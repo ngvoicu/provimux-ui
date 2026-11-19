@@ -167,40 +167,64 @@ sync_issues() {
     sort -n
 }
 
-# releases_status BASE JSON REASONS: whether every v<BASE>-pmx.* tag of PMX_REPO is
-# released. Prints none | published | in-progress | incomplete | error; writes the
-# per-tag states to the file JSON ([{tag, sha, release, run}]) and appends reasons to the
-# file REASONS (with the failed release run's errors). Published = for every such tag the
-# GitHub release is complete (release_state: promoted, all assets) and the newest
-# provimux-ui-release run for the tag AT THE TAG'S COMMIT succeeded.
+# releases_status BASE JSON REASONS: whether v<BASE> is released, decided by its NEWEST
+# v<BASE>-pmx.* tag (version order): published when that tag's GitHub release is complete
+# (release_state: promoted, both assets) and its newest provimux-ui-release run AT THE
+# TAG'S COMMIT succeeded; in-progress while that run runs; incomplete otherwise. Prints
+# none | published | in-progress | incomplete | error. Writes every tag's state to the
+# file JSON ([{tag, sha, release, run, newest}]) and appends to the file REASONS each
+# failed tag with its release run's errors: for the newest tag as the reason, for an
+# earlier one as "history: ..." (a failed .1 followed by a verified .2 is released, and
+# the .1's failure stays on record).
 releases_status() {
-  local base=$1 json=$2 rfile=$3 refs tags t sha s run st=published rid
+  local base=$1 json=$2 rfile=$3 refs tags t sha s run st='' rid newest prefix
   if ! refs="$(git ls-remote --tags "$PMX_REPO_URL" "refs/tags/v$base-pmx.*")"; then
     echo '[]' >"$json"; echo "cannot list the tags of $PMX_REPO_URL" >>"$rfile"; echo error; return 0
   fi
   tags="$(awk '{print $2}' <<<"$refs" | sed 's|^refs/tags/||; s/\^{}$//' | sort -u -V)"
   if [[ -z "$tags" ]]; then echo '[]' >"$json"; echo none; return 0; fi
+  newest="$(tail -n 1 <<<"$tags")"
   : >"$json.tmp"
   for t in $tags; do
     sha="$(ls_remote_tag "$refs" "$t")"
     s="$(release_state "$t")"
     run="$(release_run_state "$t" "$sha")"
-    jq -nc --arg tag "$t" --arg sha "$sha" --arg release "$s" --arg run "$run" \
-      '{tag: $tag, sha: $sha, release: $release, run: $run}' >>"$json.tmp"
-    if [[ "$s" != complete || "$run" != success ]]; then
-      if [[ "$run" == running ]]; then
-        [[ "$st" == incomplete ]] || st=in-progress
-      else
-        st=incomplete
-        echo "tag $t (${sha:0:12}) exists but its release is $s and its release run for that commit is $run" >>"$rfile"
-        rid="$(release_run_id "$t" "$sha")"
-        [[ -z "$rid" ]] || release_run_errors "$rid" | sed "s/^/  $t /" >>"$rfile"
-      fi
+    jq -nc --arg tag "$t" --arg sha "$sha" --arg release "$s" --arg run "$run" --argjson newest "$([[ "$t" == "$newest" ]] && echo true || echo false)" \
+      '{tag: $tag, sha: $sha, release: $release, run: $run, newest: $newest}' >>"$json.tmp"
+    prefix=''
+    [[ "$t" == "$newest" ]] || prefix='history: '
+    if [[ "$s" == complete && "$run" == success ]]; then
+      [[ "$t" != "$newest" ]] || st=published
+    elif [[ "$run" == running ]]; then
+      [[ "$t" != "$newest" ]] || st=in-progress
+    else
+      [[ "$t" != "$newest" ]] || st=incomplete
+      echo "${prefix}tag $t (${sha:0:12}): its release is $s and its release run for that commit is $run" >>"$rfile"
+      rid="$(release_run_id "$t" "$sha")"
+      [[ -z "$rid" ]] || release_run_errors "$rid" | sed "s/^/  ${prefix}$t /" >>"$rfile"
     fi
   done
   jq -s '.' "$json.tmp" >"$json"
   rm -f "$json.tmp"
   echo "$st"
+}
+
+# unreleased_bases: the bases (X.Y.Z) whose newest v<base>-pmx.* tag has no complete
+# release (release_state), one per line: what the report's sweep looks at, so that a
+# failed tag on any base, pushed by the automatic publish or by hand, is reported. One
+# API call for all releases, one ls-remote for all tags.
+unreleased_bases() {
+  local refs rel t base newest
+  refs="$(git ls-remote --tags "$PMX_REPO_URL" 'refs/tags/v*-pmx.*')" || return 1
+  rel="$(gh api --paginate "repos/$PMX_REPO/releases?per_page=100" \
+    --jq '.[] | select((.draft | not) and (.prerelease | not) and ((.published_at // "") != "")
+          and ([.assets[] | select(.state == "uploaded") | .name] | contains(["management.html", "checksums.txt"]))) | .tag_name')" || return 1
+  # shellcheck disable=SC2013 # versions have no spaces
+  for base in $(awk '{print $2}' <<<"$refs" | sed -E 's|^refs/tags/v||; s/\^\{\}$//; s/-pmx\..*$//' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -u -V); do
+    newest="$(awk '{print $2}' <<<"$refs" | sed 's|^refs/tags/||; s/\^{}$//' | grep -E "^v${base//./\\.}-pmx\.[0-9]+$" | sort -u -V | tail -n 1)"
+    [[ -n "$newest" ]] || continue
+    grep -qxF "$newest" <<<"$rel" || echo "$base"
+  done
 }
 
 # ver_ge A B: version A >= version B (vX.Y.Z).
@@ -235,50 +259,113 @@ upstream_base() {
   echo "$base $base_commit"
 }
 
-# range_diff_lists RANGE-DIFF-FILE DIR GIT...: from git range-diff output, the old main's
-# dropped (<) commits and the candidate's added (>) ones, as "<full sha>\t<subject>" lines
-# in DIR/dropped and DIR/added, and the changed (!) pairs as "<old sha>\t<new sha>\t<subject>"
-# in DIR/changed.pairs; then split_changed. GIT is the git command that resolves the short
-# SHAs (e.g. git --git-dir=X).
+# range_diff_lists RANGE-DIFF-FILE DIR GIT...: from git range-diff output, as
+# "<full sha>\t<subject>" lines: DIR/dropped (<, the old main's commit), DIR/changed (!,
+# the old main's commit; every one needs the owner), DIR/added (>, the candidate's).
+# A pair range-diff calls equal (=) counts as changed too when a binary file of it
+# differs (binary_changes): a patch shows a binary file only as "Binary files differ",
+# so two different images look equal there. GIT is the git command that resolves the
+# short SHAs (e.g. git --git-dir=X).
 range_diff_lists() {
   local file=$1 dir=$2 line p op a b subj
   shift 2
-  : >"$dir/dropped"; : >"$dir/changed.pairs"; : >"$dir/added"
+  : >"$dir/dropped"; : >"$dir/changed"; : >"$dir/added"
   while IFS= read -r line; do
     p="$(sed -E 's/^ *([0-9]+|-+): +([0-9a-f]+|-+) ([=!<>]) +([0-9]+|-+): +([0-9a-f]+|-+) (.*)$/\3	\2	\5	\6/' <<<"$line")"
     IFS=$'\t' read -r op a b subj <<<"$p"
     case "$op" in
       '<') printf '%s\t%s\n' "$("$@" rev-parse "$a^{commit}")" "$subj" >>"$dir/dropped" ;;
-      '!') printf '%s\t%s\t%s\n' "$("$@" rev-parse "$a^{commit}")" "$("$@" rev-parse "$b^{commit}")" "$subj" >>"$dir/changed.pairs" ;;
+      '!') printf '%s\t%s\n' "$("$@" rev-parse "$a^{commit}")" "$subj" >>"$dir/changed" ;;
       '>') printf '%s\t%s\n' "$("$@" rev-parse "$b^{commit}")" "$subj" >>"$dir/added" ;;
+      '=')
+        if [[ "$(binary_changes "$@" -- "$a")" != "$(binary_changes "$@" -- "$b")" ]]; then
+          printf '%s\t%s (a binary file differs)\n' "$("$@" rev-parse "$a^{commit}")" "$subj" >>"$dir/changed"
+        fi
+        ;;
     esac
   done < <(grep -E '^ *([0-9]+|-+): +([0-9a-f]+|-+) [=!<>] +([0-9]+|-+): +([0-9a-f]+|-+) ' "$file" || true)
-  split_changed "$dir" "$@"
 }
 
-# patch_lines GIT... -- COMMIT: COMMIT's own change without context: the -U0 patch with
-# the hunk headers (line numbers) and index lines left out. Two commits with the same
-# patch_lines make the same change; they differ at most in the code around it.
-patch_lines() {
-  local c="${*: -1}"
+# binary_changes GIT... -- COMMIT: the binary files COMMIT changes, as "<path> <old blob>
+# <new blob> <new mode>" lines, sorted (git diff-tree --numstat marks a binary file "-").
+binary_changes() {
+  local c="${*: -1}" bin
   set -- "${@:1:$#-2}"
-  "$@" diff-tree -p -U0 --no-color --no-ext-diff --format= "$c" | grep -vE '^(@@ |index )' || true
+  bin="$("$@" diff-tree -r --no-commit-id --numstat -z --no-renames "$c" | tr '\0' '\n' | awk -F'\t' '$1 == "-" && $2 == "-" {print $3}')"
+  [[ -n "$bin" ]] || return 0
+  "$@" diff-tree -r --no-commit-id --no-renames "$c" | while IFS=$'\t' read -r meta path; do
+    grep -qxF -- "$path" <<<"$bin" || continue
+    read -r _ nmode ob nb _ <<<"$meta"
+    printf '%s %s %s %s\n' "$path" "$ob" "$nb" "$nmode"
+  done | LC_ALL=C sort
 }
 
-# split_changed DIR GIT...: splits the changed pairs (DIR/changed.pairs) into DIR/changed
-# (the change itself differs: the owner decides, publish.sh refuses it unless named) and
-# DIR/context (only the code around the change differs, e.g. upstream edited lines next to
-# a layer change: listed in the issue, accepted). Both "<old main's sha>\t<subject>".
-split_changed() {
-  local dir=$1 a b subj
-  shift
-  : >"$dir/changed"; : >"$dir/context"
-  while IFS=$'\t' read -r a b subj; do
-    [[ -n "$a" ]] || continue
-    if [[ "$(patch_lines "$@" -- "$a")" == "$(patch_lines "$@" -- "$b")" ]]; then
-      printf '%s\t%s\n' "$a" "$subj" >>"$dir/context"
-    else
-      printf '%s\t%s\n' "$a" "$subj" >>"$dir/changed"
+# fetch_artifact ID NAME DIGEST RUN DIR: the artifact ID of this repository, unpacked into
+# DIR, only if it belongs to RUN, has NAME and DIGEST (sha256:<hex>, as the uploading
+# job's upload step gave it), is not expired, and the downloaded zip hashes to DIGEST.
+# The id and digest come from the producing job's outputs (a job that ran no code of the
+# candidate or of upstream), never from a lookup by name: a job of the same run can
+# replace an artifact under the same name, never under the same id and digest.
+fetch_artifact() {
+  local id=$1 name=$2 digest=$3 run=$4 dir=$5 got
+  [[ "$id" =~ ^[0-9]+$ && "$digest" =~ ^(sha256:)?[0-9a-f]{64}$ && "$run" =~ ^[0-9]+$ ]] ||
+    { echo "fetch_artifact: id '$id', digest '$digest', run '$run'" >&2; return 1; }
+  digest="sha256:${digest#sha256:}"
+  gh api "repos/$PMX_REPO/actions/artifacts/$id" | jq -e --arg run "$run" --arg name "$name" --arg d "$digest" \
+    '(.workflow_run.id | tostring) == $run and .name == $name and (.expired | not) and .digest == $d' >/dev/null ||
+    { echo "artifact $id is not $name of run $run with $digest" >&2; return 1; }
+  mkdir -p "$dir"
+  gh api "repos/$PMX_REPO/actions/artifacts/$id/zip" >"$dir/.artifact.zip" || { echo "cannot download artifact $id" >&2; return 1; }
+  if command -v sha256sum >/dev/null 2>&1; then got="$(sha256sum "$dir/.artifact.zip" | cut -d' ' -f1)"
+  else got="$(shasum -a 256 "$dir/.artifact.zip" | cut -d' ' -f1)"; fi
+  [[ "sha256:$got" == "$digest" ]] || { echo "artifact $id downloads as sha256:$got, not $digest" >&2; return 1; }
+  unzip -q -o "$dir/.artifact.zip" -d "$dir" || { echo "artifact $id is not a zip" >&2; return 1; }
+  rm -f "$dir/.artifact.zip"
+}
+
+# state_get FILE KEY REGEX: the value of KEY in the JSON state FILE (check.sh's state,
+# read as data, never sourced), checked against REGEX ("" passes when REGEX allows it).
+state_get() {
+  local v
+  v="$(jq -r --arg k "$2" 'if type == "object" then (.[$k] // "") else error("not an object") end | tostring' "$1")" ||
+    { echo "state: $1 is not a JSON object" >&2; return 1; }
+  [[ "$v" =~ $3 ]] || { echo "state: $2 is '$v'" >&2; return 1; }
+  printf '%s' "$v"
+}
+
+# --- release authorization (SYNC.md, "Release authorization") --------------------------
+# A release is built and promoted only for a tag whose commit carries the commit status
+# PMX_AUTH_CONTEXT, state success, description = the tag exactly, created either by this
+# repository's provimux-ui-publish run (github-actions[bot], target_url = that run, read
+# back from the API: provimux-ui-publish.yml, event workflow_run, on main, this
+# repository) or by the repository owner's account (publish.sh by hand, or the owner's
+# documented hotfix path). Only the publish job holds statuses: write.
+PMX_AUTH_CONTEXT=provimux-ui-release
+
+# authorize_release TAG SHA URL: sets that status (the caller's gh credentials).
+authorize_release() {
+  gh api -X POST "repos/$PMX_REPO/statuses/$2" -f state=success -f context="$PMX_AUTH_CONTEXT" \
+    -f description="$1" -f target_url="$3" >/dev/null
+}
+
+# release_authorized TAG SHA: 0 when SHA carries a valid authorization for TAG; 1 when it
+# does not (the reason on stderr); 2 when the statuses cannot be read.
+release_authorized() {
+  local tag=$1 sha=$2 owner="${PMX_REPO%%/*}" list login url run
+  list="$(gh api "repos/$PMX_REPO/commits/$sha/statuses?per_page=100" \
+    --jq ".[] | select(.context == \"$PMX_AUTH_CONTEXT\" and .state == \"success\" and .description == \"$tag\") | \"\(.creator.login) \(.target_url // \"\")\"")" ||
+    { echo "cannot read the statuses of $sha" >&2; return 2; }
+  while read -r login url; do
+    [[ -n "$login" ]] || continue
+    if [[ "$login" == "$owner" ]]; then echo "authorized by the owner ($login)"; return 0; fi
+    [[ "$login" == "github-actions[bot]" && "$url" =~ ^https://github\.com/$PMX_REPO/actions/runs/([0-9]+)$ ]] || continue
+    run="${BASH_REMATCH[1]}"
+    if gh api "repos/$PMX_REPO/actions/runs/$run" | jq -e --arg repo "$PMX_REPO" \
+      '.path == ".github/workflows/provimux-ui-publish.yml" and .event == "workflow_run" and .head_branch == "main"
+       and .repository.full_name == $repo and .head_repository.full_name == $repo' >/dev/null; then
+      echo "authorized by provimux-ui-publish run $run"; return 0
     fi
-  done <"$dir/changed.pairs"
+  done <<<"$list"
+  echo "$sha carries no $PMX_AUTH_CONTEXT status for $tag from a provimux-ui-publish run or the owner" >&2
+  return 1
 }

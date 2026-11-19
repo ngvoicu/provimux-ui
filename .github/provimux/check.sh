@@ -9,12 +9,18 @@
 #   check.sh tree T        T = candidate | tag: a checkout of that commit (git only, the
 #                          same files the release's checkout builds), to $PMX_TREES/T,
 #                          without .git
-#   check.sh test T        bun install --frozen-lockfile, bun run verify on tree T. RUNS
-#                          THE TREE'S CODE. Writes only logs and exit statuses to
-#                          $PMX_TEST_OUT/T and decides nothing.
-#   check.sh verdict       reads those exit statuses (data) and writes the status. Runs
-#                          no repository code.
-#   check.sh               all of them, in one process (local use only).
+#   check.sh fetch-prepare ID DIGEST
+#                          the prepare job's artifact pmx-prepare into $PMX_CHECK_OUT, by
+#                          the id and digest the prepare job output (fetch_artifact)
+#   check.sh verdict       the status, from the prepare step's state (data) and the test
+#                          jobs' own step conclusions, read from the API: "bun install
+#                          --frozen-lockfile" and "bun run verify" of the jobs "test
+#                          (candidate)" and "test (tag)" of this run attempt. Nothing the
+#                          tests wrote is read. Runs no repository code.
+#   check.sh               all of them, in one process (local use only: it runs bun
+#                          install and bun run verify of both trees itself).
+# The workflow's test jobs run bun install --frozen-lockfile and bun run verify as their
+# own steps; RUNS THE TREE'S CODE there, and nothing leaves those jobs but their result.
 #
 # select: the tag is $PMX_TAG, or upstream's newest stable release (published, not a
 # draft, not a prerelease); an explicit tag must be one too. The base of main is the
@@ -28,9 +34,10 @@
 #   - otherwise: "check", and prepare goes on.
 # prepare: git rebase <tag commit> (never --onto; committer date = author date, so the same
 # inputs give the same candidate), bundle <tag commit>..candidate, range-diff of
-# <old base>..<old main> against <tag>..<candidate> (dropped patches and changed patches
-# need the owner; a patch whose change is identical and only its surrounding code moved is
-# listed and accepted: split_changed), the paths under .github/workflows/ new in the tag
+# <old base>..<old main> against <tag>..<candidate> (dropped and changed layer commits
+# need the owner,
+# never accepted automatically: range_diff_lists; a binary file that differs makes even
+# an "=" pair changed), the paths under .github/workflows/ new in the tag
 # (publish.sh refuses them), guard.sh with the expected base. Status "test".
 # verdict: bun run verify must pass on the candidate: the release's build job runs the
 # same verify, so a candidate that fails it cannot be released. The pristine tag's verify
@@ -41,8 +48,9 @@
 # Exit status: 0 unless the script itself breaks (the status is the result).
 #
 # Env: PMX_TAG (optional), PMX_MAIN_REF (default HEAD), PMX_CHECK_OUT (default: a new temp
-# dir), PMX_TEST_OUT (default $PMX_CHECK_OUT/test), PMX_TREES (default $PMX_CHECK_OUT/trees),
-# PMX_RUN_URL, PMX_PREP_JOB / PMX_TEST_JOB (the jobs' results, for messages),
+# dir), PMX_TREES (default $PMX_CHECK_OUT/trees), PMX_RUN_URL, PMX_PREP_JOB / PMX_TEST_JOB
+# (the jobs' results, for messages), PMX_RUN_ID / PMX_RUN_ATTEMPT and GH_TOKEN with
+# actions: read (verdict),
 # PMX_UPSTREAM_REPO / PMX_UPSTREAM_URL / PMX_REPO / PMX_REPO_URL (common.sh).
 # Runs with bash 3.2 (macOS); needs git, jq, gh (and bun for test). The rebase happens in
 # a temporary worktree; the only refs it writes are refs/pmx-check/*, deleted on exit.
@@ -55,19 +63,34 @@ here="$(cd "$(dirname "$0")" && pwd)"
 mode="${1:-all}"
 out="${PMX_CHECK_OUT:-$(mktemp -d "${TMPDIR:-/tmp}/provimux-ui-check.XXXXXX")}"
 mkdir -p "$out/logs"
-test_out="${PMX_TEST_OUT:-$out/test}"
 trees="${PMX_TREES:-$out/trees}"
-state="$out/state.env"
+state="$out/state.json"
 log() { echo "==> $*" >&2; }
 
 status='' step='' tag='' base='' upstream_commit='' old_main='' old_base_tag='' old_base_commit=''
 candidate='' commits='' guard_ok='' tests_ok=''
 reasons="$out/reasons.txt"
+# The state between the steps is JSON, read back field by field against a pattern
+# (state_get in common.sh), never sourced.
 save_state() {
-  local v
-  for v in status step tag base upstream_commit old_main old_base_tag old_base_commit candidate commits guard_ok; do
-    printf '%s=%q\n' "$v" "${!v}"
-  done >"$state"
+  jq -n --arg status "$status" --arg step "$step" --arg tag "$tag" --arg base "$base" \
+    --arg upstream_commit "$upstream_commit" --arg old_main "$old_main" --arg old_base_tag "$old_base_tag" \
+    --arg old_base_commit "$old_base_commit" --arg candidate "$candidate" --arg commits "$commits" --arg guard_ok "$guard_ok" \
+    '$ARGS.named' >"$state"
+}
+load_state() {
+  local sha='^([0-9a-f]{40})?$' t='^(v[0-9]+\.[0-9]+\.[0-9]+)?$'
+  status="$(state_get "$state" status '^(check|test|running|pass|fail|error|published|in-progress|incomplete|unreleased)?$')" &&
+    step="$(state_get "$state" step '^[a-z-]*$')" &&
+    tag="$(state_get "$state" tag "$t")" &&
+    base="$(state_get "$state" base '^([0-9]+\.[0-9]+\.[0-9]+)?$')" &&
+    upstream_commit="$(state_get "$state" upstream_commit "$sha")" &&
+    old_main="$(state_get "$state" old_main "$sha")" &&
+    old_base_tag="$(state_get "$state" old_base_tag "$t")" &&
+    old_base_commit="$(state_get "$state" old_base_commit "$sha")" &&
+    candidate="$(state_get "$state" candidate "$sha")" &&
+    commits="$(state_get "$state" commits '^[0-9]*$')" &&
+    guard_ok="$(state_get "$state" guard_ok '^(true|false)?$')"
 }
 reason() { printf '%s\n' "$*" >>"$reasons"; log "$*"; }
 
@@ -83,7 +106,7 @@ write_result() {
     reason "check.sh stopped unexpectedly during step '$step'"
   fi
   touch "$reasons"
-  for f in dropped changed context added wf-new wf-removed logs/range-diff.txt logs/guard.log; do touch "$out/$f"; done
+  for f in dropped changed added wf-new wf-removed logs/range-diff.txt logs/guard.log; do touch "$out/$f"; done
   for f in tests rebase release; do [[ -s "$out/$f.json" ]] || echo 'null' >"$out/$f.json"; done
   jq -n \
     --arg status "$s" --arg step "$step" --arg tag "$tag" --arg base "$base" \
@@ -92,7 +115,7 @@ write_result() {
     --arg candidate "$candidate" --arg commits "$commits" \
     --arg guard_ok "$guard_ok" --arg run_url "${PMX_RUN_URL:-}" \
     --rawfile reasons "$rfile" \
-    --rawfile dropped "$out/dropped" --rawfile changed "$out/changed" --rawfile context "$out/context" \
+    --rawfile dropped "$out/dropped" --rawfile changed "$out/changed" \
     --rawfile added "$out/added" --rawfile wf_new "$out/wf-new" --rawfile wf_removed "$out/wf-removed" \
     --rawfile range_diff "$out/logs/range-diff.txt" --rawfile guard "$out/logs/guard.log" \
     --slurpfile tests "$out/tests.json" --slurpfile rebase "$out/rebase.json" --slurpfile release "$out/release.json" '
@@ -110,7 +133,6 @@ write_result() {
       candidate: $candidate,
       commits: (if $commits == "" then null else ($commits | tonumber) end),
       decisions: {dropped: ($dropped | commits), changed: ($changed | commits), new_workflows: ($wf_new | lines)},
-      context_only: ($context | commits),
       added: ($added | commits),
       removed_workflows: ($wf_removed | lines),
       rebase: $rebase[0],
@@ -191,8 +213,7 @@ do_select() {
 # --- prepare (git only) ---------------------------------------------------------------------
 do_prepare() {
   local wt stopped
-  # shellcheck disable=SC1090
-  . "$state"
+  load_state || { status=error; reason "the select step's state is not valid"; return; }
   [[ "$status" == check ]] || { log "nothing to prepare (status $status)"; return; }
   status=running
 
@@ -266,8 +287,7 @@ do_prepare() {
 # repository, so it needs only the prepare step's out dir.
 do_tree() {
   local which=$1 repo c
-  # shellcheck disable=SC1090
-  . "$state"
+  load_state || { echo "check.sh tree: the prepare step's state is not valid" >&2; exit 1; }
   [[ "$status" == test ]] || { echo "check.sh tree: nothing to test (status $status)" >&2; exit 1; }
   repo="$(mktemp -d "${TMPDIR:-/tmp}/provimux-ui-check-tree.XXXXXX")"
   cleanup_paths+=("$repo")
@@ -292,69 +312,75 @@ do_tree() {
   log "tree $which ($c) in $trees/$which"
 }
 
-# --- test (runs the tree's code; logs and exit statuses only) ------------------------------------
-# step NAME CMD...: runs CMD in the tree, keeping NAME.log and NAME.exit.
+# --- test (local mode only: runs the tree's code) ------------------------------------------------
+# do_test T: bun install --frozen-lockfile, then bun run verify, in tree T; the outcome of
+# each (success | failure | skipped) in res_<T>_install / res_<T>_verify, the logs in
+# $out/test/<T>/. In the workflow these are the test jobs' own steps instead.
+res_candidate_install='' res_candidate_verify='' res_tag_install='' res_tag_verify=''
 do_test() {
-  local which=$1 dir d e
-  dir="$trees/$which" d="$test_out/$which"
-  [[ -d "$dir" ]] || { echo "check.sh test: no tree $dir (run check.sh tree $which)" >&2; exit 1; }
+  local which=$1 dir d
+  dir="$trees/$which" d="$out/test/$which"
+  [[ -d "$dir" ]] || { echo "check.sh test: no tree $dir" >&2; exit 1; }
   rm -rf "${d:?}"; mkdir -p "$d"
-  run_step() {
-    local name=$1; shift
-    log "$* ($which)"
-    set +e; (cd "$dir" && "$@") >"$d/$name.log" 2>&1; e=$?; set -e
-    echo "$e" >"$d/$name.exit"
-    return "$e"
-  }
-  run_step install bun install --frozen-lockfile && run_step verify bun run verify || true
-  log "logs and exit statuses in $d"
+  printf -v "res_${which}_install" skipped; printf -v "res_${which}_verify" skipped
+  log "bun install --frozen-lockfile ($which)"
+  if (cd "$dir" && bun install --frozen-lockfile) >"$d/install.log" 2>&1; then
+    printf -v "res_${which}_install" success
+    log "bun run verify ($which)"
+    if (cd "$dir" && bun run verify) >"$d/verify.log" 2>&1; then printf -v "res_${which}_verify" success
+    else printf -v "res_${which}_verify" failure; fi
+  else
+    printf -v "res_${which}_install" failure
+  fi
+  log "logs in $d"
 }
 
-# --- verdict (no repository code: the exit statuses are data) ------------------------------------
-exitval() {
-  local v=''
-  [[ -f "$1" ]] && v="$(head -c 16 "$1" | tr -d ' \n\r')"
-  [[ "$v" =~ ^[0-9]{1,3}$ ]] && echo "$v" || echo -1
+# --- verdict (no repository code) ------------------------------------------------------------------
+# api_outcomes: the test jobs' step conclusions for this run attempt (the API, not files),
+# into res_<T>_install / res_<T>_verify (success | failure | skipped | cancelled | missing)
+# and url_<T>; fails when a test job is not exactly one completed job.
+url_candidate='' url_tag=''
+api_outcomes() {
+  local jobs w j
+  [[ "${PMX_RUN_ID:-}" =~ ^[0-9]+$ && "${PMX_RUN_ATTEMPT:-}" =~ ^[0-9]+$ ]] ||
+    { reason "the verdict needs PMX_RUN_ID and PMX_RUN_ATTEMPT (the test jobs' results are read from the API)"; return 1; }
+  jobs="$(gh api "repos/$PMX_REPO/actions/runs/$PMX_RUN_ID/attempts/$PMX_RUN_ATTEMPT/jobs?per_page=100")" ||
+    { reason "cannot read the jobs of run $PMX_RUN_ID attempt $PMX_RUN_ATTEMPT"; return 1; }
+  for w in candidate tag; do
+    j="$(jq -c --arg n "test ($w)" '[.jobs[] | select(.name == $n)] | if length == 1 and .[0].status == "completed" then .[0] else null end' <<<"$jobs")"
+    [[ "$j" != null ]] || { reason "run $PMX_RUN_ID attempt $PMX_RUN_ATTEMPT has not exactly one completed job \"test ($w)\" (test jobs: ${PMX_TEST_JOB:-unknown})"; return 1; }
+    printf -v "res_${w}_install" '%s' "$(jq -r '[.steps[] | select(.name == "bun install --frozen-lockfile") | .conclusion // "missing"] | if length == 1 then .[0] else "missing" end' <<<"$j")"
+    printf -v "res_${w}_verify" '%s' "$(jq -r '[.steps[] | select(.name == "bun run verify") | .conclusion // "missing"] | if length == 1 then .[0] else "missing" end' <<<"$j")"
+    printf -v "url_${w}" '%s' "$(jq -r '.html_url // ""' <<<"$j" | grep -E '^https://github\.com/' || true)"
+  done
 }
-# tail_log FILE: the last 60 lines, without ANSI colour codes.
-tail_log() { [[ -f "$1" ]] && tail -n 60 "$1" | sed $'s/\x1b\\[[0-9;]*m//g' || true; }
 
 do_verdict() {
-  local c="$test_out/candidate" t="$test_out/tag" w ci cv ti tv
-  [[ -f "$state" ]] || { status=error step=verdict; reason "no result from the prepare job (job: ${PMX_PREP_JOB:-unknown})"; return; }
-  # shellcheck disable=SC1090
-  . "$state"
-  [[ "$status" == test ]] || { log "nothing to decide (status $status): result.json stays"; verdict_skip=1; return; }
+  local from=$1
+  [[ -f "$state" ]] || { status=error step=verdict; reason "no result from the prepare job (job: ${PMX_PREP_JOB:-unknown})"; return 0; }
+  load_state || { status=error step=verdict; reason "the prepare job's state is not valid"; return 0; }
+  [[ "$status" == test ]] || { log "nothing to decide (status $status): result.json stays"; verdict_skip=1; return 0; }
   status=running
   step=verdict
-  for w in candidate tag; do
-    [[ -f "$test_out/$w/install.exit" ]] ||
-      { status=error; reason "the test job for the $w left no result (test jobs: ${PMX_TEST_JOB:-unknown})"; }
-  done
-  [[ "$status" == running ]] || return 0
-  ci="$(exitval "$c/install.exit")" cv="$(exitval "$c/verify.exit")"
-  ti="$(exitval "$t/install.exit")" tv="$(exitval "$t/verify.exit")"
-  # -1: did not run (the install failed) or left no status.
-  if [[ "$ci" == 0 && "$cv" == 0 ]]; then
+  if [[ "$from" == api ]]; then api_outcomes || { status=error; return 0; }; fi
+  if [[ "$res_candidate_install" == success && "$res_candidate_verify" == success ]]; then
     tests_ok=true
   else
     tests_ok=false
-    if [[ "$ci" != 0 ]]; then
-      reason "bun install --frozen-lockfile fails on the candidate (exit $ci)"
+    if [[ "$res_candidate_install" != success ]]; then
+      reason "bun install --frozen-lockfile on the candidate: $res_candidate_install"
     else
-      reason "bun run verify fails on the candidate (exit $cv)"
+      reason "bun run verify on the candidate: $res_candidate_verify"
     fi
-    if [[ "$ti" == 0 && "$tv" == 0 ]]; then
+    if [[ "$res_tag_install" == success && "$res_tag_verify" == success ]]; then
       reason "it passes on the pristine $tag: the Provimux layer breaks it"
     else
-      reason "it fails on the pristine $tag too (install exit $ti, verify exit $tv): upstream's own failure, but the release's build runs the same verify, so this release cannot be built"
+      reason "on the pristine $tag too (install $res_tag_install, verify $res_tag_verify): upstream's own failure, but the release's build runs the same verify, so this release cannot be built"
     fi
   fi
-  jq -n --arg ok "$tests_ok" --argjson ci "$ci" --argjson cv "$cv" --argjson ti "$ti" --argjson tv "$tv" \
-    --arg clog "$(tail_log "$c/verify.log"; [[ "$ci" == 0 ]] || tail_log "$c/install.log")" \
-    --arg tlog "$(if [[ "$ti" == 0 && "$tv" == 0 ]]; then :; else tail_log "$t/verify.log"; tail_log "$t/install.log"; fi)" \
-    '{ok: ($ok == "true"), candidate: {install: $ci, verify: $cv, tail: $clog},
-      tag: {install: $ti, verify: $tv, tail: $tlog}}' >"$out/tests.json"
+  jq -n --arg ok "$tests_ok" --arg ci "$res_candidate_install" --arg cv "$res_candidate_verify" --arg cu "$url_candidate" \
+    --arg ti "$res_tag_install" --arg tv "$res_tag_verify" --arg tu "$url_tag" \
+    '{ok: ($ok == "true"), candidate: {install: $ci, verify: $cv, job: $cu}, tag: {install: $ti, verify: $tv, job: $tu}}' >"$out/tests.json"
   step="done"
   if [[ -s "$reasons" ]]; then status=fail; else status=pass; fi
 }
@@ -373,12 +399,13 @@ case "$mode" in
     trap 'cleanup' EXIT
     do_tree "${2:-}"
     ;;
-  test)
-    do_test "${2:-}"
+  fetch-prepare)
+    # The prepare job's artifact, by the id and digest that job output (fetch_artifact).
+    fetch_artifact "${2:-}" pmx-prepare "${3:-}" "${GITHUB_RUN_ID:-}" "$out" || exit 1
     ;;
   verdict)
     trap 'if [[ $verdict_skip -eq 0 ]]; then write_result; fi' EXIT
-    do_verdict
+    do_verdict api
     ;;
   all)
     trap 'cleanup; if [[ $verdict_skip -eq 0 ]]; then write_result; fi' EXIT
@@ -390,10 +417,11 @@ case "$mode" in
       if [[ "$status" == test ]]; then
         do_tree candidate; do_tree tag
         do_test candidate; do_test tag
-        do_verdict
+        save_state
+        do_verdict local
       fi
     fi
     ;;
-  *) echo "usage: $0 [select|prepare|tree T|test T|verdict]" >&2; exit 2 ;;
+  *) echo "usage: $0 [select|prepare|fetch-prepare ID DIGEST|tree T|verdict]" >&2; exit 2 ;;
 esac
 { echo "status=$status"; echo "tag=$tag"; echo "out=$out"; } >>"${GITHUB_OUTPUT:-/dev/null}"
