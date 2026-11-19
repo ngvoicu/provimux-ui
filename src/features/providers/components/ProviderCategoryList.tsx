@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { PROVIDER_LOGOS } from '../brandLogos';
 import type { ProviderBrand, ProviderGroup } from '../types';
 import styles from './ProviderCategoryList.module.scss';
+import { noQuickFill } from '@/provimux/sponsors';
 
 interface ProviderCategoryListProps {
   groups: ProviderGroup[];
@@ -11,7 +12,7 @@ interface ProviderCategoryListProps {
 
 const QUICK_FILL_BRAND_ORDER: readonly ProviderBrand[] = ['fennoAI', 'qiniuCloud', 'aiCodeMirror'];
 
-const QUICK_FILL_BRANDS: ReadonlySet<ProviderBrand> = new Set(QUICK_FILL_BRAND_ORDER);
+const QUICK_FILL_BRANDS: ReadonlySet<ProviderBrand> = new Set(noQuickFill(QUICK_FILL_BRAND_ORDER));
 
 export function ProviderCategoryList({ groups, activeBrand, onSelect }: ProviderCategoryListProps) {
   const { t } = useTranslation();

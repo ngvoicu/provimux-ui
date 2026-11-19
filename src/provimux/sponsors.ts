@@ -1,18 +1,23 @@
 /**
- * Sponsors and affiliate entries are hidden in Provimux's console (owner's decision, 2026-11-19).
+ * Sponsors and affiliate entries are hidden in Provimux's console (owner's decision, 2026-11-19); what an operator
+ * has configured stays reachable.
  *
- * Four places carry them as entries of their own, each hidden by a one-line seam:
+ * Seams, each one line:
  * - the "Quick Start" nav item (a reseller's page): `hideSponsorNav` in MainLayout, and its route redirects
  *   to AI Providers in MainRoutes;
  * - the sponsor row under the proxy URL field: `hideSponsor` in config/components/fields/sharedFields.tsx;
- * - the AI Providers page's "Quick Fill" list of sponsor presets (owner, 2026-11-19, T-45):
- *   `hideSponsorPresets` where ProvidersWorkbenchPage.tsx builds its groups;
+ * - the AI Providers page (T-45, T-49): `providerGroupsWithoutOffers` where ProvidersWorkbenchPage.tsx builds its
+ *   groups, and `noQuickFill` in ProviderCategoryList.tsx. A sponsor group with nothing configured (an offer to add
+ *   one) is not listed; one that holds configured keys (keys whose base URL is the sponsor's, APIKEY.FUN included,
+ *   which upstream shows only on Quick Start) is listed with the other providers, as an ordinary row with its
+ *   edit, disable and delete controls;
  * - the OAuth page's Kimi card: it is also the console's only Kimi login, and it lives under src/features/oauth/,
- *   which the guard protects; its affiliate sign-up links are hidden by the theme (theme/_sponsors.scss).
+ *   which the guard protects; its affiliate sign-up links are hidden by the theme.
  *
- * Every other affiliate link (the Kimi provider's registration link on AI Providers) is hidden by the same
- * stylesheet rule. tests/provimux/sponsors.test.ts fails when upstream adds an affiliate URL that rule does not
- * cover, or a sponsor preset the AI Providers page would still list.
+ * Every link to a referral URL, wherever it comes from (source, JSON, the server), is hidden by the theme
+ * (theme/_sponsors.scss), with the line that only introduces one and the Kimi promotion text.
+ * tests/provimux/sponsors.test.ts renders the pages that carry such links and fails when one stays visible, when
+ * an affiliate URL in the source is not covered, or when configured sponsor keys stop being reachable.
  */
 
 /** Paths of nav items that are sponsor pages. */
@@ -35,16 +40,24 @@ export function hideSponsor<T>(sponsor: T | undefined): T | undefined {
   return undefined;
 }
 
-/**
- * The sponsor presets of the AI Providers page's "Quick Fill" list. Kimi stays: it is a provider with an API of
- * its own (only its registration link is hidden); APIKEY.FUN never shows there (upstream keeps it for Quick Start).
- */
-export const SPONSOR_PRESET_BRANDS: readonly string[] = ['fennoAI', 'qiniuCloud', 'aiCodeMirror'];
+/** The reseller groups upstream offers on AI Providers ("Quick Fill") and on Quick Start (APIKEY.FUN). */
+export const SPONSOR_GROUP_BRANDS: readonly string[] = ['apikeyFun', 'fennoAI', 'qiniuCloud', 'aiCodeMirror'];
 
 /**
- * The AI Providers page's groups without the sponsor presets: the "Quick Fill" list is not drawn, and a preset
- * remembered as the selected group falls back to the first provider.
+ * The AI Providers page's groups: a sponsor group only when it holds configured keys, never as an offer to add
+ * one. Kimi stays as upstream lists it: a provider with an API of its own (its registration link is hidden).
+ * A remembered selection that is no longer listed falls back to the first provider.
  */
-export function hideSponsorPresets<G extends { id: string }>(groups: readonly G[]): G[] {
-  return groups.filter((group) => !SPONSOR_PRESET_BRANDS.includes(group.id));
+export function providerGroupsWithoutOffers<
+  G extends { id: string; resources: readonly unknown[] },
+>(groups: readonly G[]): G[] {
+  return groups.filter(
+    (group) => !SPONSOR_GROUP_BRANDS.includes(group.id) || group.resources.length > 0
+  );
+}
+
+/** No "Quick Fill" list: configured sponsor groups are listed with the other providers. */
+export function noQuickFill<T>(brands: readonly T[]): T[] {
+  void brands;
+  return [];
 }

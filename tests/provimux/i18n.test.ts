@@ -2,9 +2,14 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import i18n from '../../src/i18n/index';
-import upstreamEn from '../../src/i18n/locales/en.json';
-import provimuxEn from '../../src/provimux/locales/en.json';
-import upstreamZhCn from '../../src/i18n/locales/zh-CN.json';
+
+// Upstream's locale files as they are on disk: the overlay merges into the imported JSON objects, so a check on
+// those would see Provimux's keys as upstream's.
+const upstream = (language: string) =>
+  JSON.parse(readFileSync(`src/i18n/locales/${language}.json`, 'utf8')) as Tree;
+const upstreamEn = upstream('en');
+const upstreamZhCn = upstream('zh-CN');
+const provimuxEn = JSON.parse(readFileSync('src/provimux/locales/en.json', 'utf8')) as Tree;
 
 const initialLanguage = i18n.language;
 afterAll(async () => {
@@ -43,16 +48,20 @@ describe('override bundle', () => {
 
   test('keeps every other upstream string, in its language', async () => {
     await i18n.changeLanguage('zh-CN');
-    expect(i18n.t('splash.subtitle')).toBe((upstreamZhCn as Tree).splash && get(upstreamZhCn as Tree, 'splash.subtitle'));
-    expect(i18n.t('nav.dashboard')).toBe(get(upstreamZhCn as Tree, 'nav.dashboard'));
+    expect(i18n.t('splash.subtitle')).toBe(get(upstreamZhCn, 'splash.subtitle') as string);
+    expect(i18n.t('nav.dashboard')).toBe(get(upstreamZhCn, 'nav.dashboard') as string);
+    expect(get(upstreamZhCn, 'splash.subtitle')).not.toBe(get(provimuxEn, 'splash.subtitle'));
   });
 
   test('overrides only keys upstream has (a renamed upstream key shows up here)', () => {
-    const stale = leaves(provimuxEn as Tree)
+    const stale = leaves(provimuxEn)
       .map(([key]) => key)
       .filter((key) => !key.startsWith('provimux.'))
-      .filter((key) => typeof get(upstreamEn as Tree, key) !== 'string');
+      .filter((key) => typeof get(upstreamEn, key) !== 'string');
     expect(stale).toEqual([]);
+    // The file on disk is upstream's: none of Provimux's own keys, the brand still upstream's.
+    expect(get(upstreamEn, 'provimux')).toBeUndefined();
+    expect(get(upstreamEn, 'title.abbr')).not.toBe('Provimux');
   });
 
   test('is registered right after i18next starts, in src/i18n/index.ts', () => {
@@ -76,10 +85,10 @@ describe('upstream brand strings', () => {
 
   test('each one is overridden or kept on purpose', () => {
     const brand = /CLI ?Proxy ?API|CPAMC|\bCPA\b|Management Center/;
-    const uncovered = leaves(upstreamEn as Tree)
+    const uncovered = leaves(upstreamEn)
       .filter(([, value]) => brand.test(value))
       .map(([key]) => key)
-      .filter((key) => typeof get(provimuxEn as Tree, key) !== 'string' && !(key in KEPT));
+      .filter((key) => typeof get(provimuxEn, key) !== 'string' && !(key in KEPT));
     expect(uncovered).toEqual([]);
   });
 });

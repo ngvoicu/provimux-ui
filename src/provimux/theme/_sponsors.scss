@@ -1,17 +1,44 @@
 // Sponsors and affiliate links are hidden (owner, 2026-11-19; see src/provimux/sponsors.ts).
-// Any link to a known affiliate URL is removed from view, the tab order and the accessibility tree, and so is a
-// line that only introduces one. tests/provimux/sponsors.test.ts reads these selectors and fails when an
-// affiliate URL in the source is not covered by one of them.
+//
+// A link is hidden by what its address carries, not by where the address comes from (source, JSON, the server):
+// a referral parameter, or one of the known affiliate short links. It leaves the view, the tab order and the
+// accessibility tree, and so does a line that only introduces such a link. A configured sponsor account's own
+// links (its dashboard) carry no referral and stay. tests/provimux/sponsors.test.ts compiles this file, renders
+// the pages that carry sponsor links and fails when one stays visible.
 
-a[href*='aff='],
-a[href*='invitecode='],
-a[href^='https://s.qiniu.com/'],
-a[href^='https://bestproxy.com/'],
-a[href^='https://apikey.fan/'] {
+@use 'sass:list';
+
+// Query parameters that pay someone for a sign-up
+$pmx-referral-params: aff, affiliate, ref, referral, invite, invitecode, invite_code, keyword, promo, promo_code,
+  coupon, via;
+// Affiliate links without a parameter
+$pmx-referral-prefixes: 'https://s.qiniu.com/';
+
+$pmx-referral-links: ();
+@each $param in $pmx-referral-params {
+  @each $start in ('?', '&') {
+    $pmx-referral-links: list.append($pmx-referral-links, "a[href*='#{$start}#{$param}=' i]", $separator: comma);
+  }
+}
+@each $prefix in $pmx-referral-prefixes {
+  $pmx-referral-links: list.append($pmx-referral-links, "a[href^='#{$prefix}' i]", $separator: comma);
+}
+
+$pmx-referral-lines: ();
+@each $link in $pmx-referral-links {
+  $pmx-referral-lines: list.append($pmx-referral-lines, 'p:has(> #{$link})', $separator: comma);
+}
+
+#{$pmx-referral-links} {
   display: none !important;
 }
 
-// The Kimi login dialog's "Don't have an account? Sign Up Now" line (OAuthFlowDialog.tsx SponsorSignUp)
-p:has(> a[href*='aff=']) {
+// "Don't have an account? Sign Up Now" (the Kimi login dialog, OAuthFlowDialog.tsx SponsorSignUp)
+#{$pmx-referral-lines} {
+  display: none !important;
+}
+
+// The Kimi provider's sign-up offer under its hidden registration link (ProviderResourcePanel.tsx kimiPromo)
+[class*='ProviderResourcePanel-module__kimiPromo___'] {
   display: none !important;
 }

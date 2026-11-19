@@ -23,7 +23,7 @@ import { APIKEY_FUN_DISPLAY_NAME } from './sponsor';
 import { isMultiProtocolSponsorBrand } from './sponsorDefinitions';
 import { isSponsorPartialMutationError } from './sponsorMutationRecovery';
 import { useProviderWorkbench } from './useProviderWorkbench';
-import { hideSponsorPresets } from '@/provimux/sponsors';
+import { providerGroupsWithoutOffers } from '@/provimux/sponsors';
 import {
   getProviderFilterState,
   readProvidersWorkbenchUiState,
@@ -159,7 +159,7 @@ export function ProvidersWorkbenchPage({ fixedBrand }: ProvidersWorkbenchPagePro
     () =>
       fixedBrand
         ? allGroups.filter((group) => group.id === fixedBrand)
-        : hideSponsorPresets(allGroups).filter((group) => group.id !== 'apikeyFun'),
+        : providerGroupsWithoutOffers(allGroups),
     [allGroups, fixedBrand]
   );
   const firstVisibleBrand = groups[0]?.id ?? fixedBrand ?? 'gemini';
