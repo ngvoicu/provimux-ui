@@ -105,8 +105,10 @@ The build is a single file, `dist/index.html`, with its scripts, styles and font
 runs the tests, the linter and the build.
 
 Releases are built and published by a GitHub workflow from a `v<base>-pmx.<n>` tag; each starts as a prerelease
-and becomes the latest release once tried with a Provimux binary. See
-[.github/provimux/releases.md](provimux/releases.md).
+and becomes the latest release once the published file has passed its checks, including a headless browser run
+against a stub of the management API. Each new release of the original console is rebased onto, checked and
+released automatically. See [.github/provimux/releases.md](provimux/releases.md) and
+[.github/provimux/SYNC.md](provimux/SYNC.md).
 
 ## Built on
 
