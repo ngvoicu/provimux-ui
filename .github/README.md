@@ -52,11 +52,21 @@ The pages for what Provimux adds to CLIProxyAPI are planned.
 ## Use it
 
 Provimux will download the console by itself once it is wired to this repository; until then it serves the original
-console. To use provimux-ui now, give Provimux (or CLIProxyAPI) its `management.html`: the asset of a
-[release](https://github.com/ngvoicu/provimux-ui/releases) of this repository (none is published yet), or
+console. To use provimux-ui now, give Provimux (or CLIProxyAPI) its `management.html`: the asset of the
+[latest release](https://github.com/ngvoicu/provimux-ui/releases/latest) of this repository, or
 [your own build](#build-it).
 
-1. Put `management.html` in a folder, for example `~/provimux-ui/management.html`.
+1. Download `management.html` and its checksum into a folder, for example `~/provimux-ui`, and check it:
+
+   ```bash
+   mkdir -p ~/provimux-ui && cd ~/provimux-ui
+   curl -fLO https://github.com/ngvoicu/provimux-ui/releases/latest/download/management.html
+   curl -fLO https://github.com/ngvoicu/provimux-ui/releases/latest/download/checksums.txt
+   shasum -a 256 -c checksums.txt   # on Linux: sha256sum -c checksums.txt
+   ```
+
+   It prints `management.html: OK`. The file carries the console's MIT license notice in a comment at its top.
+
 2. In your config, stop the console's automatic updates. Otherwise Provimux replaces the file at startup and every
    3 hours with the latest release of `panel-github-repository`, which is the original console:
 
@@ -93,6 +103,10 @@ bun install && bun run build
 The build is a single file, `dist/index.html`, with its scripts, styles and fonts inlined; rename it to
 `management.html` to serve it as above. `bun run dev` starts a local server for working on it, and `bun run verify`
 runs the tests, the linter and the build.
+
+Releases are built and published by a GitHub workflow from a `v<base>-pmx.<n>` tag; each starts as a prerelease
+and becomes the latest release once tried with a Provimux binary. See
+[.github/provimux/releases.md](provimux/releases.md).
 
 ## Built on
 
