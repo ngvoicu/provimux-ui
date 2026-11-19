@@ -348,9 +348,20 @@ api_outcomes() {
     { reason "cannot read the jobs of run $PMX_RUN_ID attempt $PMX_RUN_ATTEMPT"; return 1; }
   for w in candidate tag; do
     j="$(jq -c --arg n "test ($w)" '[.jobs[] | select(.name == $n)] | if length == 1 and .[0].status == "completed" then .[0] else null end' <<<"$jobs")"
+    if [[ "$j" == null && "$w" == tag ]]; then
+      # The pristine run is diagnostic only: without it the candidate still decides.
+      res_tag_install=missing res_tag_verify=missing
+      continue
+    fi
     [[ "$j" != null ]] || { reason "run $PMX_RUN_ID attempt $PMX_RUN_ATTEMPT has not exactly one completed job \"test ($w)\" (test jobs: ${PMX_TEST_JOB:-unknown})"; return 1; }
-    printf -v "res_${w}_install" '%s' "$(jq -r '[.steps[] | select(.name == "bun install --frozen-lockfile") | .conclusion // "missing"] | if length == 1 then .[0] else "missing" end' <<<"$j")"
-    printf -v "res_${w}_verify" '%s' "$(jq -r '[.steps[] | select(.name == "bun run verify") | .conclusion // "missing"] | if length == 1 then .[0] else "missing" end' <<<"$j")"
+    # step NAME: that step's conclusion; for the tag, whose steps continue on error (and
+    # then report "success"), a marker step that ran means the step failed.
+    printf -v "res_${w}_install" '%s' "$(jq -r --arg w "$w" '
+      def step($n): [.steps[] | select(.name == $n) | .conclusion // "missing"] | if length == 1 then .[0] else "missing" end;
+      if $w == "tag" and step("pristine install failed (diagnostic)") == "success" then "failure" else step("bun install --frozen-lockfile") end' <<<"$j")"
+    printf -v "res_${w}_verify" '%s' "$(jq -r --arg w "$w" '
+      def step($n): [.steps[] | select(.name == $n) | .conclusion // "missing"] | if length == 1 then .[0] else "missing" end;
+      if $w == "tag" and step("pristine verify failed (diagnostic)") == "success" then "failure" else step("bun run verify") end' <<<"$j")"
     printf -v "url_${w}" '%s' "$(jq -r '.html_url // ""' <<<"$j" | grep -E '^https://github\.com/' || true)"
   done
 }
