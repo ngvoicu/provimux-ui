@@ -128,7 +128,7 @@ esac
       echo "|---|---|"
       echo "| old \`main\` | \`$old_main\` on \`$old_base_tag\` |"
       echo "| candidate | \`$candidate\`, $(j .commits) commits on \`$tag\` |"
-      echo "| \`bun run verify\` | candidate: passes; pristine \`$tag\`: $(jq -r 'if .tests.tag.install == 0 and .tests.tag.verify == 0 then "passes" else "fails (install exit \(.tests.tag.install), verify exit \(.tests.tag.verify))" end' "$r" | tr -cd 'A-Za-z0-9 ,.;:()_-') |"
+      echo "| \`bun run verify\` | candidate: passes; pristine \`$tag\`: $(jq -r 'if .tests.tag.install == "success" and .tests.tag.verify == "success" then "passes" else "install \(.tests.tag.install), verify \(.tests.tag.verify)" end' "$r" | tr -cd 'A-Za-z0-9 ,.;:()_-') |"
       echo "| guard | ok |"
       echo
       nd="$(jq '.decisions.dropped | length' "$r")"; nc="$(jq '.decisions.changed | length' "$r")"; nw="$(jq '.decisions.new_workflows | length' "$r")"
@@ -142,7 +142,6 @@ esac
         if [[ "$nw" != 0 ]]; then echo "**New workflow files** in \`$tag\`: \`publish.sh\` refuses this release; follow \"New upstream workflow files\" in SYNC.md:"; list '.decisions.new_workflows[]'; fi
       fi
       echo
-      if [[ "$(jq '.context_only | length' "$r")" != 0 ]]; then echo "Layer commits whose change is identical but whose surrounding upstream code moved (accepted):"; list '.context_only[] | "\(.commit[0:12]) \(.subject)"'; fi
       echo "**Publish by hand** only if the automatic publish refused (it says so here). On the owner's Mac, in a worktree of \`upstream/main\` of provimux-ui; see \`.github/provimux/SYNC.md\`:"
       echo
       echo '```sh'
@@ -162,20 +161,23 @@ esac
         echo "If upstream took this patch in another form, see \"Upstream took a patch in another form\" in SYNC.md."
       fi
       if isfalse .tests.ok; then
-        echo "\`bun install --frozen-lockfile\` / \`bun run verify\`: candidate exit $(jq -r '"\(.tests.candidate.install) / \(.tests.candidate.verify)"' "$r" | tr -cd '0-9 /-'), pristine \`$label\` exit $(jq -r '"\(.tests.tag.install) / \(.tests.tag.verify)"' "$r" | tr -cd '0-9 /-') (-1: did not run). The candidate's last lines:"
-        list '.tests.candidate.tail'
-        if [[ -n "$(j .tests.tag.tail)" ]]; then echo "The pristine tag's last lines:"; list '.tests.tag.tail'; fi
+        echo "\`bun install --frozen-lockfile\` / \`bun run verify\` (the test jobs' own step conclusions): candidate $(jq -r '"\(.tests.candidate.install) / \(.tests.candidate.verify)"' "$r" | tr -cd 'a-z /-'), pristine \`$label\` $(jq -r '"\(.tests.tag.install) / \(.tests.tag.verify)"' "$r" | tr -cd 'a-z /-'). Their output is in the jobs' logs:"
+        for w in candidate tag; do
+          u="$(j ".tests.$w.job")"
+          [[ "$u" =~ ^https://github\.com/[A-Za-z0-9._/-]+$ ]] && echo "- test ($w): $u"
+        done
+        echo
       fi
       if isfalse .guard.ok; then echo "Guard:"; list '.guard.output'; fi
       echo "Fix it by hand following \`.github/provimux/SYNC.md\`. The next check (every 3 hours, or Actions → provimux-ui-check → Run workflow) updates this issue."
       ;;
     incomplete)
-      echo "**A provimux-ui tag for \`$label\` exists but its release is not complete**, and no release run is still running."
+      echo "**The newest provimux-ui tag for \`$label\` has no complete release**, and its release run is not running."
       echo
       list '.reasons[]?'
       echo "Releases:"
       list '.release[]? | "\(.tag) (\(.sha[0:12] // "?")): release \(.release), release run for that commit \(.run)"'
-      echo "A release that stayed a prerelease failed a promotion check (the errors above): fix the cause in a new \`-pmx.<n+1>\`, or, if the check itself was wrong, rerun the failed jobs (\`gh run rerun <id> --failed -R $PMX_REPO\`). A failed build or publish job: rerun it. See \"Check a release\" in SYNC.md. The next check closes this issue once every release is complete."
+      echo "A release that stayed a prerelease failed a promotion check (the errors above): fix the cause in a new \`-pmx.<n+1>\`, or, if the check itself was wrong, rerun the failed jobs (\`gh run rerun <id> --failed -R $PMX_REPO\`). A failed build or publish job: rerun it. See \"Check a release\" in SYNC.md. A check closes this issue once the newest tag of this base is released (its failed predecessors stay listed)."
       ;;
     unreleased)
       echo "**\`main\` is already on \`$label\` but no \`v$base-pmx.*\` tag exists.** This is the state between the two pushes of \"New upstream workflow files\" in SYNC.md."
@@ -196,9 +198,66 @@ esac
   fi
 } >"$body"
 
+# close_released ISSUE BASE REASONS: closes ISSUE for a released base, keeping the history
+# of its failed earlier tags (the "history:" lines of REASONS) in the comment.
+close_released() {
+  {
+    echo "Verified: the newest \`v$2-pmx.*\` release is public, promoted and complete, and its provimux-ui-release run for the tag's commit succeeded. $run_url"
+    if grep -q '^ *history: ' "$3"; then echo; echo "Earlier tags of this base that failed (kept for the record):"; sed -n 's/^ *history: //p' "$3" | fence; fi
+  } >"$tmp/close.md"
+  gh issue close "$1" -R "$PMX_REPO" --comment "$(cat "$tmp/close.md")" >/dev/null
+  echo "Closed #$1"
+}
+
+# sweep: every other base whose newest -pmx tag has no complete release (a failed
+# automatic or hand-pushed tag, on any base), reported in its own "sync: v<base>" issue;
+# and every other open sync issue whose base is now released, closed with its history.
+sweep() {
+  local bases b rs n t marker
+  bases="$(unreleased_bases)" || { echo "sweep: cannot list the releases" >&2; return 0; }
+  for b in $bases; do
+    [[ "$b" != "$base" ]] || continue
+    : >"$tmp/sw-reasons.txt"
+    rs="$(releases_status "$b" "$tmp/sw.json" "$tmp/sw-reasons.txt")"
+    [[ "$rs" == incomplete ]] || continue
+    t="sync: v$b — release incomplete"
+    marker="<!-- provimux-sync status=incomplete reasons=$(git hash-object --stdin <"$tmp/sw-reasons.txt") -->"
+    {
+      echo "$marker"
+      echo "**The newest provimux-ui tag for \`v$b\` has no complete release** (found by the check's sweep of every tag; it may have been pushed by hand)."
+      echo
+      fence <"$tmp/sw-reasons.txt"
+      echo "Releases:"
+      jq -r '.[] | "\(.tag) (\(.sha[0:12])): release \(.release), release run for that commit \(.run)"' "$tmp/sw.json" | fence
+      echo "See \"Check a release\" in SYNC.md. A check closes this issue once the newest tag of this base is released."
+      echo
+      echo "Run: $run_url"
+    } >"$tmp/sw-body.md"
+    if [[ -n "${PMX_REPORT_DRY_RUN:-}" ]]; then echo "sweep: $t"; cat "$tmp/sw-body.md"; continue; fi
+    n="$(sync_issues "$b" | head -n 1)"
+    if [[ -z "$n" ]]; then
+      gh issue create -R "$PMX_REPO" --title "$t" --body-file "$tmp/sw-body.md"
+    elif [[ "$(gh api "repos/$PMX_REPO/issues/$n" --jq '.body' | head -n 1)" != "$marker" ]]; then
+      gh issue edit "$n" -R "$PMX_REPO" --title "$t" --body-file "$tmp/sw-body.md" >/dev/null
+      gh issue comment "$n" -R "$PMX_REPO" --body "Now: **release incomplete** (the description shows this run). $run_url" >/dev/null
+      echo "Updated #$n: $t"
+    fi
+  done
+  [[ -z "${PMX_REPORT_DRY_RUN:-}" ]] || return 0
+  gh api --paginate "repos/$PMX_REPO/issues?state=open&per_page=100" \
+    --jq '.[] | select(.pull_request == null) | .title | capture("^sync: v(?<b>[0-9]+\\.[0-9]+\\.[0-9]+)( |$)").b' 2>/dev/null | sort -u |
+    while IFS= read -r b; do
+      if [[ "$b" == "$base" ]] || grep -qxF "$b" <<<"$bases"; then continue; fi
+      : >"$tmp/sw-reasons.txt"
+      [[ "$(releases_status "$b" "$tmp/sw.json" "$tmp/sw-reasons.txt")" == published ]] || continue
+      for n in $(sync_issues "$b"); do close_released "$n" "$b" "$tmp/sw-reasons.txt"; done
+    done
+}
+
 if [[ -n "${PMX_REPORT_DRY_RUN:-}" ]]; then
   echo "status=$status title=${title:-<none>}"
   cat "$body"
+  sweep
   exit 0
 fi
 
@@ -208,8 +267,7 @@ number="$(head -n 1 <<<"$numbers")"
 case "$status" in
   published)
     for n in $numbers; do
-      gh issue close "$n" -R "$PMX_REPO" --comment "Verified: every \`v$base-pmx.*\` release is public, promoted and complete, and its provimux-ui-release run for the tag's commit succeeded. $run_url" >/dev/null
-      echo "Closed #$n"
+      close_released "$n" "$base" "$tmp/rel-reasons.txt"
     done
     [[ -n "$numbers" ]] || echo "Published; no open issue for $label."
     ;;
@@ -229,3 +287,4 @@ case "$status" in
     fi
     ;;
 esac
+sweep

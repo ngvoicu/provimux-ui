@@ -8,10 +8,12 @@
 # It publishes nothing and holds no token of the owner (provimux-ui-publish.yml, started
 # by this run's completion, does). Every job checks out the run's own commit (github.sha,
 # the head_sha publish.sh binds the artifact to) and runs that commit's scripts. Only the
-# "test" jobs run upstream's or the candidate's code, one tree per job, and they only
-# write logs and exit statuses; the "verdict" job turns those (data) into the result and
-# runs no repository code, nor does "prepare" (git only) or "report", which alone may
-# write issues.
+# "test" jobs run upstream's or the candidate's code, one tree per job; they upload
+# nothing, and their result is their own steps' conclusions, which the "verdict" job
+# reads from the API. Every artifact a later job reads is fetched by the id and digest
+# its producing job output (never by name: a job of the same run could replace an
+# artifact under the same name). "verdict" runs no repository code, nor does "prepare"
+# (git only) or "report", which alone may write issues.
 name: provimux-ui-check
 
 on:
@@ -39,6 +41,8 @@ jobs:
     outputs:
       tag: ${{ steps.select.outputs.tag }}
       status: ${{ steps.prepare.outputs.status || steps.select.outputs.status }}
+      artifact_id: ${{ steps.upload.outputs.artifact-id }}
+      artifact_digest: ${{ steps.upload.outputs.artifact-digest }}
     env:
       PMX_REPO: ${{ github.repository }}
       PMX_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
@@ -68,6 +72,7 @@ jobs:
           git config --global --add safe.directory "$PWD"
           bash "$RUNNER_TEMP/pmx/check.sh" prepare
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        id: upload
         if: ${{ always() }}
         with:
           name: pmx-prepare
@@ -75,7 +80,8 @@ jobs:
           if-no-files-found: warn
 
   # One job per tree: upstream's and the candidate's code run here (bun install with the
-  # dependencies' scripts, tests, lint, build), and only logs and exit statuses leave it.
+  # dependencies' scripts, tests, lint, build). They upload nothing; the verdict reads
+  # the conclusions of the steps "bun install --frozen-lockfile" and "bun run verify".
   test:
     needs: prepare
     if: ${{ needs.prepare.outputs.status == 'test' }}
@@ -83,6 +89,7 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: read
+      actions: read
     strategy:
       fail-fast: false
       matrix:
@@ -93,14 +100,16 @@ jobs:
           ref: ${{ github.sha }}
           sparse-checkout: .github/provimux
           persist-credentials: false
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: pmx-prepare
-          path: ${{ runner.temp }}/check
-      - name: Check out the ${{ matrix.tree }} tree (git only)
+      # Before any code of the tree runs: the prepare job's artifact by its id and digest.
+      - name: Fetch the prepare artifact; check out the ${{ matrix.tree }} tree (git only)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PMX_REPO: ${{ github.repository }}
+          ID: ${{ needs.prepare.outputs.artifact_id }}
+          DIGEST: ${{ needs.prepare.outputs.artifact_digest }}
         run: |
-          echo "PMX_CHECK_OUT=$RUNNER_TEMP/check" >> "$GITHUB_ENV"
           export PMX_CHECK_OUT="$RUNNER_TEMP/check"
+          bash .github/provimux/check.sh fetch-prepare "$ID" "$DIGEST"
           bash .github/provimux/check.sh tree ${{ matrix.tree }}
       # The toolchain of the release's build job: Node.js 24, and the Bun version the
       # tree's package.json pins (packageManager).
@@ -110,16 +119,16 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: ${{ runner.temp }}/check/trees/${{ matrix.tree }}/package.json
-      - name: bun install --frozen-lockfile, bun run verify (runs the tree's code; logs only)
-        run: bash .github/provimux/check.sh test ${{ matrix.tree }}
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: ${{ always() }}
-        with:
-          name: pmx-test-${{ matrix.tree }}
-          path: ${{ runner.temp }}/check/test/${{ matrix.tree }}/
-          if-no-files-found: warn
+      # The verdict reads these two steps' conclusions by name: keep the names.
+      - name: bun install --frozen-lockfile
+        working-directory: ${{ runner.temp }}/check/trees/${{ matrix.tree }}
+        run: bun install --frozen-lockfile
+      - name: bun run verify
+        working-directory: ${{ runner.temp }}/check/trees/${{ matrix.tree }}
+        run: bun run verify
 
-  # Turns the exit statuses into the result. Runs no repository code.
+  # Turns the state and the test jobs' step conclusions into the result. Runs no
+  # repository code.
   verdict:
     needs: [prepare, test]
     if: ${{ always() }}
@@ -127,6 +136,10 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
+      actions: read
+    outputs:
+      artifact_id: ${{ steps.upload.outputs.artifact-id }}
+      artifact_digest: ${{ steps.upload.outputs.artifact-digest }}
     env:
       PMX_REPO: ${{ github.repository }}
       PMX_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
@@ -138,27 +151,19 @@ jobs:
           ref: ${{ github.sha }}
           sparse-checkout: .github/provimux
           persist-credentials: false
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        continue-on-error: true
-        with:
-          name: pmx-prepare
-          path: ${{ runner.temp }}/check
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        if: ${{ needs.prepare.outputs.status == 'test' }}
-        continue-on-error: true
-        with:
-          name: pmx-test-candidate
-          path: ${{ runner.temp }}/check/test/candidate
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        if: ${{ needs.prepare.outputs.status == 'test' }}
-        continue-on-error: true
-        with:
-          name: pmx-test-tag
-          path: ${{ runner.temp }}/check/test/tag
       - name: Verdict
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ID: ${{ needs.prepare.outputs.artifact_id }}
+          DIGEST: ${{ needs.prepare.outputs.artifact_digest }}
+          PMX_RUN_ID: ${{ github.run_id }}
+          PMX_RUN_ATTEMPT: ${{ github.run_attempt }}
         run: |
           echo "PMX_CHECK_OUT=$RUNNER_TEMP/check" >> "$GITHUB_ENV"
           export PMX_CHECK_OUT="$RUNNER_TEMP/check"
+          if [ -n "$ID" ]; then
+            bash .github/provimux/check.sh fetch-prepare "$ID" "$DIGEST" || echo "::error::the prepare artifact $ID could not be fetched and verified"
+          fi
           bash .github/provimux/check.sh verdict
       - name: Summary
         if: ${{ always() }}
@@ -206,11 +211,18 @@ jobs:
           ref: ${{ github.sha }}
           sparse-checkout: .github/provimux
           persist-credentials: false
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+      # The verdict's artifact, by the id and digest the verdict job output.
+      - name: Fetch the verdict artifact
         continue-on-error: true
-        with:
-          name: provimux-ui-check-${{ needs.prepare.outputs.tag || 'none' }}
-          path: ${{ runner.temp }}/artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PMX_REPO: ${{ github.repository }}
+          ID: ${{ needs.verdict.outputs.artifact_id }}
+          DIGEST: ${{ needs.verdict.outputs.artifact_digest }}
+          NAME: provimux-ui-check-${{ needs.prepare.outputs.tag || 'none' }}
+        run: |
+          . .github/provimux/common.sh
+          fetch_artifact "$ID" "$NAME" "$DIGEST" "$GITHUB_RUN_ID" "$RUNNER_TEMP/artifact"
       - name: Open, update or close the sync issue
         env:
           GH_TOKEN: ${{ github.token }}

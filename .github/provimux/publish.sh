@@ -28,9 +28,9 @@
 #    of <old base>..<old main> against <new base>..<candidate>; the new workflow paths;
 #    the guard of the current main (the remote main, = the old main) with the expected
 #    base. Dropped or changed layer commits are refused unless named exactly with the
-#    --accept-* flags (commits: the old main's commit, 7 or more hex digits); a commit
-#    whose change is identical and only its surrounding code moved is not "changed"
-#    (split_changed in common.sh). A release that adds or renames workflow files is
+#    --accept-* flags (commits: the old main's commit, 7 or more hex digits); a pair
+#    range-diff calls equal counts as changed when a binary file of it differs
+#    (range_diff_lists in common.sh). A release that adds or renames workflow files is
 #    refused: SYNC.md, "New upstream workflow files".
 # 4. Prints what it will push and asks (--yes skips the question), rechecks step 2
 #    immediately before pushing, then makes one atomic push: main with
@@ -313,7 +313,6 @@ comm -13 "$work/wf-old" "$work/wf-tag" >"$work/wf-new"
 same() { diff <(cut -f1 "$1" | sort) <(jq -r "$2" "$res" | sort) >/dev/null; }
 same "$work/dropped" '.decisions.dropped[].commit' || die "result.json's dropped commits differ from this range-diff"
 same "$work/changed" '.decisions.changed[].commit' || die "result.json's changed commits differ from this range-diff"
-same "$work/context" '.context_only[].commit' || die "result.json's context-only commits differ from this range-diff"
 same "$work/wf-new" '.decisions.new_workflows[]' || die "result.json's new workflow paths differ from this comparison"
 
 # Guard: the copy on the current main (the remote main, checked to be the old main and
@@ -382,10 +381,10 @@ provimux-ui publish: upstream console $tag ($upstream_commit)
   check run       https://github.com/$PMX_REPO/actions/runs/$run_id
   old main        $old_main (on $old_base_tag)
   candidate       $candidate ($(g rev-list --count "$upstream_commit..$candidate") commits on $tag)
-  range-diff      $n_same unchanged, $(wc -l <"$work/context" | tr -d ' ') moved context only, $(wc -l <"$work/changed" | tr -d ' ') changed, $(wc -l <"$work/dropped" | tr -d ' ') dropped
+  range-diff      $n_same unchanged, $(wc -l <"$work/changed" | tr -d ' ') changed, $(wc -l <"$work/dropped" | tr -d ' ') dropped
   new workflows   $(wc -l <"$work/wf-new" | tr -d ' ')
   guard (here)    $guard_ok
-  verify (check)  candidate passes; pristine $tag: $(jq -r '.tests.tag | if .install == 0 and .verify == 0 then "passes" else "fails (install \(.install), verify \(.verify))" end' "$res")
+  verify (check)  candidate passes; pristine $tag: $(jq -r '.tests.tag | if .install == "success" and .verify == "success" then "passes" else "install \(.install), verify \(.verify)" end' "$res")
 EOF
 for f in dropped changed; do
   if [[ -s "$work/$f" ]]; then echo "  $f:"; sed 's/^/    /' "$work/$f"; fi
@@ -453,5 +452,10 @@ recheck
 push_refs
 g push "${pushargs[@]}" "$push_url" "${refs[@]}" || die "the push failed; nothing was changed on $remote (atomic)"
 echo "Pushed."
+# The release workflow builds and promotes only a tag whose commit carries this status
+# (SYNC.md, "Release authorization"); its build job waits for it. Set with the owner's
+# own gh credentials, so its creator is the owner.
+authorize_release "$pmx_tag" "$candidate" "https://github.com/$PMX_REPO/actions/runs/$run_id" ||
+  die "pushed, but the release authorization (commit status $PMX_AUTH_CONTEXT on $candidate) could not be set: set it as SYNC.md says, or the release run stops"
 
 wait_and_close
