@@ -1,0 +1,125 @@
+// Provimux values for upstream's theme tokens (src/styles/themes.scss), from providers.dev's palette
+// (site/src/styles/global.css; brand/provimux/colours-and-type.md): zinc neutrals, the indigo brand,
+// Geist. Status colours (success, error, warning, quota, charts), motion and glass stay upstream's.
+//
+// Each block matches exactly one theme, so a value never leaks into another theme whatever the order:
+//   Light  (upstream's warm paper, no data-theme): soft zinc, cards a step darker than the page
+//   White  (data-theme='white'; also "auto" in a light system): providers.dev as it is, white on white
+//   Dark   (data-theme='dark'; also "auto" in a dark system): providers.dev dark
+// tests/provimux/theme.test.ts fails when upstream adds a token that has no Provimux value here and is not
+// listed there as kept on purpose.
+
+@mixin pmx-light-base {
+  color-scheme: light;
+
+  --floating-surface: #ffffff;
+  --floating-shadow: 0 12px 28px rgb(9 9 11 / 0.1), 0 2px 6px rgb(9 9 11 / 0.04);
+
+  --text-primary: #09090b;
+  --text-secondary: #52525b;
+  --text-tertiary: #71717a;
+  --text-quaternary: #a1a1aa;
+
+  --border-color: #e4e4e7;
+  --border-primary: #d4d4d8;
+  --border-hover: #c4c4cc;
+
+  --primary-color: #4338ca;
+  --primary-hover: #3730a3;
+  --primary-active: #312e81;
+  --primary-contrast: #ffffff;
+
+  --count-badge-bg: rgb(9 9 11 / 0.06);
+  --count-badge-text: #3f3f46;
+
+  --shadow: 0 1px 2px rgb(9 9 11 / 0.04), 0 1px 3px rgb(9 9 11 / 0.06);
+  --shadow-lg: 0 10px 24px -4px rgb(9 9 11 / 0.1), 0 2px 6px rgb(9 9 11 / 0.04);
+
+  // providers.dev's own tokens, for Provimux's pages and pieces
+  --pmx-fg: #09090b;
+  --pmx-fg-soft: #3f3f46;
+  --pmx-muted: #71717a;
+  --pmx-line: #e4e4e7;
+  --pmx-link: #1d4ed8;
+  --pmx-brand: #4338ca;
+  --pmx-brand-bg: #eef2ff;
+  --pmx-brand-line: #c7d2fe;
+  --pmx-header: rgb(255 255 255 / 0.82);
+  // access kinds (owner, 2026-11-19): subscription green, API key amber; always with the word
+  --pmx-sub: #047857;
+  --pmx-sub-bg: #ecfdf5;
+  --pmx-api: #b45309;
+  --pmx-api-bg: #fffbeb;
+}
+
+:root {
+  --pmx-font-sans:
+    'Geist Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --pmx-font-mono: 'Geist Mono Variable', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+}
+
+:root:not([data-theme]) {
+  @include pmx-light-base;
+
+  --bg-secondary: #fafafa;
+  --bg-primary: #f4f4f5;
+  --bg-tertiary: #ececee;
+  --bg-hover: #e9e9ec;
+  --bg-quinary: #f7f7f8;
+}
+
+:root[data-theme='white'] {
+  @include pmx-light-base;
+
+  --bg-secondary: #ffffff;
+  --bg-primary: #ffffff;
+  --bg-tertiary: #f4f4f5;
+  --bg-hover: #f4f4f5;
+  --bg-quinary: #ffffff;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bg-secondary: #09090b;
+  --bg-primary: #0e0e11;
+  --bg-tertiary: #18181b;
+  --bg-hover: #1f1f23;
+  --bg-quinary: #0c0c0f;
+  --floating-surface: #18181b;
+  --floating-shadow: 0 14px 32px rgb(0 0 0 / 0.55);
+
+  --text-primary: #fafafa;
+  --text-secondary: #d4d4d8;
+  --text-tertiary: #a1a1aa;
+  --text-quaternary: #71717a;
+
+  --border-color: #27272a;
+  --border-primary: #3f3f46;
+  --border-hover: #52525b;
+
+  --primary-color: #818cf8;
+  --primary-hover: #a5b4fc;
+  --primary-active: #6366f1;
+  --primary-contrast: #09090b;
+
+  --count-badge-bg: rgb(250 250 250 / 0.08);
+  --count-badge-text: #d4d4d8;
+
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-lg: 0 10px 24px -4px rgb(0 0 0 / 0.5);
+
+  --pmx-fg: #fafafa;
+  --pmx-fg-soft: #d4d4d8;
+  --pmx-muted: #a1a1aa;
+  --pmx-line: #27272a;
+  --pmx-link: #93c5fd;
+  --pmx-brand: #a5b4fc;
+  --pmx-brand-bg: #1e1b4b;
+  --pmx-brand-line: #3730a3;
+  --pmx-header: rgb(9 9 11 / 0.8);
+  --pmx-sub: #6ee7b7;
+  --pmx-sub-bg: #052e21;
+  --pmx-api: #fcd34d;
+  --pmx-api-bg: #2a1d05;
+}

@@ -25,7 +25,7 @@ import { useApiKeysForModels } from '@/hooks/useApiKeysForModels';
 import { formatDateTimeValue } from '@/utils/format';
 import { classifyModels } from '@/utils/models';
 import { STORAGE_KEY_AUTH } from '@/utils/constants';
-import { INLINE_LOGO_JPEG } from '@/assets/logoInline';
+import { INLINE_LOGO_JPEG, PROVIMUX_BRAND, ProvimuxAbout, ProvimuxLinks } from '@/provimux';
 import iconGemini from '@/assets/icons/gemini.svg';
 import iconClaude from '@/assets/icons/claude.svg';
 import iconMeta from '@/assets/icons/meta.svg';
@@ -362,8 +362,9 @@ export function SystemPage() {
       <div className={styles.content}>
         <Card className={styles.aboutCard}>
           <div className={styles.aboutHeader}>
-            <img src={INLINE_LOGO_JPEG} alt="CPAMC" className={styles.aboutLogo} />
+            <img src={INLINE_LOGO_JPEG} alt={PROVIMUX_BRAND.name} className={styles.aboutLogo} />
             <div className={styles.aboutTitle}>{t('system_info.about_title')}</div>
+            <ProvimuxAbout serverVersion={auth.serverVersion} />
           </div>
 
           <div className={styles.aboutInfoGrid}>
@@ -418,6 +419,7 @@ export function SystemPage() {
 
         <Card title={t('system_info.quick_links_title')}>
           <div className={styles.quickLinks}>
+            <ProvimuxLinks styles={styles} />
             <a
               href="https://github.com/router-for-me/CLIProxyAPI"
               target="_blank"

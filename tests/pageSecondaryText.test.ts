@@ -100,7 +100,8 @@ describe('system page', () => {
     const html = stripSvg(renderPage(SystemPage));
     const quickLinks = html.slice(html.indexOf(i18n.t('system_info.quick_links_title')));
     const cards = quickLinks.match(/<a href="https:[\s\S]*?<\/a>/g) ?? [];
-    expect(cards).toHaveLength(3);
+    // Provimux: Provimux and providers.dev come first, then upstream's three.
+    expect(cards).toHaveLength(5);
     for (const card of cards) {
       // Icon, then a content block holding only the title line.
       expect(card).toMatch(/<div[^>]*><svg\/><\/div><div><div>[^<]+<svg\/><\/div><\/div><\/a>$/);
@@ -178,7 +179,8 @@ describe('main layout', () => {
   test('the sidebar brand is the mark alone; the full name stays in its title', () => {
     const layout = read('src/components/layout/MainLayout.tsx');
     expect(layout).toMatch(
-      /<span className="sidebar-brand-text">\s*<span className="sidebar-brand-title">\{abbrBrandName\}<\/span>\s*<\/span>/
+      // Provimux: the signature "by providers.dev" goes under the name.
+      /<span className="sidebar-brand-text">\s*<span className="sidebar-brand-title">\{abbrBrandName\}<\/span>\s*<ProvimuxTagline className="sidebar-brand-tagline" \/>\s*<\/span>/
     );
     expect(layout).toContain('className="sidebar-brand" title={fullBrandName}');
   });

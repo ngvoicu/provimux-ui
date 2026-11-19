@@ -1,0 +1,54 @@
+{
+  "title": {
+    "login": "Provimux by providers.dev",
+    "abbr": "Provimux"
+  },
+  "splash": {
+    "title": "Provimux"
+  },
+  "common": {
+    "quota_update_required": "Please update Provimux or check for updates"
+  },
+  "login": {
+    "error_not_found": "v8 Management API not found. Check the server address and upgrade Provimux (or CLIProxyAPI) to v8 or later; v0 is not supported.",
+    "error_legacy_backend": "This backend accepts v0 Management API but does not provide v8. Upgrade Provimux (or CLIProxyAPI) to v8 or later to use this console."
+  },
+  "auth_files": {
+    "models_unsupported_desc": "Please update Provimux to the latest version and try again"
+  },
+  "oauth_excluded": {
+    "upgrade_required": "This Provimux version does not support OAuth model disablement. Please upgrade.",
+    "upgrade_required_title": "Please upgrade Provimux",
+    "upgrade_required_desc": "The server does not support fetching OAuth model disablement. Please upgrade to the latest Provimux and try again."
+  },
+  "oauth_model_alias": {
+    "model_source_unsupported": "This Provimux version does not support fetching model lists (manual input still works).",
+    "upgrade_required": "This feature requires a newer Provimux version. Please upgrade.",
+    "upgrade_required_title": "Please upgrade Provimux",
+    "upgrade_required_desc": "The server does not support the OAuth model aliases API. Please upgrade to the latest Provimux."
+  },
+  "auth_login": {
+    "oauth_callback_upgrade_hint": "Please update Provimux or check the connection."
+  },
+  "system_info": {
+    "about_title": "Provimux",
+    "link_main_repo": "Built on CLIProxyAPI",
+    "link_webui_repo": "Built on CLI Proxy API Management Center",
+    "link_docs": "CLIProxyAPI documentation"
+  },
+  "footer": {
+    "api_version": "Server version"
+  },
+  "provimux": {
+    "version_line": "Provimux version {{version}} (based on CLIProxyAPI {{base}})",
+    "version_line_other": "Connected to CLIProxyAPI {{version}}",
+    "built_on": "Built on CLIProxyAPI and the CLI Proxy API Management Center by router-for-me, MIT licensed.",
+    "link_provimux": "Provimux on GitHub",
+    "link_providers_dev": "providers.dev",
+    "footer_console": "Console {{version}}",
+    "footer_built_on": "Built on CLIProxyAPI"
+  },
+  "theme": {
+    "light": "Soft Grey"
+  }
+}
