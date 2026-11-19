@@ -36,7 +36,7 @@ import {
   IconSidebarSystem,
   IconChevronDown,
 } from '@/components/ui/icons';
-import { INLINE_LOGO_JPEG, PROVIMUX_BRAND, ProvimuxFooter, ProvimuxTagline } from '@/provimux';
+import { INLINE_LOGO_JPEG, PROVIMUX_BRAND, ProvimuxFooter, ProvimuxTagline, hideSponsorNav } from '@/provimux';
 import {
   useAuthStore,
   useLoginTransitionStore,
@@ -722,6 +722,7 @@ export function MainLayout() {
         ]
       : []),
   ];
+  hideSponsorNav(navGroups);
   const navItems = navGroups.flatMap((group) => flattenNavItems(group.items));
   const navOrder = navItems.map((item) => item.path);
   const getRouteOrder = (pathname: string) => {
