@@ -25,6 +25,7 @@ upstream_tags=$(git ls-remote --tags "$upstream" 'refs/tags/v*') ||
   fail "Cannot list the tags of $upstream."
 base=''
 base_commit=''
+# shellcheck disable=SC2013 # tag names have no spaces
 for t in $(awk '{ sub("^refs/tags/", "", $2); sub("\\^\\{\\}$", "", $2); print $2 }' <<<"$upstream_tags" |
   grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -u | sort -rV); do
   peeled=$(awk -v r="refs/tags/$t^{}" '$2==r {print $1}' <<<"$upstream_tags")
