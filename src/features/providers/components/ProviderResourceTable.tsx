@@ -29,6 +29,7 @@ import type { OpenAIProviderConfig } from '@/types';
 import type { StatusBarData } from '@/utils/recentRequests';
 import type { ProviderResource } from '../types';
 import { isMultiProtocolSponsorBrand } from '../sponsorDefinitions';
+import { ProvimuxOpenRouterTag } from '@/provimux/components/ProvimuxOpenRouterTag';
 import styles from './ProviderResourceTable.module.scss';
 import statusBarStyles from './providerStatusBar.module.scss';
 
@@ -174,6 +175,7 @@ export function ProviderResourceTable({
         <div className={styles.primaryCell}>
           <span className={styles.primaryName}>{r.name ?? r.identifier}</span>
           <span className={styles.primarySub}>{(r.apiKeyPreview ?? '—') + extra}</span>
+          <ProvimuxOpenRouterTag baseUrl={r.baseUrl} />
         </div>
       );
     }

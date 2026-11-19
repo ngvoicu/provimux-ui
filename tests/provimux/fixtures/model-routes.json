@@ -1,0 +1,208 @@
+{
+  "observed_at": "2026-11-19T18:04:11.482Z",
+  "models": [
+    {
+      "id": "anthropic/claude-opus-5.5",
+      "display_name": "Anthropic: Claude Opus 5.5",
+      "owned_by": "anthropic",
+      "limits": {
+        "context": 1000000,
+        "output": 128000
+      },
+      "routes": [
+        {
+          "auth_index": "9c2e7b1a0f3d4e56",
+          "provider": "openai-compatible-openrouter",
+          "kind": "apikey",
+          "priority": 0,
+          "host": "openrouter.ai",
+          "login": {
+            "name": null,
+            "email": null,
+            "label": "openrouter"
+          },
+          "limits": {
+            "context": 1000000,
+            "output": 128000
+          },
+          "reasoning": {
+            "levels": [
+              "low",
+              "medium",
+              "high"
+            ],
+            "budget": null
+          },
+          "recorded_cooldown": null
+        }
+      ]
+    },
+    {
+      "id": "claude-opus-5-5",
+      "display_name": "Claude Opus 5.5",
+      "owned_by": "anthropic",
+      "limits": {
+        "context": 200000,
+        "output": 64000
+      },
+      "routes": [
+        {
+          "auth_index": "a8d167b7d82c8c15",
+          "provider": "claude",
+          "kind": "oauth",
+          "priority": 10,
+          "host": null,
+          "login": {
+            "name": "claude-ada@example.com.json",
+            "email": "ada@example.com",
+            "label": "ada@example.com"
+          },
+          "limits": {
+            "context": 1000000,
+            "output": 64000
+          },
+          "reasoning": {
+            "levels": [
+              "low",
+              "medium",
+              "high",
+              "max"
+            ],
+            "budget": {
+              "min": 1024,
+              "max": 64000,
+              "zero_allowed": true,
+              "dynamic_allowed": false
+            }
+          },
+          "recorded_cooldown": null
+        },
+        {
+          "auth_index": "5f0c1d2e3a4b5c6d",
+          "provider": "claude",
+          "kind": "apikey",
+          "priority": 0,
+          "host": "api.anthropic.com",
+          "login": {
+            "name": null,
+            "email": null,
+            "label": "claude-apikey"
+          },
+          "limits": {
+            "context": 200000,
+            "output": 64000
+          },
+          "reasoning": {
+            "levels": [],
+            "budget": {
+              "min": 1024,
+              "max": 64000,
+              "zero_allowed": true,
+              "dynamic_allowed": false
+            }
+          },
+          "recorded_cooldown": {
+            "scope": "model",
+            "model": "claude-opus-5-5",
+            "reason": "quota",
+            "until": "2026-11-19T18:31:00.731Z",
+            "http_status": 429,
+            "backoff_level": 2
+          }
+        }
+      ]
+    },
+    {
+      "id": "devin-opus-5-5",
+      "display_name": null,
+      "owned_by": "devin",
+      "limits": {
+        "context": 200000,
+        "output": 32000
+      },
+      "routes": [
+        {
+          "auth_index": "3d9a6c5b2e1f0a47",
+          "provider": "devin",
+          "kind": "oauth",
+          "priority": 0,
+          "host": null,
+          "login": {
+            "name": "devin-ada@example.com.json",
+            "email": "ada@example.com",
+            "label": "ada@example.com"
+          },
+          "limits": {
+            "context": 200000,
+            "output": 32000
+          },
+          "reasoning": null,
+          "recorded_cooldown": {
+            "scope": "model",
+            "model": "devin-opus-5-5",
+            "reason": "quota",
+            "until": "2026-11-19T19:00:00.731Z",
+            "http_status": null,
+            "backoff_level": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "gpt-6.1-terra",
+      "display_name": "GPT-6.1 Terra",
+      "owned_by": "openai",
+      "limits": {
+        "context": null,
+        "output": 128000
+      },
+      "routes": [
+        {
+          "auth_index": "0b7e2a91c4d3f6e8",
+          "provider": "codex",
+          "kind": "oauth",
+          "priority": 0,
+          "host": null,
+          "login": {
+            "name": "codex-ada@example.com-plus.json",
+            "email": "ada@example.com",
+            "label": "ada@example.com"
+          },
+          "limits": {
+            "context": 400000,
+            "output": 128000
+          },
+          "reasoning": {
+            "levels": [
+              "minimal",
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ],
+            "budget": null
+          },
+          "recorded_cooldown": null
+        },
+        {
+          "auth_index": "7a1b9e8d6c5f4032",
+          "provider": "openai-compatible-lab",
+          "kind": "apikey",
+          "priority": 0,
+          "host": "llm.lab.example",
+          "login": {
+            "name": null,
+            "email": null,
+            "label": "lab"
+          },
+          "limits": {
+            "context": null,
+            "output": 128000
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        }
+      ]
+    }
+  ]
+}

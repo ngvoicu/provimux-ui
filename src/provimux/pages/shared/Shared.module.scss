@@ -1,0 +1,633 @@
+@use '../../../styles/mixins' as *;
+
+/* ============================================================
+ * Provimux pages: the page shell (header, chips, toolbar), the
+ * feature cards and the small badges shared by both pages.
+ * providers.dev's palette through the --pmx-* tokens; status
+ * colours (cooldowns, failures) stay upstream's warning tokens,
+ * as Auth Files shows them.
+ * ============================================================ */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  width: 100%;
+  min-width: 0;
+  // Below upstream's top gradient (.top-gradient-blur), where AI Providers puts its title.
+  padding-top: 22px;
+
+  @include mobile {
+    padding-top: 8px;
+  }
+}
+
+/* ---------- header ---------- */
+
+.header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px 24px;
+  flex-wrap: wrap;
+}
+
+.headerText {
+  min-width: 0;
+  flex: 1 1 420px;
+}
+
+.title {
+  margin: 0;
+  font-size: clamp(26px, 3.2vw, 30px);
+  line-height: 1.15;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+.lede {
+  margin: 6px 0 0;
+  max-width: 72ch;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+
+  button svg {
+    margin-right: 6px;
+  }
+}
+
+.updated {
+  font-family: var(--pmx-font-mono);
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+/* ---------- summary chips ---------- */
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 11px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+
+  &[data-access='sub'] .chipDot {
+    background: var(--pmx-sub);
+  }
+
+  &[data-access='api'] .chipDot {
+    background: var(--pmx-api);
+  }
+
+  &[data-tone='cooling'] {
+    border-color: var(--warning-border);
+    background: var(--warning-bg);
+    color: var(--warning-text);
+  }
+
+  &[data-tone='ok'] {
+    color: var(--pmx-sub);
+  }
+
+  &[data-tone='brand'] {
+    border-color: var(--pmx-brand-line);
+    background: var(--pmx-brand-bg);
+    color: var(--pmx-brand);
+  }
+}
+
+button.chip {
+  cursor: pointer;
+  transition:
+    border-color var(--dur-hover, 0.15s) ease,
+    box-shadow var(--dur-hover, 0.15s) ease;
+
+  &:hover:not(:disabled) {
+    border-color: var(--border-hover);
+  }
+
+  &:disabled {
+    cursor: default;
+  }
+
+  &[aria-pressed='true'] {
+    box-shadow: inset 0 0 0 1px currentColor;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--pmx-brand);
+    outline-offset: 2px;
+  }
+}
+
+.chipDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+}
+
+/* ---------- toolbar ---------- */
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 260px;
+  max-width: 420px;
+  min-width: 0;
+
+  input {
+    width: 100%;
+    height: 34px;
+    padding: 0 12px 0 34px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font: inherit;
+    font-size: 13.5px;
+
+    &::placeholder {
+      color: var(--text-tertiary);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--pmx-brand);
+      outline-offset: 1px;
+      border-color: transparent;
+    }
+  }
+
+  @include mobile {
+    max-width: none;
+    flex-basis: 100%;
+  }
+}
+
+.providerSelect {
+  min-width: 200px;
+
+  > button {
+    width: 100%;
+    height: 34px;
+  }
+
+  @include mobile {
+    flex: 1 1 auto;
+  }
+}
+
+.searchIcon {
+  position: absolute;
+  left: 11px;
+  color: var(--text-tertiary);
+  pointer-events: none;
+}
+
+.segmented {
+  display: inline-flex;
+  padding: 3px;
+  gap: 2px;
+  border: 1px solid var(--border-color);
+  border-radius: 9px;
+  background: var(--bg-primary);
+
+  button {
+    height: 26px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-secondary);
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 500;
+    white-space: nowrap;
+    cursor: pointer;
+
+    &:hover {
+      color: var(--text-primary);
+    }
+
+    &[aria-pressed='true'] {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--pmx-brand);
+      outline-offset: 1px;
+    }
+  }
+}
+
+.clear {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: none;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+
+  &:hover {
+    color: var(--text-primary);
+  }
+}
+
+.note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  max-width: 96ch;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-tertiary);
+
+  svg {
+    flex: none;
+    margin-top: 2px;
+  }
+}
+
+.inlineError,
+.featureError {
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--warning-border);
+  border-radius: 8px;
+  background: var(--warning-bg);
+  color: var(--warning-text);
+  font-size: 13px;
+}
+
+.skeletons {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* ---------- feature cards ---------- */
+
+.features {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+
+  @media (max-width: 1080px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.feature {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 16px 18px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--bg-primary);
+  box-shadow: var(--shadow);
+}
+
+.featureHead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.featureIcon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+
+  img {
+    width: 18px;
+    height: 18px;
+  }
+}
+
+.featureIconGlyph {
+  border-color: var(--pmx-brand-line);
+  background: var(--pmx-brand-bg);
+  color: var(--pmx-brand);
+}
+
+.featureTitles {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.featureTitle {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+
+.featureEyebrow {
+  margin: 1px 0 0;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.featureControl {
+  flex: none;
+}
+
+.switchState {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.featureText {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+
+.featureNote {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-tertiary);
+}
+
+.featureStatus {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+
+  &[data-tone='ok'] {
+    color: var(--pmx-sub);
+  }
+}
+
+.featureList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.featureListItem {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  font-size: 12.5px;
+  color: var(--text-secondary);
+
+  code {
+    font-family: var(--pmx-font-mono);
+    font-size: 12.5px;
+    color: var(--text-primary);
+  }
+
+  &[data-tone='cooling'] {
+    border-color: var(--warning-border);
+    background: var(--warning-bg);
+    color: var(--warning-text);
+  }
+}
+
+.featureListMore {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  padding-left: 10px;
+}
+
+.entryLink,
+.featureLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--pmx-link);
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+
+  &:hover {
+    text-decoration: underline;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--pmx-brand);
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+
+  code {
+    color: inherit;
+  }
+}
+
+.featureLink {
+  font-size: 12.5px;
+}
+
+.featureEmpty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px dashed var(--border-primary);
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+
+  p {
+    margin: 0;
+  }
+}
+
+.copyUrl {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 3px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font: inherit;
+  cursor: pointer;
+
+  code {
+    font-family: var(--pmx-font-mono);
+    font-size: 12px;
+    overflow-wrap: anywhere;
+  }
+
+  &:hover {
+    border-color: var(--border-hover);
+  }
+}
+
+.copyState {
+  font-size: 11.5px;
+  color: var(--pmx-sub);
+}
+
+.featureKey {
+  margin: auto 0 0;
+  padding-top: 2px;
+
+  code {
+    font-family: var(--pmx-font-mono);
+    font-size: 11.5px;
+    color: var(--text-tertiary);
+    overflow-wrap: anywhere;
+  }
+}
+
+/* ---------- badges ---------- */
+
+.access {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 20px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+
+  &[data-access='sub'] {
+    color: var(--pmx-sub);
+    background: var(--pmx-sub-bg);
+    border-color: color-mix(in srgb, var(--pmx-sub) 28%, transparent);
+  }
+
+  &[data-access='api'] {
+    color: var(--pmx-api);
+    background: var(--pmx-api-bg);
+    border-color: color-mix(in srgb, var(--pmx-api) 30%, transparent);
+  }
+}
+
+.accessDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 20px;
+  padding: 0 7px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.pillIcon {
+  width: 12px;
+  height: 12px;
+}
+
+.pillCompatible {
+  border-color: var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-family: var(--pmx-font-mono);
+  font-weight: 500;
+}
+
+/* ---------- AI Providers: the OpenRouter tag on an OpenAI-compatible row ---------- */
+
+// The table's own tags (ProviderResourceTable.module.scss .flagTag), in the brand tint, as a link.
+.openRouterTag {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 3px 9px;
+  border: 1px solid var(--pmx-brand-line);
+  border-radius: var(--radius-md, 8px);
+  background: var(--pmx-brand-bg);
+  color: var(--pmx-brand);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--pmx-brand);
+    outline-offset: 2px;
+  }
+}
