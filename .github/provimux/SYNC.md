@@ -54,7 +54,8 @@ Every job checks out the run's own commit (`github.sha`, the run's `head_sha`) a
    **dropped** (`<`) or **changed** (`!`) needs the owner's decision; nothing is accepted because "only the code
    around it moved" (review T-73: upstream swapping two items made an unchanged layer patch hide the wrong one). A pair
    range-diff calls **equal** (`=`) counts as changed too when one of its binary files differs: a patch shows a
-   binary file only as "Binary files differ", so the blob ids are compared (`range_diff_lists`, `binary_changes`).
+   binary file only as "Binary files differ", so the full blob ids are compared, with paths NUL-delimited as git stores
+   them (a non-ASCII name such as `café.png` included) (`range_diff_lists`, `binary_changes`).
 6. **Workflow files.** Every path under `.github/workflows/` new in the tag is listed, and `publish.sh` refuses such
    a release (see "New upstream workflow files").
 7. **Guard** on the candidate with `PMX_EXPECT_BASE=<tag>` and `PMX_EXPECT_BASE_COMMIT=<commit>`.
@@ -64,7 +65,11 @@ fetch-prepare` fetches the prepare job's artifact by the id and digest that job 
 checkout of the commit (the same files, filters and modes the release's `actions/checkout` makes, so the tested tree is
 the released tree), without `.git`; then Node.js 24 and the Bun version the tree's `package.json` pins
 (`packageManager`; the release's build job uses the same), and two steps of their own, `bun install
---frozen-lockfile` and `bun run verify` (tests, lint, build). They upload nothing.
+--frozen-lockfile` and `bun run verify` (tests, lint, build). They upload nothing. **The pristine tag's job is
+diagnostic only**: its job and its two steps continue on error, so its failure never fails the job, the check run or
+the publish of a passing candidate. Because GitHub reports a failed step that continues on error as `success`, its
+failures are recorded by two marker steps that run only then, `pristine install failed (diagnostic)` and `pristine
+verify failed (diagnostic)`, which the verdict reads.
 
 **Every input of a later job is bound to the job that produced it.** A job of the same run can replace an artifact
 under the same name (it holds the run's artifact token), so no job reads an artifact by name: the prepare job and the
@@ -75,9 +80,9 @@ field against a pattern (`state_get`), never sourced.
 **Job `verdict`** (`check.sh verdict`): the test outcomes are the conclusions of the steps `bun install
 --frozen-lockfile` and `bun run verify` of the jobs `test (candidate)` and `test (tag)` of this run attempt, read
 from the API: nothing the tests wrote is read. `bun run verify` must pass on the candidate, because the release's build job
-runs the same verify and a candidate that fails it cannot be released. The pristine tag's run says whose failure it
-is: "the Provimux layer breaks it" when the tag passes, "upstream's own failure" when the tag fails too (still a
-failure). It uploads the artifact `provimux-ui-check-<tag>` (`result.json`, `candidate.bundle`, `logs/`) and binds it
+runs the same verify and a candidate that fails it cannot be released; the candidate alone decides. The pristine
+tag's run says whose failure it is: "the Provimux layer breaks it" when the tag passes, "upstream's own failure" when
+the tag fails too (still a failure); for a passing candidate its result (or its absence) is only shown in the issue. It uploads the artifact `provimux-ui-check-<tag>` (`result.json`, `candidate.bundle`, `logs/`) and binds it
 to itself: its step "Bind the artifact to the verdict" writes the artifact's id, name and digest as the job's one
 annotation titled `provimux-ui-check-artifact`. `publish.sh` and `autopublish.sh` take only that artifact
 (`check_artifact` in `common.sh`): of one given attempt of the run, the job `verdict`, exactly one such annotation, an
@@ -169,13 +174,14 @@ flags, which is all promotion does). Then:
   a time in the whole repository** (job concurrency group `provimux-ui-promote`; different tags run in different
   release concurrency groups). The checked sha256 must be this run's build. It requires the tag's commit to carry the
   release authorization for exactly this tag (next section); the release to be published, **immutable**, with
-  `management.html`'s digest still the checked one; and the latest release to be read for certain (a 404 is "none
-  yet", any other error stops it: an unreadable latest is never taken as "none"). It does nothing when the release is
+  `management.html`'s digest still the checked one; and the latest release to be read for certain: a 404 is "none
+  yet"; an answer must name a `v<base>-pmx.<n>` tag (`{}` or malformed JSON stops it); any other error stops it. It does nothing when the release is
   already the latest, refuses when a newer release is the latest (version order), then runs
   `gh release edit <tag> --prerelease=false --latest` and reads it back: a failed edit, an unreadable readback or a
   readback that differs from "not a prerelease, the latest, the checked digest" is reported red with what it read.
-  (A third promotion queued while one runs replaces the waiting one, which GitHub cancels: that release stays a
-  prerelease, its run red, and the sweep reports it.)
+  Waiting promotions all wait (`queue: max`; by default GitHub keeps one waiting job and cancels the others). A
+  promotion cancelled anyway (a timeout, by hand) leaves the release a prerelease and is reported by the run itself
+  (job `report`, below).
 
 ### Release authorization
 
@@ -184,9 +190,13 @@ A tag alone does not make a release. The build job (`release-auth.sh`, before an
 description = the tag exactly, created either
 
 - by a `provimux-ui-publish` run: `github-actions[bot]`, its `target_url` that run, which is read back from the API
-  (`provimux-ui-publish.yml`, event `workflow_run`, on `main`, this repository). The publish job sets it in its step
-  "Authorize the release" right after its push (the build job waits for it up to 10 minutes); it is the only job of
-  any workflow here with `statuses: write`; or
+  (`provimux-ui-publish.yml`, event `workflow_run`, on `main`, this repository), **and whose job `publish` has the
+  steps `Push <tag> at <commit> (the only step with the token)` and `Authorize the release <tag> at <commit>`, both
+  concluded success, for exactly this tag and commit** (`publish_pushed` in `common.sh`; the step names are evaluated
+  at run time from the values the step "Push values" checked, and the jobs API reports them evaluated). A run whose
+  push or authorization skipped, as in a run that stopped at the missing token, authorizes nothing. The publish job
+  sets the status in that step right after its push (the build job waits for it up to 10 minutes); it is the only
+  job of any workflow here with `statuses: write`; or
 - by the repository owner's account: `publish.sh` by hand sets it with the owner's credentials after its push, and
   for a hand hotfix (a `-pmx.<n+1>` on the same base) the owner sets it before pushing the tag:
 
@@ -198,12 +208,13 @@ description = the tag exactly, created either
 
 A tag nobody authorized, for example a higher-numbered tag on an older commit reachable from `main`, fails the build
 job (no prerelease is made) and could not be promoted. Tags `v*` can be created, moved or deleted only by repository
-admins (ruleset "v* tags: admins only"), i.e. the owner and the owner's token. One limit stays: a tag runs the workflow
-file of its own commit, so a tag on a commit older than this rule runs the old release workflow without these checks;
-only the owner can create such a tag, and a check's sweep reports a release left incomplete.
+admins (ruleset "v* tags: admins only"), i.e. the owner and the owner's token. (A tag on a commit older than these
+rules runs that commit's older release workflow: see "Accepted risks".)
 
-If any check fails, the release stays a prerelease, the release run is red, and the sync issue quotes the failing
-job's errors (the publish job's `notify`, or the next check's report).
+**A release run that does not complete reports itself.** Its job `report` (`release-report.sh`; issues: write) runs
+when any job of a tag's release run failed or was cancelled, and opens or retitles `sync: v<base> — release
+incomplete` with every failed or cancelled job and its errors, at once, whoever pushed the tag. The release stays a
+prerelease and the run is red; the publish job's `notify` and the check's sweep say the same from their side.
 
 **Why in the release workflow, not separate.** Every `-pmx` tag gets the same checks, whoever pushed it (the
 automatic publish, or the owner's `publish.sh` or `-pmx.2`), so no release needs a manual step; the expected file is
@@ -341,6 +352,25 @@ new `-pmx.<n+1>` (a tag is never moved, a published asset never replaced). A pro
 runner: `gh run rerun <id> --failed -R ngvoicu/provimux-ui`. Promoting by hand is possible
 (`gh release edit <tag> --prerelease=false --latest`) but skips the checks.
 
+## Accepted risks
+
+The owner decided (2026-11-19, after review T-77) to accept these and not build further guards for them:
+
+- **A mistaken `v*` tag on an older commit runs that commit's older release workflow.** A tag push runs the workflow
+  file of the tagged commit, so a tag on a commit from before the release authorization (for example `bbfdffbc` or
+  earlier) runs a release workflow without it, and some of those revisions can promote. Only repository admins can
+  create, move or delete `v*` tags (ruleset 27664161, bypass: the admin role only), i.e. the owner by hand or the
+  owner's token, whose only use is the publish job's push of the tag the check passed; and the token is not reachable
+  from a tag's release run (the environment `provimux-token` allows only `main`, and no release job names it). Such a
+  tag is an owner's mistake; its run reports itself or a check's sweep reports an incomplete release.
+- **The code under test can fake its own results.** The test jobs run the candidate's and upstream's code; that code
+  could make its own `bun run verify` step succeed. The check isolates what it can (one tree per job, no uploads, the
+  outcome from the job's own steps through the API, every other input bound by artifact id and digest), but it cannot
+  make code honest about testing itself. The same is true of the release's build job, which runs the same verify.
+- **The existing release `v1.28.3-pmx.1` is mutable.** It was published before immutable releases were enabled
+  (immutability applies only to releases published afterwards) and carries no release authorization status; it stays
+  the latest release until a newer one is promoted, and a promotion dry run against it says it would refuse it.
+
 ## Testing the scripts
 
 - `bash .github/provimux/selftest.sh` runs the fixture tests offline (local repositories, a stub `gh` and `curl`):
@@ -351,6 +381,9 @@ runner: `gh run rerun <id> --failed -R ngvoicu/provimux-ui`. Promoting by hand i
   `autopublish.sh` decide and notify, `publish.sh --ci`, `release-check.sh` and the inline promote step of
   `provimux-ui-release.yml`. Run it after changing any of these.
 - `check.sh`, `report.sh`, `publish.sh`, `autopublish.sh` and `selftest.sh` run with macOS bash 3.2.
+- actionlint (1.7.12, the newest) does not know `concurrency.queue` yet, which GitHub accepts (a probe run in the
+  sandbox, 2026-11-19): run it as `actionlint -ignore 'unexpected key "queue" for "concurrency" section'
+  .github/workflows/provimux-ui-*.yml`.
 - `PMX_TAG=v1.28.2 bash .github/provimux/check.sh` (all steps, in one process) from a checkout whose `HEAD` is the
   `main` to check: it runs `bun install` and `bun run verify` of both trees.
 - `PMX_REPORT_DRY_RUN=1 RESULT=<result.json> CHECK_JOB=success bash .github/provimux/report.sh` prints the issue a
