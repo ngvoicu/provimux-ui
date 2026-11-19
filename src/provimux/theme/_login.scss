@@ -1,0 +1,109 @@
+// The login page sets its own --login-* tokens on its container and on the language dropdown
+// (src/pages/login/_palette.scss, mixed into LoginPage.module.scss), so root tokens do not reach it.
+// These rules give it providers.dev's look from outside, by the CSS-module class names Vite generates
+// ('[name]__[local]___[hash]', vite.config.ts); tests/provimux/theme.test.ts fails if either name changes.
+// Specificity (0,3,0) is above upstream's theme rules (0,2,1), whatever the order.
+
+$pmx-login-scope: "[class*='LoginPage-module__container___'], [class*='LoginPage-module__languageDropdown___']";
+
+@mixin pmx-login-light {
+  color-scheme: light;
+
+  --login-bg: #ffffff;
+  // The dot field takes the brand indigo, as the dot in the mark; the tones are 22 % and 47 % of it.
+  --login-dot-color: #4338ca;
+  --login-title: #09090b;
+
+  --login-text: #09090b;
+  --login-text-muted: #52525b;
+  --login-text-faint: #71717a;
+
+  --login-field-bg: #ffffff;
+  --login-field-bg-focus: #ffffff;
+  --login-readout-bg: #f4f4f5;
+  --login-border: #e4e4e7;
+  --login-border-hover: #d4d4d8;
+  --login-focus-border: #4338ca;
+  --login-focus-ring: rgb(67 56 202 / 0.14);
+  --login-hover-bg: #f4f4f5;
+  --login-outline: #4338ca;
+
+  // providers.dev's primary button: the text colour on the page colour
+  --login-submit-bg: #09090b;
+  --login-submit-hover: #27272a;
+  --login-submit-fg: #fafafa;
+
+  --login-dropdown-bg: #ffffff;
+  --login-dropdown-hover: #f4f4f5;
+  --login-dropdown-active: #eef2ff;
+  --login-dropdown-border: #e4e4e7;
+  --login-dropdown-shadow: 0 12px 28px rgb(9 9 11 / 0.1), 0 2px 6px rgb(9 9 11 / 0.04);
+
+  --login-loader-track: #e4e4e7;
+  --login-loader-bar: #4338ca;
+
+  --bg-secondary: var(--login-bg);
+  --bg-primary: #ffffff;
+  --border-color: var(--login-border);
+  --border-hover: var(--login-border-hover);
+  --primary-color: #4338ca;
+  --primary-hover: #3730a3;
+  --primary-active: #312e81;
+  --primary-contrast: #ffffff;
+}
+
+@mixin pmx-login-dark {
+  color-scheme: dark;
+
+  --login-bg: #09090b;
+  --login-dot-color: #a5b4fc;
+  --login-title: #fafafa;
+
+  --login-text: #fafafa;
+  --login-text-muted: #a1a1aa;
+  --login-text-faint: #71717a;
+
+  --login-field-bg: #09090b;
+  --login-field-bg-focus: #0e0e11;
+  --login-readout-bg: #18181b;
+  --login-border: #27272a;
+  --login-border-hover: #3f3f46;
+  --login-focus-border: #a5b4fc;
+  --login-focus-ring: rgb(165 180 252 / 0.16);
+  --login-hover-bg: #18181b;
+  --login-outline: #a5b4fc;
+
+  --login-submit-bg: #fafafa;
+  --login-submit-hover: #e4e4e7;
+  --login-submit-fg: #09090b;
+
+  --login-dropdown-bg: #18181b;
+  --login-dropdown-hover: #27272a;
+  --login-dropdown-active: #1e1b4b;
+  --login-dropdown-border: #27272a;
+  --login-dropdown-shadow: 0 14px 32px rgb(0 0 0 / 0.55);
+
+  --login-loader-track: #27272a;
+  --login-loader-bar: #a5b4fc;
+
+  --bg-secondary: var(--login-bg);
+  --bg-primary: #0e0e11;
+  --border-color: var(--login-border);
+  --border-hover: var(--login-border-hover);
+  --primary-color: #818cf8;
+  --primary-hover: #a5b4fc;
+  --primary-active: #6366f1;
+  --primary-contrast: #09090b;
+}
+
+:root:not([data-theme='dark']) {
+  #{$pmx-login-scope} {
+    @include pmx-login-light;
+  }
+}
+
+:root[data-theme='dark'] {
+  #{$pmx-login-scope} {
+    @include pmx-login-dark;
+  }
+}

@@ -12,6 +12,7 @@ import vi from './locales/vi.json';
 import ko from './locales/ko.json';
 import tr from './locales/tr.json';
 import { getInitialLanguage } from '@/utils/language';
+import { registerProvimuxStrings } from '@/provimux/i18n';
 
 i18n.use(initReactI18next).init({
   resources: {
@@ -32,5 +33,6 @@ i18n.use(initReactI18next).init({
     useSuspense: false,
   },
 });
+registerProvimuxStrings(i18n);
 
 export default i18n;
