@@ -8,12 +8,12 @@
 # "Provimux-Layer: branding").
 #
 # Checks HEAD:
-#   1. the base is the newest vX.Y.Z tag reachable from HEAD, it exists in the
-#      upstream console repository at the same commit (a tag that differs from
-#      upstream's is an error, never a reason to fall back to an older base), and it
-#      is not HEAD itself. With PMX_EXPECT_BASE (and PMX_EXPECT_BASE_COMMIT) the base
-#      must be exactly that upstream tag at that commit, an ancestor of HEAD; no local
-#      tag is needed;
+#   1. the base is the newest vX.Y.Z tag of the upstream console (its refs, not local
+#      tags) whose commit is an ancestor of HEAD, and it is not HEAD itself; a vX.Y.Z
+#      tag reachable from HEAD here, as new as that base or newer, that upstream
+#      withdrew or moved is an error, never a reason to fall back to an older base.
+#      With PMX_EXPECT_BASE (and PMX_EXPECT_BASE_COMMIT) the base must be exactly that
+#      upstream tag at that commit;
 #   2. base..HEAD has at least one layer commit, and once one appears every later
 #      commit carries the trailer too;
 #   3. no layer commit changes a protected path, against any of its parents;
@@ -64,17 +64,54 @@ short() { git rev-parse --short "$1"; }
 subject() { git log -1 --format=%s "$1"; }
 
 # --- 1. Base: a real upstream release tag, not the tip ---------------------------
-upstream_tags=$(git ls-remote --tags "$upstream" 'refs/tags/v*')
+# Upstream's refs decide (git ls-remote), not local tags: the base is the newest vX.Y.Z
+# tag of upstream whose commit is an ancestor of HEAD. A vX.Y.Z tag reachable from HEAD
+# here, as new as that base or newer, that upstream no longer has (withdrawn) or has at
+# another commit (moved) is an error, never a reason to fall back to an older base.
+# Same rule as upstream_base in common.sh (this file stays self-contained: workflows
+# and publish.sh run a copy of it alone).
+if ! upstream_tags=$(git ls-remote --tags "$upstream" 'refs/tags/v*'); then
+  echo "::error::Cannot list the tags of $upstream."
+  exit 1
+fi
 upstream_commit() { # commit an upstream tag points to (peeled when annotated)
   local t=$1 peeled plain
   peeled=$(awk -v r="refs/tags/$t^{}" '$2==r {print $1}' <<<"$upstream_tags")
   plain=$(awk -v r="refs/tags/$t" '$2==r {print $1}' <<<"$upstream_tags")
   echo "${peeled:-$plain}"
 }
+stable_re='^v[0-9]+\.[0-9]+\.[0-9]+$'
 base=''
 base_commit=''
+# shellcheck disable=SC2013 # tag names have no spaces
+for t in $(awk '{print $2}' <<<"$upstream_tags" | sed 's|^refs/tags/||; s/\^{}$//' | grep -E "$stable_re" | sort -u | sort -r -V); do
+  up=$(upstream_commit "$t")
+  git cat-file -e "$up^{commit}" 2>/dev/null || continue
+  if git merge-base --is-ancestor "$up" HEAD; then
+    base=$t
+    base_commit=$up
+    break
+  fi
+done
+if [ -z "$base" ]; then
+  echo "::error::No vX.Y.Z release tag of $upstream is an ancestor of HEAD; cannot find the base."
+  exit 1
+fi
+for t in $(git tag --merged HEAD --list 'v*' | grep -E "$stable_re" || true); do
+  # Only tags as new as the base or newer.
+  [ "$(printf '%s\n%s\n' "$t" "$base" | sort -V | tail -n 1)" = "$t" ] || continue
+  local_commit=$(git rev-parse "$t^{commit}")
+  up=$(upstream_commit "$t")
+  if [ -z "$up" ]; then
+    echo "::error::Tag $t ($(short "$local_commit")) is reachable from HEAD but is no longer a tag in $upstream (withdrawn); refusing to fall back to $base."
+    exit 1
+  elif [ "$up" != "$local_commit" ]; then
+    echo "::error::Tag $t is $(short "$local_commit") here but ${up:0:8} in $upstream (moved); refusing to fall back to $base. Fix the tag."
+    exit 1
+  fi
+done
 if [ -n "${PMX_EXPECT_BASE:-}" ]; then
-  # The sync: the base is given; it must be upstream's tag, at the given commit.
+  # The sync: the base must be exactly the given upstream tag, at the given commit.
   up=$(upstream_commit "$PMX_EXPECT_BASE")
   if [ -z "$up" ]; then
     echo "::error::Expected base $PMX_EXPECT_BASE is not a tag in $upstream."
@@ -84,37 +121,8 @@ if [ -n "${PMX_EXPECT_BASE:-}" ]; then
     echo "::error::Expected base $PMX_EXPECT_BASE at ${PMX_EXPECT_BASE_COMMIT:0:8}, but upstream's tag is ${up:0:8}."
     exit 1
   fi
-  if ! git merge-base --is-ancestor "$up" HEAD 2>/dev/null; then
-    echo "::error::Expected base $PMX_EXPECT_BASE (${up:0:8}) is not an ancestor of HEAD."
-    exit 1
-  fi
-  # No newer vX.Y.Z tag may be reachable (HEAD would then be on another base).
-  for t in $(git tag --merged HEAD --list 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -rV); do
-    if [ "$(printf '%s\n%s\n' "$t" "$PMX_EXPECT_BASE" | sort -V | tail -n 1)" != "$PMX_EXPECT_BASE" ]; then
-      echo "::error::Tag $t, newer than the expected base $PMX_EXPECT_BASE, is reachable from HEAD."
-      exit 1
-    fi
-    break
-  done
-  base=$PMX_EXPECT_BASE
-  base_commit=$up
-else
-  for t in $(git tag --merged HEAD --list 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -rV); do
-    local_commit=$(git rev-parse "$t^{commit}")
-    up=$(upstream_commit "$t")
-    if [ -z "$up" ]; then
-      echo "Skipping tag $t: not a tag in $upstream."
-    elif [ "$up" != "$local_commit" ]; then
-      echo "::error::Tag $t is $(short "$local_commit") here but ${up:0:8} in $upstream; refusing to fall back to an older base. Fix the tag."
-      exit 1
-    else
-      base=$t
-      base_commit=$local_commit
-      break
-    fi
-  done
-  if [ -z "$base" ]; then
-    echo "::error::No vX.Y.Z tag reachable from HEAD matches a release tag of $upstream; cannot find the base."
+  if [ "$base" != "$PMX_EXPECT_BASE" ] || [ "$base_commit" != "$up" ]; then
+    echo "::error::Expected base $PMX_EXPECT_BASE (${up:0:8}), but the base of HEAD is $base (${base_commit:0:8})."
     exit 1
   fi
 fi
