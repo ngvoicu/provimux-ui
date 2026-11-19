@@ -26,6 +26,7 @@ import {
 import { APIKEY_FUN_DISPLAY_NAME } from './sponsor';
 import { isSponsorPartialMutationError } from './sponsorMutationRecovery';
 import { useProviderWorkbench } from './useProviderWorkbench';
+import { hideSponsorPresets } from '@/provimux/sponsors';
 import {
   getProviderFilterState,
   readProvidersWorkbenchUiState,
@@ -110,7 +111,7 @@ export function ProvidersWorkbenchPage({ fixedBrand }: ProvidersWorkbenchPagePro
     () =>
       fixedBrand
         ? allGroups.filter((group) => group.id === fixedBrand)
-        : allGroups.filter((group) => group.id !== 'apikeyFun'),
+        : hideSponsorPresets(allGroups).filter((group) => group.id !== 'apikeyFun'),
     [allGroups, fixedBrand]
   );
   // Every brand stays in the strip (regular providers first, quick-connect partners after).
