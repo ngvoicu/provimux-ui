@@ -61,6 +61,8 @@ jobs:
       checks: read
       # notify and publish.sh --wait write the sync issue.
       issues: write
+      # The step "Authorize the release" (the only job of any workflow here with it).
+      statuses: write
     outputs:
       sha: ${{ steps.verify.outputs.sha }}
       tag: ${{ steps.decide.outputs.tag }}
@@ -198,6 +200,8 @@ jobs:
           up="$(get UPSTREAM_COMMIT "$sha_re")"
           base_tag="$(get PUSH_BASE_TAG '^[01]$')"
           {
+            echo "candidate=$cand"
+            echo "pmx_tag=$TAG-pmx.1"
             echo "repo=$PLAN_DIR/work/repo.git"
             echo "lease=refs/heads/main:$SHA"
             echo "ref_main=$cand:refs/heads/main"
@@ -248,6 +252,27 @@ jobs:
             echo "publish: git push reported a failure" >>"$LOG"
             exit 1
           }
+
+      # Right after the push: the release workflow builds and promotes only a tag whose
+      # commit carries this status for exactly this tag, set by a provimux-ui-publish run
+      # (its build job waits for it). GITHUB_TOKEN, inline, no repository code.
+      - name: Authorize the release (no token of the owner)
+        if: ${{ steps.decide.outputs.action == 'publish' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE: ${{ steps.values.outputs.candidate }}
+          PMX_TAG: ${{ steps.values.outputs.pmx_tag }}
+        run: |
+          set -euo pipefail
+          [[ "$CANDIDATE" =~ ^[0-9a-f]{40}$ && "$PMX_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-pmx\.1$ ]] || { echo "::error::no candidate or tag"; exit 1; }
+          gh api -X POST "repos/$PMX_REPO/statuses/$CANDIDATE" -f state=success -f context=provimux-ui-release \
+            -f description="$PMX_TAG" -f target_url="$RUN_URL" >/dev/null || {
+            echo "publish: pushed, but the release authorization of $PMX_TAG could not be set" >>"$LOG"
+            echo "::error::pushed, but the release authorization of $PMX_TAG on $CANDIDATE could not be set: the release run waits for it and stops"
+            exit 1
+          }
+          echo "Authorized $PMX_TAG at $CANDIDATE ($RUN_URL)."
 
       - name: Wait for the release, close the issue (no token)
         if: ${{ steps.decide.outputs.action == 'publish' }}

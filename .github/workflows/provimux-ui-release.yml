@@ -7,20 +7,25 @@
 #
 # Order and trust (as in Provimux's provimux-release.yml):
 #   build    read-only token, checkout without a stored credential; the only job that
-#            runs repository code (release-meta.sh, guard.sh, bun install, verify,
-#            build).
+#            runs repository code (release-meta.sh, release-auth.sh, guard.sh, bun
+#            install, verify, build). On a tag push it first requires the release
+#            authorization: the tag's commit carries the status provimux-ui-release for
+#            exactly this tag from a provimux-ui-publish run or the owner (SYNC.md,
+#            "Release authorization").
 #   publish  contents: write with GITHUB_TOKEN; no checkout, no repository script:
 #            fixed inline steps on the files the build job uploaded. Runs only for a
 #            tag push, after the build job passed.
 #   smoke    contents: read, no secret. Downloads the PUBLISHED release as anyone does
 #            and checks it (release-check.sh: sha256 = checksums.txt = the API digest =
 #            the build's, one page, title, MIT notice, version), then loads it in
-#            headless Chrome against a stub of the management API (smoke.mjs: the login
-#            page renders, sign-in reaches the stub, no request leaves 127.0.0.1).
-#   promote  contents: write with GITHUB_TOKEN; no checkout, no repository script.
-#            Only after smoke passed: re-reads the release (its digest must still be
-#            the checked one) and makes it the latest release unless a newer one is.
-#            On a dry run it says what it would do.
+#            chrome-headless-shell whose only proxy is a stub of the management API
+#            (smoke.mjs: the login page renders, sign-in reaches the stub, nothing of the
+#            whole browser leaves the stub).
+#   promote  contents: write with GITHUB_TOKEN; no checkout, no repository script; one
+#            at a time in the repository. Only after smoke passed: the release
+#            authorization again, the release immutable with the checked digest, the
+#            latest release read for certain; makes it the latest unless a newer one is,
+#            and reads it back. On a dry run it says what it would do.
 #
 # Every release is published as a PRERELEASE first. GitHub's "latest release", which
 # the console updater of Provimux and CLIProxyAPI reads (releases/latest), skips
@@ -60,6 +65,11 @@ jobs:
   build:
     if: ${{ !inputs.release }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # release-auth.sh reads the tag's commit statuses and the publish run.
+      statuses: read
+      actions: read
     outputs:
       version: ${{ steps.meta.outputs.version }}
       base: ${{ steps.meta.outputs.base }}
@@ -78,6 +88,15 @@ jobs:
         env:
           INPUT_VERSION: ${{ inputs.version }}
         run: bash .github/provimux/release-meta.sh
+
+      # Only a tag that provimux-ui-publish pushed (or the owner authorized) is built:
+      # its commit must carry the release authorization for exactly this tag.
+      - name: Release authorization (tag pushes)
+        if: ${{ github.event_name == 'push' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PMX_REPO: ${{ github.repository }}
+        run: bash .github/provimux/release-auth.sh "$GITHUB_REF_NAME" "$GITHUB_SHA"
 
       - name: Check the Provimux layer (guard)
         env:
@@ -302,19 +321,36 @@ jobs:
           WANT: ${{ needs.build.outputs.sha256 }}
         run: bash .github/provimux/release-check.sh "$TAG" "$RUNNER_TEMP/release" "$WANT"
 
+      # chrome-headless-shell, pinned: no Google services of its own, so every request
+      # the stub-proxy refuses comes from the page.
+      - name: Install chrome-headless-shell
+        id: browser
+        run: |
+          path="$(npx -y @puppeteer/browsers@2.13.2 install chrome-headless-shell@158.0.8127.36 --path "$RUNNER_TEMP/browser" --format '{{path}}' | tail -n 1)"
+          test -x "$path" || { echo "::error::chrome-headless-shell not installed ($path)"; exit 1; }
+          echo "path=$path" >> "$GITHUB_OUTPUT"
+
       - name: Load it in headless Chrome against a stub of the management API
         env:
           TAG: ${{ steps.tag.outputs.tag }}
+          CHROME: ${{ steps.browser.outputs.path }}
         run: node .github/provimux/smoke.mjs "$RUNNER_TEMP/release/management.html" "$TAG"
 
-  # Makes the checked release the latest. No checkout, no repository script.
+  # Makes the checked release the latest. No checkout, no repository script. One
+  # promotion at a time in the whole repository (different tags run in different
+  # release concurrency groups); a second waits.
   promote:
     needs: [build, smoke]
     if: ${{ always() && needs.smoke.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    concurrency:
+      group: provimux-ui-promote
+      cancel-in-progress: false
     permissions:
       contents: write
+      statuses: read
+      actions: read
     env:
       GH_REPO: ${{ github.repository }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -328,32 +364,75 @@ jobs:
           # >>> promote
           set -euo pipefail
           fail() { echo "::error title=promote $TAG::$*"; exit 1; }
-          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-pmx\.[0-9]+$ ]] || fail "no tag from the smoke job"
+          tag_re='^v[0-9]+\.[0-9]+\.[0-9]+-pmx\.[0-9]+$'
+          [[ "$TAG" =~ $tag_re ]] || fail "no tag from the smoke job"
           [[ "$SHA" =~ ^[0-9a-f]{64}$ ]] || fail "no checked sha256 from the smoke job"
+          dry=1
           if [[ "$GITHUB_EVENT_NAME" == push ]]; then
+            dry=0
             [[ "$GITHUB_REF" == "refs/tags/$TAG" && "$SHA" == "$BUILT" ]] || fail "the checked file is not this run's build ($SHA, built $BUILT)"
+            commit="$GITHUB_SHA"
+          else
+            commit="$(gh api "repos/$GH_REPO/commits/$TAG" --jq .sha)" || fail "cannot resolve $TAG"
           fi
-          # state: "<draft> <prerelease> <digest of management.html>"
-          state() { gh api "repos/$GH_REPO/releases/tags/$TAG" --jq '"\(.draft) \(.prerelease) \([.assets[] | select(.name == "management.html") | .digest // ""] | join(","))"'; }
-          latest() { gh api "repos/$GH_REPO/releases/latest" --jq .tag_name 2>/dev/null || true; }
-          read -r draft pre digest <<<"$(state)"
+          [[ "$commit" =~ ^[0-9a-f]{40}$ ]] || fail "no commit for $TAG"
+
+          # 1. Authorized: the tag's commit carries the provimux-ui-release status for exactly
+          # this tag, from a provimux-ui-publish run of this repository on main, or from the
+          # owner (SYNC.md, "Release authorization").
+          auths="$(gh api "repos/$GH_REPO/commits/$commit/statuses?per_page=100" \
+            --jq '.[] | select(.context == "provimux-ui-release" and .state == "success" and .description == env.TAG) | "\(.creator.login) \(.target_url // "")"')" ||
+            fail "cannot read the statuses of $commit: not promoted"
+          by=''
+          while read -r login url; do
+            [[ -n "$login" ]] || continue
+            if [[ "$login" == "${GH_REPO%%/*}" ]]; then by="the owner"; break; fi
+            [[ "$login" == "github-actions[bot]" && "$url" =~ ^https://github\.com/$GH_REPO/actions/runs/([0-9]+)$ ]] || continue
+            run="${BASH_REMATCH[1]}"
+            if [[ "$(gh api "repos/$GH_REPO/actions/runs/$run" --jq '.path == ".github/workflows/provimux-ui-publish.yml" and .event == "workflow_run"
+                  and .head_branch == "main" and .repository.full_name == env.GH_REPO and .head_repository.full_name == env.GH_REPO')" == true ]]; then
+              by="provimux-ui-publish run $run"; break
+            fi
+          done <<<"$auths"
+          [[ -n "$by" ]] || fail "$TAG ($commit) is not authorized by a provimux-ui-publish run or the owner: not promoted"
+          echo "$TAG ($commit) authorized by $by."
+
+          # 2. The release: published, immutable, still the checked file.
+          state() { gh api "repos/$GH_REPO/releases/tags/$TAG" --jq '"\(.draft) \(.prerelease) \(.immutable) \([.assets[] | select(.name == "management.html") | .digest // ""] | join(","))"'; }
+          st="$(state)" || fail "cannot read release $TAG: not promoted"
+          read -r draft pre immutable digest <<<"$st"
           [[ "$draft" == false ]] || fail "$TAG is a draft"
+          [[ "$immutable" == true ]] || fail "$TAG is not an immutable release (its assets or tag could still change): not promoted"
           [[ "$digest" == "sha256:$SHA" ]] || fail "management.html of $TAG is now '$digest', the smoke job checked sha256:$SHA"
-          now="$(latest)"
+
+          # 3. The latest release, read for certain (a read error is never "no latest").
+          latest() {
+            local o
+            if o="$(gh api "repos/$GH_REPO/releases/latest" 2>&1)"; then jq -r '.tag_name // ""' <<<"$o"; return 0; fi
+            case "$o" in *"HTTP 404"*) return 0 ;; esac
+            echo "$o" | tail -n 1 >&2; return 1
+          }
+          now="$(latest)" || fail "cannot read the latest release: nothing changed"
+          [[ -z "$now" || "$now" =~ $tag_re ]] || fail "the latest release is '$now', not a v<base>-pmx.<n> release: nothing changed"
           if [[ "$pre" == false && "$now" == "$TAG" ]]; then
             echo "$TAG is already the latest release; nothing to do." | tee -a "$GITHUB_STEP_SUMMARY"; exit 0
           fi
           if [[ -n "$now" && "$(printf '%s\n%s\n' "$now" "$TAG" | sort -V | tail -n 1)" != "$TAG" ]]; then
             fail "the latest release is $now, newer than $TAG: $TAG is not made the latest (it stays as it is)"
           fi
-          if [[ "$GITHUB_EVENT_NAME" != push ]]; then
+          if [[ $dry -eq 1 ]]; then
             echo "Dry run: would run gh release edit $TAG --prerelease=false --latest (now: prerelease $pre, latest ${now:-none}); nothing changed." | tee -a "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
-          gh release edit "$TAG" --prerelease=false --latest >/dev/null
-          read -r draft pre digest <<<"$(state)"
-          now="$(latest)"
+
+          # 4. Promote, then read back; anything else than the expected state is reported.
+          if ! gh release edit "$TAG" --prerelease=false --latest >/dev/null; then
+            fail "gh release edit failed; the release now reads '$(state 2>/dev/null || echo unreadable)', the latest is '$(latest 2>/dev/null || echo unreadable)': check it by hand"
+          fi
+          st="$(state)" || fail "edited, but $TAG cannot be read back: its state is unknown, check it by hand"
+          read -r draft pre immutable digest <<<"$st"
+          now="$(latest)" || fail "edited, but the latest release cannot be read back: the state is unknown, check it by hand"
           [[ "$pre" == false && "$now" == "$TAG" && "$digest" == "sha256:$SHA" ]] ||
-            fail "after the edit: prerelease $pre, latest '$now', digest $digest"
+            fail "edited, but it reads back as prerelease $pre, latest '$now', digest $digest: check it by hand"
           echo "$TAG is the latest release (management.html sha256 $SHA)." | tee -a "$GITHUB_STEP_SUMMARY"
           # <<< promote
