@@ -167,7 +167,7 @@ esac
         if [[ -n "$(j .tests.tag.tail)" ]]; then echo "The pristine tag's last lines:"; list '.tests.tag.tail'; fi
       fi
       if isfalse .guard.ok; then echo "Guard:"; list '.guard.output'; fi
-      echo "Fix it by hand following \`.github/provimux/SYNC.md\`. The next check (every 3 hours, or Actions → provimux-check → Run workflow) updates this issue."
+      echo "Fix it by hand following \`.github/provimux/SYNC.md\`. The next check (every 3 hours, or Actions → provimux-ui-check → Run workflow) updates this issue."
       ;;
     incomplete)
       echo "**A provimux-ui tag for \`$label\` exists but its release is not complete**, and no release run is still running."
