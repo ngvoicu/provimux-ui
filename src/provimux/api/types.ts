@@ -62,7 +62,8 @@ export interface ProvimuxModelRoute {
   provider: string;
   /** "oauth" = subscription login (green), "apikey" = API key (amber). */
   kind: 'oauth' | 'apikey' | (string & {}) | null;
-  priority: number;
+  /** null when the server did not say (never 0 by default). */
+  priority: number | null;
   /** Host of an API key's base URL. */
   host: string | null;
   login: ProvimuxLogin;

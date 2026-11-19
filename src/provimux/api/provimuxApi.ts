@@ -18,6 +18,8 @@ export const PROVIMUX_PATHS = {
   /** Config paths mirror the v8 YAML tree. */
   liveListsSwitch: '/config/models/live-lists',
   devinModelLevelCooling: '/config/oauth/providers/devin/model-level-cooling',
+  /** The credentials list (Auth Files). */
+  credentials: '/credentials',
   /** The management section: panel-github-repository, disable-auto-update-panel. */
   management: '/config/management',
 } as const;
@@ -28,6 +30,16 @@ export const errorStatus = (error: unknown): number | null => {
   const status = (error as { status?: unknown }).status;
   return typeof status === 'number' ? status : null;
 };
+
+/** The catalog error of Provimux's own 502 from POST /models/refresh, or null for any other failure. */
+export function serverCatalogFailure(error: unknown): string | null {
+  if (errorStatus(error) !== 502 || typeof error !== 'object' || error === null) return null;
+  const body = (error as { data?: unknown }).data;
+  if (typeof body !== 'object' || body === null) return null;
+  const record = body as Record<string, unknown>;
+  if (record.ok !== false || !('catalogs' in record || 'sources' in record)) return null;
+  return typeof record.error === 'string' && record.error ? record.error : 'catalog refresh failed';
+}
 
 /** `?model=a&model=b`: the contract's repeatable parameter (axios would write `model[]=`). */
 const modelQuery = (models: readonly string[]) =>
@@ -73,8 +85,22 @@ export const provimuxApi = {
   },
 
   /** Wakes the fetcher; returns before the lists arrive. */
-  async refreshModels(client: Client = apiClient): Promise<void> {
-    await client.post<unknown>(PROVIMUX_PATHS.modelsRefresh);
+  /**
+   * Refreshes the catalogs and wakes the live-list fetcher. Provimux wakes the fetcher before it reports a catalog
+   * that could not be read (model_definitions.go, RefreshModelDefinitions): its 502 answer, `{"ok": false, "error":
+   * …, "catalogs": …}`, means the logins are being asked anyway, so it resolves with that error as `catalogError`.
+   * Anything else that fails (400 invalid sources, 401, 404, a proxy's 502 without that body) started nothing and
+   * rejects.
+   */
+  async refreshModels(client: Client = apiClient): Promise<{ catalogError: string | null }> {
+    try {
+      await client.post<unknown>(PROVIMUX_PATHS.modelsRefresh);
+      return { catalogError: null };
+    } catch (error) {
+      const catalogError = serverCatalogFailure(error);
+      if (catalogError === null) throw error;
+      return { catalogError };
+    }
   },
 
   /** models.live-lists. Applies at once in a running Provimux. */
@@ -89,6 +115,30 @@ export const provimuxApi = {
 
   async setDevinModelLevelCooling(enabled: boolean, client: Client = apiClient): Promise<void> {
     await client.put<unknown>(PROVIMUX_PATHS.devinModelLevelCooling, enabled);
+  },
+
+  /**
+   * The Devin logins the credentials page lists (GET /credentials), counted by state: Model routes lists only the
+   * routes a login registered, so a Devin login whose models are all excluded, or that is disabled, has none there.
+   */
+  async devinLogins(client: Client = apiClient): Promise<{ enabled: number; disabled: number }> {
+    const answer = await client.get<unknown>(PROVIMUX_PATHS.credentials);
+    const files =
+      typeof answer === 'object' &&
+      answer !== null &&
+      Array.isArray((answer as { files?: unknown }).files)
+        ? ((answer as { files: unknown[] }).files as unknown[])
+        : [];
+    const counts = { enabled: 0, disabled: 0 };
+    for (const file of files) {
+      if (typeof file !== 'object' || file === null) continue;
+      const record = file as Record<string, unknown>;
+      const provider = String(record.provider ?? record.type ?? '').toLowerCase();
+      if (provider !== 'devin') continue;
+      if (record.disabled === true) counts.disabled += 1;
+      else counts.enabled += 1;
+    }
+    return counts;
   },
 
   /** Where the server downloads its console from: the configured repository (null: not set) and auto-update. */

@@ -154,6 +154,13 @@ body {
     }
   }
 
+  .pmx-about-source-url {
+    font-family: var(--pmx-font-mono);
+    font-size: 12px;
+    color: var(--text-secondary);
+    overflow-wrap: anywhere;
+  }
+
   .pmx-about-source {
     display: flex;
     flex-direction: column;

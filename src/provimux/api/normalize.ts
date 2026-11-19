@@ -88,7 +88,7 @@ export const readRoute = (value: unknown): ProvimuxModelRoute | null => {
     auth_index: str(value.auth_index),
     provider: str(value.provider) ?? 'unknown',
     kind: str(value.kind),
-    priority: num(value.priority) ?? 0,
+    priority: num(value.priority),
     host: str(value.host),
     login: readLogin(value.login),
     limits: readLimits(value.limits),

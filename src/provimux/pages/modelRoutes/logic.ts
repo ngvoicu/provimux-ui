@@ -58,16 +58,23 @@ export function loginText(route: Pick<ProvimuxModelRoute, 'kind' | 'host' | 'log
   return { primary, secondary: name && name !== primary ? name : null };
 }
 
-/** Routes that share a priority: the router chooses among them by its strategy. Highest priority first. */
+/**
+ * Routes that share a priority: the router chooses among them by its strategy. Highest priority first; routes whose
+ * priority the server did not report come last, in a tier of their own (never taken as 0).
+ */
 export interface Tier {
-  priority: number;
+  priority: number | null;
   routes: ProvimuxModelRoute[];
 }
+
+const priorityRank = (priority: number | null) => (priority === null ? -Infinity : priority);
 
 export function tiersOf(routes: readonly ProvimuxModelRoute[]): Tier[] {
   const sorted = routes
     .map((route, index) => ({ route, index }))
-    .sort((a, b) => b.route.priority - a.route.priority || a.index - b.index);
+    .sort(
+      (a, b) => priorityRank(b.route.priority) - priorityRank(a.route.priority) || a.index - b.index
+    );
   const tiers: Tier[] = [];
   for (const { route } of sorted) {
     const last = tiers[tiers.length - 1];
@@ -209,6 +216,19 @@ export function devinState(models: readonly ProvimuxModel[], nowMs: number) {
     models: new Set(routes.map(({ model }) => model.id)).size,
     cooling,
   };
+}
+
+/**
+ * Why Model routes holds no Devin route, from the credentials list: a login whose models are all excluded, or that
+ * is disabled, registers none, so "no route" is not "no login" ('unknown' when the list could not be read).
+ */
+export function devinAbsence(
+  logins: { enabled: number; disabled: number } | null
+): 'no_login' | 'enabled_no_routes' | 'disabled' | 'unknown' {
+  if (logins === null) return 'unknown';
+  if (logins.enabled > 0) return 'enabled_no_routes';
+  if (logins.disabled > 0) return 'disabled';
+  return 'no_login';
 }
 
 /** OpenRouter routes by model, with the limits Provimux read from OpenRouter's model list. */

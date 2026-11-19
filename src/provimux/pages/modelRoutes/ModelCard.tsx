@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import type { ProvimuxLimits, ProvimuxModel, ProvimuxModelRoute } from '../../api/types';
 import { AccessBadge } from '../shared/AccessBadge';
 import { ProviderPill } from '../shared/ProviderPill';
+import { useOpenInAuthFiles } from '../shared/authFilesLink';
 import { CooldownNote } from './CooldownNote';
 import { accessOf, formatInteger, formatTokens, isCoolingAt, loginText, tiersOf } from './logic';
 import styles from './ModelRoutesPage.module.scss';
@@ -77,6 +78,7 @@ function RouteRow({
   nowMs: number;
 }) {
   const { t } = useTranslation();
+  const openInAuthFiles = useOpenInAuthFiles();
   const access = accessOf(route.kind);
   const login = loginText(route);
   const cooling = isCoolingAt(route.recorded_cooldown, nowMs);
@@ -85,20 +87,34 @@ function RouteRow({
       <div className={styles.routeMain}>
         <AccessBadge access={access} kind={route.kind} />
         <ProviderPill provider={route.provider} host={route.host} />
-        <span
-          className={styles.login}
-          title={
-            route.auth_index
-              ? t('provimux.routes.auth_index', { index: route.auth_index })
-              : undefined
-          }
-        >
-          {login.primary ?? (
-            <span className={styles.unknown}>
-              {t('provimux.routes.runtime_login', { index: route.auth_index ?? '?' })}
-            </span>
-          )}
-        </span>
+        {route.login.name && login.primary ? (
+          <button
+            type="button"
+            className={`${styles.login} ${styles.loginLink}`}
+            onClick={() => openInAuthFiles(route.login.name!)}
+            title={t('provimux.routes.open_credential', {
+              name: route.login.name,
+              index: route.auth_index ?? '?',
+            })}
+          >
+            {login.primary}
+          </button>
+        ) : (
+          <span
+            className={styles.login}
+            title={
+              route.auth_index
+                ? t('provimux.routes.auth_index', { index: route.auth_index })
+                : undefined
+            }
+          >
+            {login.primary ?? (
+              <span className={styles.unknown}>
+                {t('provimux.routes.runtime_login', { index: route.auth_index ?? '?' })}
+              </span>
+            )}
+          </span>
+        )}
         {login.secondary ? <span className={styles.loginSecondary}>{login.secondary}</span> : null}
       </div>
       <div className={styles.routeMeta}>
@@ -142,22 +158,24 @@ export const ModelCard = memo(function ModelCard({ model, offsetMs, nowMs }: Mod
       </header>
       <ol className={styles.tiers}>
         {tiers.map((tier) => (
-          <li key={tier.priority} className={styles.tier}>
+          <li key={tier.priority ?? 'unknown'} className={styles.tier}>
             <span
               className={styles.tierPriority}
               title={
-                tier.routes.length > 1
-                  ? t('provimux.routes.tier_shared', {
-                      priority: tier.priority,
-                      count: tier.routes.length,
-                    })
-                  : t('provimux.routes.tier', { priority: tier.priority })
+                tier.priority === null
+                  ? t('provimux.routes.tier_unknown')
+                  : tier.routes.length > 1
+                    ? t('provimux.routes.tier_shared', {
+                        priority: tier.priority,
+                        count: tier.routes.length,
+                      })
+                    : t('provimux.routes.tier', { priority: tier.priority })
               }
             >
               <span className={styles.tierPriorityLabel}>
                 {t('provimux.routes.priority_short')}
               </span>
-              {tier.priority}
+              {tier.priority ?? '?'}
             </span>
             <ul className={styles.routes}>
               {tier.routes.map((route, index) => (

@@ -20,6 +20,13 @@ export const clockOffset = (observedAt: string | null, receivedAtMs: number): nu
 export const serverNow = (browserNowMs: number, offsetMs: number): number =>
   browserNowMs + offsetMs;
 
+/**
+ * The server's "now" for what is on screen: the page clock ticks every 15 s, so an answer can arrive after its last
+ * tick; the moment the answer arrived is the floor, so a fresh event never reads as "in 3 seconds".
+ */
+export const screenNow = (clockMs: number, loadedAtMs: number | null, offsetMs: number): number =>
+  serverNow(Math.max(clockMs, loadedAtMs ?? 0), offsetMs);
+
 /** Whole parts of a duration, rounded up to the second so a running countdown never shows 0 before the end. */
 export function durationParts(ms: number): { h: number; m: number; s: number } {
   const total = Math.max(0, Math.ceil(ms / 1000));
