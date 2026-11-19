@@ -26,6 +26,9 @@
 #            authorization again, the release immutable with the checked digest, the
 #            latest release read for certain; makes it the latest unless a newer one is,
 #            and reads it back. On a dry run it says what it would do.
+#   report   issues: write. When a job of a tag's release run failed or was cancelled,
+#            the run opens or updates its "sync: v<base>" issue itself
+#            (release-report.sh).
 #
 # Every release is published as a PRERELEASE first. GitHub's "latest release", which
 # the console updater of Provimux and CLIProxyAPI reads (releases/latest), skips
@@ -347,6 +350,9 @@ jobs:
     concurrency:
       group: provimux-ui-promote
       cancel-in-progress: false
+      # Every waiting promotion waits (the default keeps one and cancels the others); a
+      # promotion cancelled anyway is reported by the job "report".
+      queue: max
     permissions:
       contents: write
       statuses: read
@@ -389,8 +395,14 @@ jobs:
             if [[ "$login" == "${GH_REPO%%/*}" ]]; then by="the owner"; break; fi
             [[ "$login" == "github-actions[bot]" && "$url" =~ ^https://github\.com/$GH_REPO/actions/runs/([0-9]+)$ ]] || continue
             run="${BASH_REMATCH[1]}"
+            # That run is provimux-ui-publish on main, and its job "publish" pushed exactly
+            # this tag at this commit and set the status: both named steps concluded success.
             if [[ "$(gh api "repos/$GH_REPO/actions/runs/$run" --jq '.path == ".github/workflows/provimux-ui-publish.yml" and .event == "workflow_run"
-                  and .head_branch == "main" and .repository.full_name == env.GH_REPO and .head_repository.full_name == env.GH_REPO')" == true ]]; then
+                  and .head_branch == "main" and .repository.full_name == env.GH_REPO and .head_repository.full_name == env.GH_REPO')" == true ]] &&
+              gh api "repos/$GH_REPO/actions/runs/$run/jobs?filter=all&per_page=100" |
+              jq -e --arg push "Push $TAG at $commit (the only step with the token)" --arg auth "Authorize the release $TAG at $commit" '
+                [.jobs[] | select(.name == "publish") | .steps[] | select(.conclusion == "success") | .name] as $ok
+                | ($ok | index($push)) != null and ($ok | index($auth)) != null' >/dev/null; then
               by="provimux-ui-publish run $run"; break
             fi
           done <<<"$auths"
@@ -405,15 +417,20 @@ jobs:
           [[ "$immutable" == true ]] || fail "$TAG is not an immutable release (its assets or tag could still change): not promoted"
           [[ "$digest" == "sha256:$SHA" ]] || fail "management.html of $TAG is now '$digest', the smoke job checked sha256:$SHA"
 
-          # 3. The latest release, read for certain (a read error is never "no latest").
+          # 3. The latest release, read for certain: a 404 is "none yet"; an answer must name a
+          # v<base>-pmx.<n> tag ({} or malformed JSON is not "none"); anything else stops.
           latest() {
-            local o
-            if o="$(gh api "repos/$GH_REPO/releases/latest" 2>&1)"; then jq -r '.tag_name // ""' <<<"$o"; return 0; fi
+            local o t
+            if o="$(gh api "repos/$GH_REPO/releases/latest" 2>/dev/null)"; then
+              t="$(jq -r 'if type == "object" then (.tag_name // "") else "" end' <<<"$o" 2>/dev/null)" || t=''
+              [[ "$t" =~ $tag_re ]] || { echo "releases/latest answered without a v<base>-pmx.<n> tag: '$(head -c 120 <<<"$o")'" >&2; return 1; }
+              echo "$t"; return 0
+            fi
+            o="$(gh api "repos/$GH_REPO/releases/latest" 2>&1 >/dev/null)" || true
             case "$o" in *"HTTP 404"*) return 0 ;; esac
             echo "$o" | tail -n 1 >&2; return 1
           }
           now="$(latest)" || fail "cannot read the latest release: nothing changed"
-          [[ -z "$now" || "$now" =~ $tag_re ]] || fail "the latest release is '$now', not a v<base>-pmx.<n> release: nothing changed"
           if [[ "$pre" == false && "$now" == "$TAG" ]]; then
             echo "$TAG is already the latest release; nothing to do." | tee -a "$GITHUB_STEP_SUMMARY"; exit 0
           fi
@@ -436,3 +453,30 @@ jobs:
             fail "edited, but it reads back as prerelease $pre, latest '$now', digest $digest: check it by hand"
           echo "$TAG is the latest release (management.html sha256 $SHA)." | tee -a "$GITHUB_STEP_SUMMARY"
           # <<< promote
+
+  # A tag's release run that did not complete reports itself in the issue
+  # "sync: v<base>": every failed or cancelled job, with its errors (release-report.sh,
+  # the tag's own scripts, which its build job already ran; issues: write only).
+  report:
+    needs: [build, publish, smoke, promote]
+    if: >-
+      ${{ always() && github.event_name == 'push' &&
+      (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+      checks: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: .github/provimux
+          persist-credentials: false
+      - name: Report the failed release in its sync issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PMX_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: bash .github/provimux/release-report.sh "$GITHUB_REF_NAME" "$GITHUB_RUN_ID"

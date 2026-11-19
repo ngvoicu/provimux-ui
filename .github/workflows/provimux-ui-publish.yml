@@ -227,7 +227,10 @@ jobs:
       # the step above, the refs are bash words, git runs from the plan's bare repository
       # with hooks off and no global or system config. The credential helper reads the
       # token from git's environment; it is in no file, URL, argument or log.
-      - name: Push (the only step with the token)
+      # The step names carry the tag and commit (values checked in "Push values"): the
+      # release authorization requires both steps of a publish run to have concluded
+      # success under exactly these names (release_authorized in common.sh). Keep them.
+      - name: Push ${{ steps.values.outputs.pmx_tag }} at ${{ steps.values.outputs.candidate }} (the only step with the token)
         if: ${{ steps.decide.outputs.action == 'publish' }}
         shell: bash
         env:
@@ -256,7 +259,7 @@ jobs:
       # Right after the push: the release workflow builds and promotes only a tag whose
       # commit carries this status for exactly this tag, set by a provimux-ui-publish run
       # (its build job waits for it). GITHUB_TOKEN, inline, no repository code.
-      - name: Authorize the release (no token of the owner)
+      - name: Authorize the release ${{ steps.values.outputs.pmx_tag }} at ${{ steps.values.outputs.candidate }}
         if: ${{ steps.decide.outputs.action == 'publish' }}
         shell: bash
         env:
