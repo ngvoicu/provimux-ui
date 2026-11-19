@@ -1,0 +1,239 @@
+# provimux-ui release (PUI-10): a tag v<base>-pmx.<n> on main builds management.html
+# and publishes it, with checksums.txt, as a GitHub release of this repository. A
+# manual run (workflow_dispatch) is a dry run: it builds and checks everything and
+# publishes nothing.
+#
+# Order and trust (as in Provimux's provimux-release.yml):
+#   build    read-only token, checkout without a stored credential; the only job that
+#            runs repository code (release-meta.sh, guard.sh, bun install, verify,
+#            build).
+#   publish  contents: write with GITHUB_TOKEN; no checkout, no repository script:
+#            fixed inline steps on the files the build job uploaded. Runs only for a
+#            tag push, after the build job passed.
+#
+# Every release is published as a PRERELEASE. GitHub's "latest release", which the
+# console updater of Provimux and CLIProxyAPI reads (releases/latest), skips
+# prereleases, so a new console reaches no install until the owner has tried it
+# against a Provimux binary and promoted it:
+#   gh release edit <tag> --repo ngvoicu/provimux-ui --prerelease=false --latest
+# (.github/provimux/releases.md). Assets of a published release are never replaced.
+#
+# Upstream's release.yml (any v* tag) and ci.yml stay in the tree unchanged and are
+# disabled in the repository settings (.github/provimux/upstream-workflows.md).
+name: provimux-ui-release
+
+on:
+  push:
+    tags:
+      - 'v*-pmx.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version for the dry run (e.g. v1.28.3-pmx.0-dryrun); empty = v<base>-pmx.0-dryrun'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+# One run per ref at a time; a second push of the same tag waits.
+concurrency:
+  group: provimux-ui-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      base: ${{ steps.meta.outputs.base }}
+      publish: ${{ steps.meta.outputs.publish }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+
+      # The tag must name this tree's base: the upstream console release below the layer.
+      - name: Version and base
+        id: meta
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: bash .github/provimux/release-meta.sh
+
+      - name: Check the Provimux layer (guard)
+        env:
+          PMX_EXPECT_BASE: ${{ steps.meta.outputs.base }}
+          PMX_EXPECT_BASE_COMMIT: ${{ steps.meta.outputs.base_commit }}
+        run: bash .github/provimux/guard.sh
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: '1.4.3'
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Verify (tests, lint, build)
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: bun run verify
+
+      - name: Build management.html
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: bun run build
+
+      - name: Check the file and write checksums
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$*"; exit 1; }
+          mkdir release
+          mv dist/index.html release/management.html
+          f=release/management.html
+          [[ -z "$(ls -A dist)" ]] || fail "The build left more than index.html: $(ls -A dist | tr '\n' ' ')"
+          # One self-contained page: no external scripts or stylesheets.
+          ! grep -Eq '<script[^>]*src=|<link[^>]*rel="?stylesheet' "$f" || fail "management.html loads external files."
+          grep -Fq -e "\"${VERSION}\"" -e "\`${VERSION}\`" "$f" || fail "management.html does not carry version ${VERSION}."
+          grep -Fq '<title>Provimux by providers.dev</title>' "$f" || fail "management.html lacks the Provimux title."
+          # The MIT notice: every line of LICENSE, in order, in the comment after the doctype.
+          head -n 1 "$f" | grep -qix '<!doctype html>' || fail "management.html does not start with its doctype."
+          [[ "$(sed -n 2p "$f")" == '<!--' ]] || fail "management.html lacks the license comment after the doctype."
+          awk 'NR > 2 && /^-->$/ { exit } NR > 2' "$f" > "$RUNNER_TEMP/notice.txt"
+          grep -v '^[[:space:]]*$' LICENSE > "$RUNNER_TEMP/license.txt"
+          grep -Fxf "$RUNNER_TEMP/license.txt" "$RUNNER_TEMP/notice.txt" | diff -u "$RUNNER_TEMP/license.txt" - ||
+            fail "management.html does not carry LICENSE's notice."
+          cd release
+          sha256sum management.html > checksums.txt
+          ls -l
+          cat checksums.txt | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Write release notes
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+          BASE: ${{ steps.meta.outputs.base }}
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then ref="$GITHUB_REF_NAME"; else ref="$GITHUB_SHA"; fi
+          readme="https://github.com/${GITHUB_REPOSITORY}/blob/${ref}/.github/README.md"
+          original="https://github.com/router-for-me/Cli-Proxy-API-Management-Center"
+          {
+            echo "provimux-ui ${VERSION} by [providers.dev](https://providers.dev): the web console of [Provimux](https://github.com/ngvoicu/provimux), built on the [CLI Proxy API Management Center](${original}) ${BASE}."
+            echo
+            echo "- Console base: ${BASE}, the original's release: ${original}/releases/tag/${BASE}"
+            echo "- Provimux's part is a thin layer on it: the providers.dev look and the Provimux brand, the Provimux version and links on the System page, no sponsor or affiliate links. Every page, setting and request is the original console's. See the [README](${readme})."
+            echo "- Use it: give Provimux \`management.html\` with \`MANAGEMENT_STATIC_PATH\` and \`management.disable-auto-update-panel: true\` ([Use it](${readme}#use-it)); check it with \`sha256sum -c checksums.txt\`."
+            echo
+            echo "MIT licensed, like the original; \`management.html\` carries the license notice."
+          } > release/release-notes.md
+          cat release/release-notes.md | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release
+          path: release/
+          if-no-files-found: error
+
+  # Publish the GitHub release as a prerelease. A draft is created first, its assets'
+  # digests are checked, then it is published and checked again as anyone sees it.
+  # A rerun never replaces an asset: a published release must already hold this run's
+  # files; a draft left by a failed run is resumed with only its missing assets.
+  publish:
+    needs: build
+    if: ${{ needs.build.outputs.publish == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_REPO: ${{ github.repository }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TAG: ${{ github.ref_name }}
+      VERSION: ${{ needs.build.outputs.version }}
+      BASE: ${{ needs.build.outputs.base }}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release
+          path: release
+      - name: Publish release
+        working-directory: release
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$*"; exit 1; }
+          # Checked again here, without repository code: the tag the build job checked.
+          [[ "$GITHUB_REF" == "refs/tags/$TAG" && "$TAG" == "$VERSION" ]] || fail "$GITHUB_REF is not the tag the build job checked ($VERSION)."
+          [[ "$TAG" =~ ^(v[0-9]+\.[0-9]+\.[0-9]+)-pmx\.[0-9]+$ && "${BASH_REMATCH[1]}" == "$BASE" ]] ||
+            fail "Tag $TAG does not name the base $BASE."
+          [[ "$(sha256sum management.html)" == "$(cat checksums.txt)" ]] || fail "management.html does not match checksums.txt."
+          declare -A want
+          want[management.html]="$(sha256sum management.html | cut -d' ' -f1)"
+          want[checksums.txt]="$(sha256sum checksums.txt | cut -d' ' -f1)"
+          # The release(s) with this tag, drafts included (the tag endpoint skips drafts).
+          release() {
+            gh api --paginate "repos/$GH_REPO/releases?per_page=100" \
+              --jq '.[] | select(.tag_name == env.TAG) | {id, draft, prerelease, assets: [.assets[] | {id, name, state, digest}]}' | jq -s .
+          }
+          # Check every asset present: expected name, fully uploaded, this run's digest
+          # (downloaded and hashed when GitHub reports none). Prints the names missing.
+          check() {
+            local r=$1 bad=0 id name state digest got
+            while IFS=$'\t' read -r id name state digest; do
+              if [[ -z "${want[$name]:-}" ]]; then echo "::error::Unexpected asset $name" >&2; bad=1; continue; fi
+              [[ "$state" == uploaded ]] || { echo "::error::Asset $name is $state" >&2; bad=1; continue; }
+              if [[ -z "$digest" || "$digest" == null ]]; then
+                got="sha256:$(gh api -H 'Accept: application/octet-stream' "repos/$GH_REPO/releases/assets/$id" | sha256sum | cut -d' ' -f1)"
+              else
+                got="$digest"
+              fi
+              [[ "$got" == "sha256:${want[$name]}" ]] || { echo "::error::Asset $name is $got, this run built sha256:${want[$name]}" >&2; bad=1; }
+            done < <(jq -r '.[0].assets[] | [.id, .name, .state, (.digest // "")] | @tsv' <<<"$r")
+            [[ $bad -eq 0 ]] || return 1
+            for f in "${!want[@]}"; do
+              jq -e --arg f "$f" '.[0].assets | any(.name == $f)' <<<"$r" >/dev/null || echo "$f"
+            done
+          }
+          r="$(release)"
+          case "$(jq length <<<"$r")" in
+            0)
+              gh release create "$TAG" --draft --prerelease --verify-tag --title "provimux-ui $TAG" \
+                --notes-file release-notes.md management.html checksums.txt
+              r="$(release)"
+              ;;
+            1) ;;
+            *) fail "Several releases have tag $TAG; delete the extra drafts and rerun." ;;
+          esac
+          missing="$(check "$r")" || fail "Release $TAG has assets that are not this run's; it is left as it is."
+          if [[ "$(jq '.[0].draft' <<<"$r")" == false ]]; then
+            [[ -z "$missing" ]] || fail "Published release $TAG lacks: $missing. Assets of a published release are not changed here."
+            echo "Release $TAG is already published with this run's assets; nothing to do."
+          else
+            # This workflow's drafts are prereleases; any other draft was not made here.
+            [[ "$(jq '.[0].prerelease' <<<"$r")" == true ]] || fail "Draft $TAG is not a prerelease; it was not made by this workflow. Left as it is."
+            if [[ -n "$missing" ]]; then
+              echo "Resuming draft $TAG; uploading: $missing"
+              mapfile -t files <<<"$missing"
+              gh release upload "$TAG" "${files[@]}"
+              r="$(release)"
+              missing="$(check "$r")" || fail "Draft $TAG has assets that are not this run's."
+              [[ -z "$missing" ]] || fail "Draft $TAG still lacks: $missing"
+            fi
+            gh release edit "$TAG" --draft=false --prerelease
+          fi
+          # The public release, as anyone sees it.
+          pub="$(gh api "repos/$GH_REPO/releases/tags/$TAG" --jq '{id, draft, prerelease, html_url, assets: [.assets[] | {id, name, state, digest}]}' | jq -s .)"
+          [[ "$(jq '.[0].draft' <<<"$pub")" == false ]] || fail "Release $TAG is still a draft."
+          missing="$(check "$pub")" || fail "Published release $TAG does not match this run."
+          [[ -z "$missing" ]] || fail "Published release $TAG lacks: $missing"
+          {
+            echo "Release $TAG: $(jq -r '.[0].html_url' <<<"$pub") (prerelease: $(jq '.[0].prerelease' <<<"$pub")), assets matching this run:"
+            echo
+            sed 's/^/    /' checksums.txt
+            echo "    $(sha256sum checksums.txt)"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
