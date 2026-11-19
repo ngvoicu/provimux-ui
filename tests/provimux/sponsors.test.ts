@@ -3,6 +3,7 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { provimuxNav } from '../../src/provimux/nav';
 import { createElement, type ReactElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
@@ -69,9 +70,16 @@ describe('seams', () => {
     hideSponsorNav(groups);
     expect(groups[0].items).toEqual([{ path: '/' }]);
     expect(groups[1].items).toHaveLength(2);
+    // The sidebar's seam is Provimux's nav, which hides sponsors before adding its pages (PUI-15/16).
     expect(read('src/components/layout/MainLayout.tsx')).toMatch(
-      /\];\n {2}hideSponsorNav\(navGroups\);\n {2}const navItems = navGroups/
+      /\];\n {2}provimuxNav\(navGroups, useProvimuxPages\(\)\);\n {2}const navItems = navGroups/
     );
+    const viaNav = [{ id: 'operate', items: [{ path: '/' }, { path: '/quick-start' }] }];
+    provimuxNav(viaNav, {
+      modelRoutes: { status: 'unsupported', message: null },
+      liveLists: { status: 'unsupported', message: null },
+    });
+    expect(viaNav[0].items).toEqual([{ path: '/' }]);
   });
 
   test('the Quick Start route goes to AI Providers', () => {

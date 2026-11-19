@@ -1,0 +1,99 @@
+{
+  "observed_at": "2026-11-19T18:04:11.482Z",
+  "enabled": true,
+  "providers": [
+    "claude",
+    "codex",
+    "meta"
+  ],
+  "logins": [
+    {
+      "auth_index": "a8d167b7d82c8c15",
+      "provider": "claude",
+      "login": {
+        "name": "claude-ada@example.com.json",
+        "email": "ada@example.com",
+        "label": "ada@example.com"
+      },
+      "disabled": false,
+      "source": "live",
+      "fetching": false,
+      "fetched_at": "2026-11-19T16:10:44.207Z",
+      "listed_models": 11,
+      "registered_models": 9,
+      "last_failure": null
+    },
+    {
+      "auth_index": "c41f0d7e9b2a6835",
+      "provider": "claude",
+      "login": {
+        "name": "claude-grace@example.com.json",
+        "email": "grace@example.com",
+        "label": "grace@example.com"
+      },
+      "disabled": false,
+      "source": "live",
+      "fetching": false,
+      "fetched_at": "2026-11-19T13:02:19.207Z",
+      "listed_models": 11,
+      "registered_models": 9,
+      "last_failure": {
+        "at": "2026-11-19T18:02:20.207Z",
+        "category": "http_status",
+        "http_status": 529
+      }
+    },
+    {
+      "auth_index": "0b7e2a91c4d3f6e8",
+      "provider": "codex",
+      "login": {
+        "name": "codex-ada@example.com-plus.json",
+        "email": "ada@example.com",
+        "label": "ada@example.com"
+      },
+      "disabled": false,
+      "source": "catalog",
+      "fetching": false,
+      "fetched_at": null,
+      "listed_models": null,
+      "registered_models": 14,
+      "last_failure": {
+        "at": "2026-11-19T17:58:02.207Z",
+        "category": "http_status",
+        "http_status": 401
+      }
+    },
+    {
+      "auth_index": "e2d5a8b1c7f09346",
+      "provider": "codex",
+      "login": {
+        "name": "codex-old@example.com-team.json",
+        "email": "old@example.com",
+        "label": "old@example.com"
+      },
+      "disabled": true,
+      "source": "catalog",
+      "fetching": false,
+      "fetched_at": null,
+      "listed_models": null,
+      "registered_models": 0,
+      "last_failure": null
+    },
+    {
+      "auth_index": "6f3b0c9d8e7a1254",
+      "provider": "meta",
+      "login": {
+        "name": "meta-ada.json",
+        "email": null,
+        "label": "meta"
+      },
+      "disabled": false,
+      "source": "catalog",
+      "fetching": true,
+      "fetched_at": null,
+      "listed_models": null,
+      "registered_models": 6,
+      "last_failure": null
+    }
+  ]
+}

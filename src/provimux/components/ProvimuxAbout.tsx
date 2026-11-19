@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { describeServerVersion } from '../version';
+import { ProvimuxConsoleSource } from './ProvimuxConsoleSource';
 import { ProvimuxTagline } from './ProvimuxTagline';
 
 interface ProvimuxAboutProps {
@@ -9,7 +10,8 @@ interface ProvimuxAboutProps {
 
 /**
  * Under the System page's title: the signature, what the console is connected to, and what Provimux is built on.
- * "Provimux version 8.0.78-pmx.1 (based on CLIProxyAPI 8.0.78)"; another CLIProxyAPI build reads as itself.
+ * "Provimux version 8.0.78-pmx.1 (based on CLIProxyAPI 8.0.78)"; another CLIProxyAPI build reads as itself. Then this
+ * console's release and where the server downloads it from (PUI-15).
  */
 export function ProvimuxAbout({ serverVersion }: ProvimuxAboutProps) {
   const { t } = useTranslation();
@@ -24,6 +26,7 @@ export function ProvimuxAbout({ serverVersion }: ProvimuxAboutProps) {
             : t('provimux.version_line_other', { version: server.version })}
         </p>
       ) : null}
+      <ProvimuxConsoleSource serverVersion={serverVersion} />
       <p className="pmx-about-built-on">{t('provimux.built_on')}</p>
     </div>
   );

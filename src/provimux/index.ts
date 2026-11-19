@@ -5,3 +5,5 @@ export { ProvimuxAbout } from './components/ProvimuxAbout';
 export { ProvimuxFooter } from './components/ProvimuxFooter';
 export { ProvimuxLinks } from './components/ProvimuxLinks';
 export { ProvimuxTagline } from './components/ProvimuxTagline';
+export { provimuxNav } from './nav';
+export { useProvimuxPages } from './presence';
