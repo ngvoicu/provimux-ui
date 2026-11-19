@@ -47,11 +47,15 @@ export function useProvimuxResource<T extends { observed_at: string | null }>(
 
   const load = useCallback(async (): Promise<LoadResult<T>> => {
     const requestId = ++requestRef.current;
-    const client = apiClient.captureConnection(() => requestId === requestRef.current);
+    const connection = apiClient.getConnectionRevision();
+    // A newer load, a closed page (cleanup bumps the id) or another connection makes this answer stale.
+    const isCurrent = () =>
+      requestId === requestRef.current && connection === apiClient.getConnectionRevision();
+    const client = apiClient.captureConnection(isCurrent);
     setState((prev) => ({ ...prev, loading: true }));
     try {
       const data = await fetcher(client);
-      if (requestId !== requestRef.current) return null;
+      if (!isCurrent()) return null;
       const receivedAt = Date.now();
       loadedAtRef.current = receivedAt;
       setState({
@@ -64,7 +68,7 @@ export function useProvimuxResource<T extends { observed_at: string | null }>(
       useProvimuxPresence.getState().report(endpoint, {});
       return { ok: true, data };
     } catch (error) {
-      if (requestId !== requestRef.current) return null;
+      if (!isCurrent()) return null;
       useProvimuxPresence.getState().report(endpoint, { error });
       if (errorStatus(error) !== 404) {
         setState((prev) => ({ ...prev, loading: false, error: getErrorMessage(error) }));

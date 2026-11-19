@@ -63,6 +63,7 @@ import { QUOTA_ADAPTERS } from '@/features/quota/providers';
 import type { QuotaStore } from '@/features/quota/providers/types';
 import { useAuthStore, useNotificationStore, useQuotaStore, useThemeStore } from '@/stores';
 import styles from './AuthFilesPage.module.scss';
+import { provimuxAuthTarget } from '@/provimux/pages/shared/authFilesLink';
 
 const DEFAULT_REGULAR_PAGE_SIZE = 9;
 const DEFAULT_COMPACT_PAGE_SIZE = 12;
@@ -449,7 +450,7 @@ export function AuthFilesPage() {
       filesMatchingStatusFilters.filter((item) => {
         const type = normalizeProviderKey(String(item.type ?? item.provider ?? ''));
         const matchType = normalizedFilter === 'all' || type === normalizedFilter;
-        return matchType && matchesAuthFileSearch(item, normalizedSearch, wildcardSearch);
+        return matchType && matchesAuthFileSearch(item, normalizedSearch, wildcardSearch) && provimuxAuthTarget(item, normalizedSearch);
       }),
     [filesMatchingStatusFilters, normalizedFilter, normalizedSearch, wildcardSearch]
   );

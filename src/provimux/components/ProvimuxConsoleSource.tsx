@@ -55,14 +55,6 @@ export function ProvimuxConsoleSource({ serverVersion }: { serverVersion?: strin
       : 'cliproxyapi';
   const source: UpdateSource | null =
     loaded.state === 'ready' ? describeUpdateSource(loaded.repository, server) : null;
-  const reason =
-    source === null
-      ? ''
-      : source.reason === 'default'
-        ? server === 'provimux'
-          ? t('provimux.console.reason_default_provimux')
-          : t('provimux.console.reason_default_cliproxyapi')
-        : t(`provimux.console.reason_${source.reason}`);
 
   return (
     <div className="pmx-about-console">
@@ -72,28 +64,52 @@ export function ProvimuxConsoleSource({ serverVersion }: { serverVersion?: strin
           : t('provimux.console.dev', { version: build.version })}
       </p>
       {source && loaded.state === 'ready' ? (
-        <p className="pmx-about-source">
-          <span>
-            {t('provimux.console.update_source')}{' '}
-            {source.repository ? (
-              <a href={githubUrl(source.repository)} target="_blank" rel="noopener noreferrer">
-                github.com/{source.repository}
-              </a>
-            ) : (
-              <code className="pmx-about-source-url">{source.releaseUrl}</code>
-            )}
-            {' · '}
-            {reason}
-          </span>
-          <span>
-            {loaded.autoUpdateOff ? t('provimux.console.auto_off') : t('provimux.console.auto_on')}
-          </span>
-        </p>
+        <UpdateSourceLine source={source} server={server} autoUpdateOff={loaded.autoUpdateOff} />
       ) : loaded.state === 'error' ? (
         <p className="pmx-about-source">
           {t('provimux.console.source_failed', { message: loaded.message })}
         </p>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * The update source as shown: a repository by name, or the release address reduced to scheme, host and path. The
+ * exact release URL (which may hold a password, a token or other query values) is never rendered.
+ */
+export function UpdateSourceLine({
+  source,
+  server,
+  autoUpdateOff,
+}: {
+  source: UpdateSource;
+  server: 'provimux' | 'cliproxyapi';
+  autoUpdateOff: boolean | null;
+}) {
+  const { t } = useTranslation();
+  const reason =
+    source.reason === 'default'
+      ? server === 'provimux'
+        ? t('provimux.console.reason_default_provimux')
+        : t('provimux.console.reason_default_cliproxyapi')
+      : t(`provimux.console.reason_${source.reason}`);
+  return (
+    <p className="pmx-about-source">
+      <span>
+        {t('provimux.console.update_source')}{' '}
+        {source.repository ? (
+          <a href={githubUrl(source.repository)} target="_blank" rel="noopener noreferrer">
+            github.com/{source.repository}
+          </a>
+        ) : (
+          <code className="pmx-about-source-url">{source.address}</code>
+        )}
+        {source.hidden ? ` ${t('provimux.console.credentials_hidden')}` : ''}
+        {' · '}
+        {reason}
+      </span>
+      <span>{autoUpdateOff ? t('provimux.console.auto_off') : t('provimux.console.auto_on')}</span>
+    </p>
   );
 }

@@ -28,7 +28,7 @@ const rows = JSON.parse(
 
 describe('the updaters, as the server runs them', () => {
   test('the table covers the server tests and the review cases', () => {
-    expect(rows.length).toBeGreaterThanOrEqual(69);
+    expect(rows.length).toBeGreaterThanOrEqual(74);
     const inputs = rows.map((row) => row.input);
     expect(inputs).toContain('https://api.github.com/repositories/1296269');
     expect(inputs).toContain('https://www.github.com/review-org/review-panel');
@@ -57,27 +57,27 @@ describe('the updaters, as the server runs them', () => {
 describe('what the System page names', () => {
   test('a numeric repository id the updater uses is shown as its URL, not as the default', () => {
     // Review: the page said "not a GitHub repository … the server's default" while the updater used this id.
-    expect(describeUpdateSource('https://api.github.com/repositories/1296269', 'provimux')).toEqual(
-      {
-        releaseUrl: 'https://api.github.com/repositories/1296269/releases/latest',
-        repository: null,
-        reason: 'configured',
-      }
-    );
+    expect(
+      describeUpdateSource('https://api.github.com/repositories/1296269', 'provimux')
+    ).toMatchObject({
+      releaseUrl: 'https://api.github.com/repositories/1296269/releases/latest',
+      repository: null,
+      reason: 'configured',
+    });
   });
 
   test('www.github.com is not a repository the updater reads: it falls back to the default', () => {
     // Review: the page named review-org/review-panel while the updater fetched provimux-ui.
     expect(
       describeUpdateSource('https://www.github.com/review-org/review-panel', 'provimux')
-    ).toEqual({
+    ).toMatchObject({
       releaseUrl: PROVIMUX_DEFAULT_RELEASE_URL,
       repository: 'ngvoicu/provimux-ui',
       reason: 'unusable_as_default',
     });
     expect(
       describeUpdateSource('https://www.github.com/review-org/review-panel', 'cliproxyapi')
-    ).toEqual({
+    ).toMatchObject({
       releaseUrl: STOCK_DEFAULT_RELEASE_URL,
       repository: 'router-for-me/Cli-Proxy-API-Management-Center',
       reason: 'unusable_as_default',
@@ -105,14 +105,22 @@ describe('what the System page names', () => {
   });
 
   test('a custom repository keeps the spelling the updater requests', () => {
-    expect(describeUpdateSource('ssh://git@github.com/someone/my-panel.git', 'provimux')).toEqual({
+    expect(
+      describeUpdateSource('ssh://git@github.com/someone/my-panel.git', 'provimux')
+    ).toMatchObject({
       releaseUrl: 'https://api.github.com/repos/someone/my-panel/releases/latest',
       repository: 'someone/my-panel',
       reason: 'configured',
     });
     expect(
       describeUpdateSource('https://api.github.com/repos/someone/my-panel?per_page=1', 'provimux')
-    ).toMatchObject({ repository: null, reason: 'configured' });
+    ).toMatchObject({
+      // T-83: the query is not shown, so the publisher is named and the address marked as reduced.
+      releaseUrl: 'https://api.github.com/repos/someone/my-panel/releases/latest?per_page=1',
+      repository: 'someone/my-panel',
+      hidden: true,
+      reason: 'configured',
+    });
   });
 
   test('the label is "Update source", in every language', () => {
