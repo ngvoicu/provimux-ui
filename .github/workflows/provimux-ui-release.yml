@@ -1,7 +1,9 @@
-# provimux-ui release (PUI-10): a tag v<base>-pmx.<n> on main builds management.html
-# and publishes it, with checksums.txt, as a GitHub release of this repository. A
-# manual run (workflow_dispatch) is a dry run: it builds and checks everything and
-# publishes nothing.
+# provimux-ui release (PUI-10, PUI-12): a tag v<base>-pmx.<n> on main builds
+# management.html, publishes it with checksums.txt as a prerelease of this repository,
+# checks the published file and makes it the latest release. A manual run
+# (workflow_dispatch) is a dry run: it builds and checks everything and publishes
+# nothing; with the input "release" it instead runs the smoke and promote jobs against
+# that published release and changes nothing.
 #
 # Order and trust (as in Provimux's provimux-release.yml):
 #   build    read-only token, checkout without a stored credential; the only job that
@@ -10,13 +12,22 @@
 #   publish  contents: write with GITHUB_TOKEN; no checkout, no repository script:
 #            fixed inline steps on the files the build job uploaded. Runs only for a
 #            tag push, after the build job passed.
+#   smoke    contents: read, no secret. Downloads the PUBLISHED release as anyone does
+#            and checks it (release-check.sh: sha256 = checksums.txt = the API digest =
+#            the build's, one page, title, MIT notice, version), then loads it in
+#            headless Chrome against a stub of the management API (smoke.mjs: the login
+#            page renders, sign-in reaches the stub, no request leaves 127.0.0.1).
+#   promote  contents: write with GITHUB_TOKEN; no checkout, no repository script.
+#            Only after smoke passed: re-reads the release (its digest must still be
+#            the checked one) and makes it the latest release unless a newer one is.
+#            On a dry run it says what it would do.
 #
-# Every release is published as a PRERELEASE. GitHub's "latest release", which the
-# console updater of Provimux and CLIProxyAPI reads (releases/latest), skips
-# prereleases, so a new console reaches no install until the owner has tried it
-# against a Provimux binary and promoted it:
-#   gh release edit <tag> --repo ngvoicu/provimux-ui --prerelease=false --latest
-# (.github/provimux/releases.md). Assets of a published release are never replaced.
+# Every release is published as a PRERELEASE first. GitHub's "latest release", which
+# the console updater of Provimux and CLIProxyAPI reads (releases/latest), skips
+# prereleases, so a new console reaches installs only once the smoke job has checked
+# the published file; if any check fails it stays a prerelease, the run is red and the
+# sync issue says why (.github/provimux/SYNC.md, "Promotion"). Assets of a published
+# release are never replaced.
 #
 # Upstream's release.yml (any v* tag) and ci.yml stay in the tree unchanged and are
 # disabled in the repository settings (.github/provimux/upstream-workflows.md).
@@ -32,6 +43,10 @@ on:
         description: 'Version for the dry run (e.g. v1.28.3-pmx.0-dryrun); empty = v<base>-pmx.0-dryrun'
         required: false
         default: ''
+      release:
+        description: 'Instead of a build: check this published release (v<base>-pmx.<n>) as the smoke and promote jobs would; nothing changes'
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -43,11 +58,13 @@ concurrency:
 
 jobs:
   build:
+    if: ${{ !inputs.release }}
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.meta.outputs.version }}
       base: ${{ steps.meta.outputs.base }}
       publish: ${{ steps.meta.outputs.publish }}
+      sha256: ${{ steps.file.outputs.sha256 }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -72,9 +89,10 @@ jobs:
         with:
           node-version: '24'
 
+      # The Bun version package.json pins (packageManager), as provimux-ui-check tests with.
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: '1.4.3'
+          bun-version-file: package.json
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -90,6 +108,7 @@ jobs:
         run: bun run build
 
       - name: Check the file and write checksums
+        id: file
         env:
           VERSION: ${{ steps.meta.outputs.version }}
         run: |
@@ -98,7 +117,7 @@ jobs:
           mkdir release
           mv dist/index.html release/management.html
           f=release/management.html
-          [[ -z "$(ls -A dist)" ]] || fail "The build left more than index.html: $(ls -A dist | tr '\n' ' ')"
+          [[ -z "$(find dist -mindepth 1 -print -quit)" ]] || fail "The build left more than index.html: $(find dist -mindepth 1 | tr "\n" " ")"
           # One self-contained page: no external scripts or stylesheets.
           ! grep -Eq '<script[^>]*src=|<link[^>]*rel="?stylesheet' "$f" || fail "management.html loads external files."
           grep -Fq -e "\"${VERSION}\"" -e "\`${VERSION}\`" "$f" || fail "management.html does not carry version ${VERSION}."
@@ -112,6 +131,7 @@ jobs:
             fail "management.html does not carry LICENSE's notice."
           cd release
           sha256sum management.html > checksums.txt
+          echo "sha256=$(cut -d' ' -f1 checksums.txt)" >> "$GITHUB_OUTPUT"
           ls -l
           cat checksums.txt | tee -a "$GITHUB_STEP_SUMMARY"
 
@@ -237,3 +257,103 @@ jobs:
             sed 's/^/    /' checksums.txt
             echo "    $(sha256sum checksums.txt)"
           } | tee -a "$GITHUB_STEP_SUMMARY"
+
+  # Checks the published release before it may become the latest. Read-only, no secret.
+  smoke:
+    needs: [build, publish]
+    if: >-
+      ${{ always() && ((github.event_name == 'push' && needs.publish.result == 'success') ||
+      (github.event_name == 'workflow_dispatch' && inputs.release != '')) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+      sha256: ${{ steps.check.outputs.sha256 }}
+    steps:
+      - name: The release
+        id: tag
+        env:
+          INPUT_RELEASE: ${{ inputs.release }}
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == push ]]; then tag="$GITHUB_REF_NAME"; else tag="$INPUT_RELEASE"; fi
+          [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-pmx\.[0-9]+$ ]] || { echo "::error::'$tag' is not v<base>-pmx.<n>"; exit 1; }
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      # This run's scripts (the tagged commit on a tag push); tags for the tag's LICENSE.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+
+      - name: Check the published files (digests, page, title, MIT notice, version)
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PMX_REPO: ${{ github.repository }}
+          TAG: ${{ steps.tag.outputs.tag }}
+          # On a tag push: the file this run's build job built.
+          WANT: ${{ needs.build.outputs.sha256 }}
+        run: bash .github/provimux/release-check.sh "$TAG" "$RUNNER_TEMP/release" "$WANT"
+
+      - name: Load it in headless Chrome against a stub of the management API
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: node .github/provimux/smoke.mjs "$RUNNER_TEMP/release/management.html" "$TAG"
+
+  # Makes the checked release the latest. No checkout, no repository script.
+  promote:
+    needs: [build, smoke]
+    if: ${{ always() && needs.smoke.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    env:
+      GH_REPO: ${{ github.repository }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TAG: ${{ needs.smoke.outputs.tag }}
+      SHA: ${{ needs.smoke.outputs.sha256 }}
+      BUILT: ${{ needs.build.outputs.sha256 }}
+    steps:
+      # Inline: no repository code. selftest.sh runs the lines between the markers.
+      - name: Promote to the latest release
+        run: |
+          # >>> promote
+          set -euo pipefail
+          fail() { echo "::error title=promote $TAG::$*"; exit 1; }
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-pmx\.[0-9]+$ ]] || fail "no tag from the smoke job"
+          [[ "$SHA" =~ ^[0-9a-f]{64}$ ]] || fail "no checked sha256 from the smoke job"
+          if [[ "$GITHUB_EVENT_NAME" == push ]]; then
+            [[ "$GITHUB_REF" == "refs/tags/$TAG" && "$SHA" == "$BUILT" ]] || fail "the checked file is not this run's build ($SHA, built $BUILT)"
+          fi
+          # state: "<draft> <prerelease> <digest of management.html>"
+          state() { gh api "repos/$GH_REPO/releases/tags/$TAG" --jq '"\(.draft) \(.prerelease) \([.assets[] | select(.name == "management.html") | .digest // ""] | join(","))"'; }
+          latest() { gh api "repos/$GH_REPO/releases/latest" --jq .tag_name 2>/dev/null || true; }
+          read -r draft pre digest <<<"$(state)"
+          [[ "$draft" == false ]] || fail "$TAG is a draft"
+          [[ "$digest" == "sha256:$SHA" ]] || fail "management.html of $TAG is now '$digest', the smoke job checked sha256:$SHA"
+          now="$(latest)"
+          if [[ "$pre" == false && "$now" == "$TAG" ]]; then
+            echo "$TAG is already the latest release; nothing to do." | tee -a "$GITHUB_STEP_SUMMARY"; exit 0
+          fi
+          if [[ -n "$now" && "$(printf '%s\n%s\n' "$now" "$TAG" | sort -V | tail -n 1)" != "$TAG" ]]; then
+            fail "the latest release is $now, newer than $TAG: $TAG is not made the latest (it stays as it is)"
+          fi
+          if [[ "$GITHUB_EVENT_NAME" != push ]]; then
+            echo "Dry run: would run gh release edit $TAG --prerelease=false --latest (now: prerelease $pre, latest ${now:-none}); nothing changed." | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          gh release edit "$TAG" --prerelease=false --latest >/dev/null
+          read -r draft pre digest <<<"$(state)"
+          now="$(latest)"
+          [[ "$pre" == false && "$now" == "$TAG" && "$digest" == "sha256:$SHA" ]] ||
+            fail "after the edit: prerelease $pre, latest '$now', digest $digest"
+          echo "$TAG is the latest release (management.html sha256 $SHA)." | tee -a "$GITHUB_STEP_SUMMARY"
+          # <<< promote
