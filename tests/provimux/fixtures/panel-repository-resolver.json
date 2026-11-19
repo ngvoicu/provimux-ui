@@ -1,0 +1,416 @@
+[
+  {
+    "input": "",
+    "provimux": "https://api.github.com/repos/ngvoicu/provimux-ui/releases/latest",
+    "provimuxDefault": false,
+    "stock": "https://api.github.com/repos/router-for-me/Cli-Proxy-API-Management-Center/releases/latest"
+  },
+  {
+    "input": "   ",
+    "provimux": "https://api.github.com/repos/ngvoicu/provimux-ui/releases/latest",
+    "provimuxDefault": false,
+    "stock": "https://api.github.com/repos/router-for-me/Cli-Proxy-API-Management-Center/releases/latest"
+  },
+  {
+    "input": "https://github.com/ngvoicu/provimux-ui",
+    "provimux": "https://api.github.com/repos/ngvoicu/provimux-ui/releases/latest",
+    "provimuxDefault": true,
+    "stock": "https://api.github.com/repos/ngvoicu/provimux-ui/releases/latest"
+  },
+  {
+    "input": "https://github.com/router-for-me/Cli-Proxy-API-Management-Center",
+    "provimux": "https://api.github.com/repos/ngvoicu/provimux-ui/releases/latest",
+    "provimuxDefault": true,
+    "stock": "https://api.github.com/repos/router-for-me/Cli-Proxy-API-Management-Center/releases/latest"
+  },
+  {
+    "input": "https://github.com/router-for-me/Cli-Proxy-API-Management-Center/",
+    "provimux": "https://api.github.com/repos/ngvoicu/provimux-ui/releases/latest",
+    "provimuxDefault": true,
+    "stock": "https://api.github.com/repos/router-for-me/Cli-Proxy-API-Management-Center/releases/latest"
+  },
+  {
+    "input": "https://github.com/router-for-me/Cli-Proxy-API-Management-Center.git",
+    "provimux": "https://api.github.com/repos/ngvoicu/provimux-ui/releases/latest",
+    "provimuxDefault": true,
+    "stock": "https://api.github.com/repos/router-for-me/Cli-Proxy-API-Management-Center/releases/latest"
+  },
+  {
+    "input": "https://github.com/router-for-me/Cli-Proxy-API-Management-Center.GIT/",
+    "provimux": "https://api.github.com/repos/ngvoicu/provimux-ui/releases/latest",
+    "provimuxDefault": true,
+    "stock": "https://api.github.com/repos/router-for-me/Cli-Proxy-API-Management-Center.GIT/releases/latest"
+  },
+  {
+    "input": "HTTPS://GitHub.COM:443/Router-For-Me/cli-proxy-api-management-center",
+    "provimux": "https://api.github.com/repos/ngvoicu/provimux-ui/releases/latest",
+    "provimuxDefault": true,
+    "stock": "https://api.github.com/repos/router-for-me/Cli-Proxy-API-Management-Center/releases/latest"
+  },
+  {
+    "input": "http://github.com/router-for-me/Cli-Proxy-API-Management-Center/releases",
+    "provimux": "https://api.github.com/repos/ngvoicu/provimux-ui/releases/latest",
+    "provimuxDefault": true,
+    "stock": "https://api.github.com/repos/router-for-me/Cli-Proxy-API-Management-Center/releases/latest"
+  },
+  {
+    "input": "ssh://git@github.com/router-for-me/Cli-Proxy-API-Management-Center.git",
+    "provimux": "https://api.github.com/repos/ngvoicu/provimux-ui/releases/latest",
+    "provimuxDefault": true,
+    "stock": "https://api.github.com/repos/router-for-me/Cli-Proxy-API-Management-Center/releases/latest"
+  },
+  {
+    "input": "https://api.github.com/repos/router-for-me/Cli-Proxy-API-Management-Center/releases/latest",
+    "provimux": "https://api.github.com/repos/ngvoicu/provimux-ui/releases/latest",
+    "provimuxDefault": true,
+    "stock": "https://api.github.com/repos/router-for-me/Cli-Proxy-API-Management-Center/releases/latest"
+  },
+  {
+    "input": "https://api.github.com/repos/router-for-me/Cli-Proxy-API-Management-Center/Releases/Latest",
+    "provimux": "https://api.github.com/repos/ngvoicu/provimux-ui/releases/latest",
+    "provimuxDefault": true,
+    "stock": "https://api.github.com/repos/router-for-me/Cli-Proxy-API-Management-Center/Releases/Latest"
+  },
+  {
+    "input": "https://api.github.com:443/repos/router-for-me/Cli-Proxy-API-Management-Center/releases/latest///",
+    "provimux": "https://api.github.com/repos/ngvoicu/provimux-ui/releases/latest",
+    "provimuxDefault": true,
+    "stock": "https://api.github.com/repos/router-for-me/Cli-Proxy-API-Management-Center/releases/latest"
+  },
+  {
+    "input": "https://api.github.com/repositories/1051566067/releases/latest",
+    "provimux": "https://api.github.com/repos/ngvoicu/provimux-ui/releases/latest",
+    "provimuxDefault": true,
+    "stock": "https://api.github.com/repositories/1051566067/releases/latest"
+  },
+  {
+    "input": "https://API.github.com/repositories/1051566067",
+    "provimux": "https://api.github.com/repos/ngvoicu/provimux-ui/releases/latest",
+    "provimuxDefault": true,
+    "stock": "https://API.github.com/repositories/1051566067/releases/latest"
+  },
+  {
+    "input": "https://github.com/NGVOICU/Provimux-UI.git",
+    "provimux": "https://api.github.com/repos/ngvoicu/provimux-ui/releases/latest",
+    "provimuxDefault": true,
+    "stock": "https://api.github.com/repos/NGVOICU/Provimux-UI/releases/latest"
+  },
+  {
+    "input": "https://api.github.com/repositories/1463889407/releases/latest",
+    "provimux": "https://api.github.com/repos/ngvoicu/provimux-ui/releases/latest",
+    "provimuxDefault": true,
+    "stock": "https://api.github.com/repositories/1463889407/releases/latest"
+  },
+  {
+    "input": "ssh://git@github.com/someone/my-panel.git",
+    "provimux": "https://api.github.com/repos/someone/my-panel/releases/latest",
+    "provimuxDefault": false,
+    "stock": "https://api.github.com/repos/someone/my-panel/releases/latest"
+  },
+  {
+    "input": "ssh://git@github.com/someone/my-panel",
+    "provimux": "https://api.github.com/repos/someone/my-panel/releases/latest",
+    "provimuxDefault": false,
+    "stock": "https://api.github.com/repos/someone/my-panel/releases/latest"
+  },
+  {
+    "input": "git+ssh://git@github.com/someone/my-panel.git",
+    "provimux": "https://api.github.com/repos/someone/my-panel/releases/latest",
+    "provimuxDefault": false,
+    "stock": "https://api.github.com/repos/someone/my-panel/releases/latest"
+  },
+  {
+    "input": "git@github.com:someone/my-panel.git",
+    "provimux": "https://api.github.com/repos/ngvoicu/provimux-ui/releases/latest",
+    "provimuxDefault": false,
+    "stock": "https://api.github.com/repos/router-for-me/Cli-Proxy-API-Management-Center/releases/latest"
+  },
+  {
+    "input": "https://github.com/someone/my-panel",
+    "provimux": "https://api.github.com/repos/someone/my-panel/releases/latest",
+    "provimuxDefault": false,
+    "stock": "https://api.github.com/repos/someone/my-panel/releases/latest"
+  },
+  {
+    "input": "https://github.com/someone/my-panel.git/",
+    "provimux": "https://api.github.com/repos/someone/my-panel/releases/latest",
+    "provimuxDefault": false,
+    "stock": "https://api.github.com/repos/someone/my-panel/releases/latest"
+  },
+  {
+    "input": "https://github.com/someone/my-panel/releases",
+    "provimux": "https://api.github.com/repos/someone/my-panel/releases/latest",
+    "provimuxDefault": false,
+    "stock": "https://api.github.com/repos/someone/my-panel/releases/latest"
+  },
+  {
+    "input": "https://github.com:443/someone/my-panel",
+    "provimux": "https://api.github.com/repos/ngvoicu/provimux-ui/releases/latest",
+    "provimuxDefault": false,
+    "stock": "https://api.github.com/repos/router-for-me/Cli-Proxy-API-Management-Center/releases/latest"
+  },
+  {
+    "input": "http://github.com/someone/my-panel",
+    "provimux": "https://api.github.com/repos/someone/my-panel/releases/latest",
+    "provimuxDefault": false,
+    "stock": "https://api.github.com/repos/someone/my-panel/releases/latest"
+  },
+  {
+    "input": "https://www.github.com/someone/my-panel",
+    "provimux": "https://api.github.com/repos/ngvoicu/provimux-ui/releases/latest",
+    "provimuxDefault": false,
+    "stock": "https://api.github.com/repos/router-for-me/Cli-Proxy-API-Management-Center/releases/latest"
+  },
+  {
+    "input": "https://api.github.com/repos/someone/my-panel",
+    "provimux": "https://api.github.com/repos/someone/my-panel/releases/latest",
+    "provimuxDefault": false,
+    "stock": "https://api.github.com/repos/someone/my-panel/releases/latest"
+  },
+  {
+    "input": "https://api.github.com/repos/someone/my-panel/releases/latest",
+    "provimux": "https://api.github.com/repos/someone/my-panel/releases/latest",
+    "provimuxDefault": false,
+    "stock": "https://api.github.com/repos/someone/my-panel/releases/latest"
+  },
+  {
+    "input": "https://api.github.com/repositories/123456/releases/latest",
+    "provimux": "https://api.github.com/repositories/123456/releases/latest",
+    "provimuxDefault": false,
+    "stock": "https://api.github.com/repositories/123456/releases/latest"
+  },
+  {
+    "input": "https://api.github.com/repos/router-for-me/other-repo",
+    "provimux": "https://api.github.com/repos/router-for-me/other-repo/releases/latest",
+    "provimuxDefault": false,
+    "stock": "https://api.github.com/repos/router-for-me/other-repo/releases/latest"
+  },
+  {
+    "input": "https://gitlab.com/someone/my-panel",
+    "provimux": "https://api.github.com/repos/ngvoicu/provimux-ui/releases/latest",
+    "provimuxDefault": false,
+    "stock": "https://api.github.com/repos/router-for-me/Cli-Proxy-API-Management-Center/releases/latest"
+  },
+  {
+    "input": "github.com/someone/my-panel",
+    "provimux": "https://api.github.com/repos/ngvoicu/provimux-ui/releases/latest",
+    "provimuxDefault": false,
+    "stock": "https://api.github.com/repos/router-for-me/Cli-Proxy-API-Management-Center/releases/latest"
+  },
+  {
+    "input": "someone/my-panel",
+    "provimux": "https://api.github.com/repos/ngvoicu/provimux-ui/releases/latest",
+    "provimuxDefault": false,
+    "stock": "https://api.github.com/repos/router-for-me/Cli-Proxy-API-Management-Center/releases/latest"
+  },
+  {
+    "input": "not a url",
+    "provimux": "https://api.github.com/repos/ngvoicu/provimux-ui/releases/latest",
+    "provimuxDefault": false,
+    "stock": "https://api.github.com/repos/router-for-me/Cli-Proxy-API-Management-Center/releases/latest"
+  },
+  {
+    "input": "https://api.github.com/repositories/1296269",
+    "provimux": "https://api.github.com/repositories/1296269/releases/latest",
+    "provimuxDefault": false,
+    "stock": "https://api.github.com/repositories/1296269/releases/latest"
+  },
+  {
+    "input": "https://www.github.com/review-org/review-panel",
+    "provimux": "https://api.github.com/repos/ngvoicu/provimux-ui/releases/latest",
+    "provimuxDefault": false,
+    "stock": "https://api.github.com/repos/router-for-me/Cli-Proxy-API-Management-Center/releases/latest"
+  },
+  {
+    "input": "https://www.github.com/router-for-me/Cli-Proxy-API-Management-Center",
+    "provimux": "https://api.github.com/repos/ngvoicu/provimux-ui/releases/latest",
+    "provimuxDefault": true,
+    "stock": "https://api.github.com/repos/router-for-me/Cli-Proxy-API-Management-Center/releases/latest"
+  },
+  {
+    "input": "  https://github.com/someone/my-panel  ",
+    "provimux": "https://api.github.com/repos/someone/my-panel/releases/latest",
+    "provimuxDefault": false,
+    "stock": "https://api.github.com/repos/someone/my-panel/releases/latest"
+  },
+  {
+    "input": "//github.com/someone/my-panel",
+    "provimux": "https://api.github.com/repos/someone/my-panel/releases/latest",
+    "provimuxDefault": false,
+    "stock": "https://api.github.com/repos/someone/my-panel/releases/latest"
+  },
+  {
+    "input": "https:///someone/my-panel",
+    "provimux": "https://api.github.com/repos/ngvoicu/provimux-ui/releases/latest",
+    "provimuxDefault": false,
+    "stock": "https://api.github.com/repos/router-for-me/Cli-Proxy-API-Management-Center/releases/latest"
+  },
+  {
+    "input": "https://github.com",
+    "provimux": "https://api.github.com/repos/ngvoicu/provimux-ui/releases/latest",
+    "provimuxDefault": false,
+    "stock": "https://api.github.com/repos/router-for-me/Cli-Proxy-API-Management-Center/releases/latest"
+  },
+  {
+    "input": "https://github.com/someone",
+    "provimux": "https://api.github.com/repos/ngvoicu/provimux-ui/releases/latest",
+    "provimuxDefault": false,
+    "stock": "https://api.github.com/repos/router-for-me/Cli-Proxy-API-Management-Center/releases/latest"
+  },
+  {
+    "input": "https://github.com//someone/my-panel",
+    "provimux": "https://api.github.com/repos/someone/my-panel/releases/latest",
+    "provimuxDefault": false,
+    "stock": "https://api.github.com/repos/someone/my-panel/releases/latest"
+  },
+  {
+    "input": "https://github.com/someone//my-panel",
+    "provimux": "https://api.github.com/repos/ngvoicu/provimux-ui/releases/latest",
+    "provimuxDefault": false,
+    "stock": "https://api.github.com/repos/router-for-me/Cli-Proxy-API-Management-Center/releases/latest"
+  },
+  {
+    "input": "https://user:secret@github.com/someone/my-panel",
+    "provimux": "https://api.github.com/repos/someone/my-panel/releases/latest",
+    "provimuxDefault": false,
+    "stock": "https://api.github.com/repos/someone/my-panel/releases/latest"
+  },
+  {
+    "input": "https://github.com/someone/my-panel?tab=releases",
+    "provimux": "https://api.github.com/repos/someone/my-panel/releases/latest",
+    "provimuxDefault": false,
+    "stock": "https://api.github.com/repos/someone/my-panel/releases/latest"
+  },
+  {
+    "input": "https://github.com/someone/my-panel#readme",
+    "provimux": "https://api.github.com/repos/someone/my-panel/releases/latest",
+    "provimuxDefault": false,
+    "stock": "https://api.github.com/repos/someone/my-panel/releases/latest"
+  },
+  {
+    "input": "https://GITHUB.COM/Someone/My-Panel",
+    "provimux": "https://api.github.com/repos/Someone/My-Panel/releases/latest",
+    "provimuxDefault": false,
+    "stock": "https://api.github.com/repos/Someone/My-Panel/releases/latest"
+  },
+  {
+    "input": "https://github.com/%zz/my-panel",
+    "provimux": "https://api.github.com/repos/ngvoicu/provimux-ui/releases/latest",
+    "provimuxDefault": false,
+    "stock": "https://api.github.com/repos/router-for-me/Cli-Proxy-API-Management-Center/releases/latest"
+  },
+  {
+    "input": "https://github.com/some%20one/my-panel",
+    "provimux": "https://api.github.com/repos/some one/my-panel/releases/latest",
+    "provimuxDefault": false,
+    "stock": "https://api.github.com/repos/some one/my-panel/releases/latest"
+  },
+  {
+    "input": "https://git hub.com/someone/my-panel",
+    "provimux": "https://api.github.com/repos/ngvoicu/provimux-ui/releases/latest",
+    "provimuxDefault": false,
+    "stock": "https://api.github.com/repos/router-for-me/Cli-Proxy-API-Management-Center/releases/latest"
+  },
+  {
+    "input": "https://github.com:abc/someone/my-panel",
+    "provimux": "https://api.github.com/repos/ngvoicu/provimux-ui/releases/latest",
+    "provimuxDefault": false,
+    "stock": "https://api.github.com/repos/router-for-me/Cli-Proxy-API-Management-Center/releases/latest"
+  },
+  {
+    "input": "https://[::1]/someone/my-panel",
+    "provimux": "https://api.github.com/repos/ngvoicu/provimux-ui/releases/latest",
+    "provimuxDefault": false,
+    "stock": "https://api.github.com/repos/router-for-me/Cli-Proxy-API-Management-Center/releases/latest"
+  },
+  {
+    "input": "https://api.github.com",
+    "provimux": "https://api.github.com/releases/latest",
+    "provimuxDefault": false,
+    "stock": "https://api.github.com/releases/latest"
+  },
+  {
+    "input": "https://api.github.com/",
+    "provimux": "https://api.github.com/releases/latest",
+    "provimuxDefault": false,
+    "stock": "https://api.github.com/releases/latest"
+  },
+  {
+    "input": "https://api.github.com/repos/someone/my-panel/",
+    "provimux": "https://api.github.com/repos/someone/my-panel/releases/latest",
+    "provimuxDefault": false,
+    "stock": "https://api.github.com/repos/someone/my-panel/releases/latest"
+  },
+  {
+    "input": "https://api.github.com/repos/someone/my-panel?per_page=1",
+    "provimux": "https://api.github.com/repos/someone/my-panel/releases/latest?per_page=1",
+    "provimuxDefault": false,
+    "stock": "https://api.github.com/repos/someone/my-panel/releases/latest?per_page=1"
+  },
+  {
+    "input": "https://api.github.com/repos/someone/my-panel/RELEASES/LATEST",
+    "provimux": "https://api.github.com/repos/someone/my-panel/RELEASES/LATEST",
+    "provimuxDefault": false,
+    "stock": "https://api.github.com/repos/someone/my-panel/RELEASES/LATEST"
+  },
+  {
+    "input": "HTTPS://API.GITHUB.COM/repos/someone/my-panel",
+    "provimux": "https://API.GITHUB.COM/repos/someone/my-panel/releases/latest",
+    "provimuxDefault": false,
+    "stock": "https://API.GITHUB.COM/repos/someone/my-panel/releases/latest"
+  },
+  {
+    "input": "https://api.github.com:443/repos/someone/my-panel",
+    "provimux": "https://api.github.com/repos/ngvoicu/provimux-ui/releases/latest",
+    "provimuxDefault": false,
+    "stock": "https://api.github.com/repos/router-for-me/Cli-Proxy-API-Management-Center/releases/latest"
+  },
+  {
+    "input": "https://api.github.com/repositories/abc",
+    "provimux": "https://api.github.com/repositories/abc/releases/latest",
+    "provimuxDefault": false,
+    "stock": "https://api.github.com/repositories/abc/releases/latest"
+  },
+  {
+    "input": "https://api.github.com/repositories/1463889407",
+    "provimux": "https://api.github.com/repos/ngvoicu/provimux-ui/releases/latest",
+    "provimuxDefault": true,
+    "stock": "https://api.github.com/repositories/1463889407/releases/latest"
+  },
+  {
+    "input": "https://api.github.com/repos/ngvoicu/provimux-ui",
+    "provimux": "https://api.github.com/repos/ngvoicu/provimux-ui/releases/latest",
+    "provimuxDefault": true,
+    "stock": "https://api.github.com/repos/ngvoicu/provimux-ui/releases/latest"
+  },
+  {
+    "input": "file:///etc/passwd",
+    "provimux": "https://api.github.com/repos/ngvoicu/provimux-ui/releases/latest",
+    "provimuxDefault": false,
+    "stock": "https://api.github.com/repos/router-for-me/Cli-Proxy-API-Management-Center/releases/latest"
+  },
+  {
+    "input": "mailto:someone@github.com",
+    "provimux": "https://api.github.com/repos/ngvoicu/provimux-ui/releases/latest",
+    "provimuxDefault": false,
+    "stock": "https://api.github.com/repos/router-for-me/Cli-Proxy-API-Management-Center/releases/latest"
+  },
+  {
+    "input": ":github.com/a/b",
+    "provimux": "https://api.github.com/repos/ngvoicu/provimux-ui/releases/latest",
+    "provimuxDefault": false,
+    "stock": "https://api.github.com/repos/router-for-me/Cli-Proxy-API-Management-Center/releases/latest"
+  },
+  {
+    "input": "1https://github.com/someone/my-panel",
+    "provimux": "https://api.github.com/repos/ngvoicu/provimux-ui/releases/latest",
+    "provimuxDefault": false,
+    "stock": "https://api.github.com/repos/router-for-me/Cli-Proxy-API-Management-Center/releases/latest"
+  },
+  {
+    "input": "https://github.com/someone/my-panel\u0001",
+    "provimux": "https://api.github.com/repos/ngvoicu/provimux-ui/releases/latest",
+    "provimuxDefault": false,
+    "stock": "https://api.github.com/repos/router-for-me/Cli-Proxy-API-Management-Center/releases/latest"
+  }
+]

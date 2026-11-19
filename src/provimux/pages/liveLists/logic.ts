@@ -36,15 +36,18 @@ export function liveRowState(login: ProvimuxLiveListLogin, enabled: boolean | nu
 export interface LiveSummary {
   live: number;
   catalog: number;
+  /** A source this console does not know: counted apart, never as catalog. */
+  unknown: number;
   failing: number;
   fetching: number;
 }
 
 export function liveSummary(logins: readonly ProvimuxLiveListLogin[]): LiveSummary {
-  const summary: LiveSummary = { live: 0, catalog: 0, failing: 0, fetching: 0 };
+  const summary: LiveSummary = { live: 0, catalog: 0, unknown: 0, failing: 0, fetching: 0 };
   for (const login of logins) {
     if (login.source === 'live') summary.live += 1;
-    else summary.catalog += 1;
+    else if (login.source === 'catalog') summary.catalog += 1;
+    else summary.unknown += 1;
     if (login.last_failure && !login.disabled) summary.failing += 1;
     if (login.fetching) summary.fetching += 1;
   }
@@ -75,6 +78,7 @@ export function refreshProgress(
 
 export type FailureHint =
   | 'signin'
+  | 'denied'
   | 'rate_limited'
   | 'provider_error'
   | 'http_other'
@@ -83,7 +87,10 @@ export type FailureHint =
   | 'invalid_response'
   | 'other';
 
-/** A one-line reading of a failure's code; the reason in words stays in the server's log. */
+/**
+ * A one-line reading of a failure's code; the reason in words stays in the server's log. Only a 401 asks to sign in
+ * again: a 403 is the provider denying this account (policy, permissions), which a new sign-in does not change.
+ */
 export function failureHint(failure: {
   category: string;
   http_status: number | null;
@@ -91,7 +98,8 @@ export function failureHint(failure: {
   switch (failure.category) {
     case 'http_status': {
       const status = failure.http_status ?? 0;
-      if (status === 401 || status === 403) return 'signin';
+      if (status === 401) return 'signin';
+      if (status === 403) return 'denied';
       if (status === 429) return 'rate_limited';
       if (status >= 500) return 'provider_error';
       return 'http_other';

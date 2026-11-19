@@ -74,8 +74,9 @@ back, and for each Claude, Codex and Meta login: its own live list or the catalo
 models the provider listed and how many the login serves, and the last failed fetch (when, its category and HTTP
 status).
 
-**The console on the System page.** Which console release is installed, and where the server downloads it from
-(`management.panel-github-repository`, read with Provimux's rules) and whether it updates itself.
+**The console on the System page.** Which console release is installed, and its update source: where the server's
+updater fetches new releases (`management.panel-github-repository`, resolved with the updater's own rules, so a value
+the updater cannot use shows the default it falls back to) and whether it updates itself.
 
 These pages use endpoints only Provimux has (`/v8/management/provimux/…`). Connected to CLIProxyAPI, which answers
 404 there, they are not in the sidebar and their addresses open the dashboard; any other error shows on the page,

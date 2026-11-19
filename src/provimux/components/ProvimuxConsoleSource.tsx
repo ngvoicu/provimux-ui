@@ -6,9 +6,9 @@ import { getErrorMessage } from '@/utils/helpers';
 import { provimuxApi } from '../api/provimuxApi';
 import {
   describeConsoleBuild,
-  describeConsoleSource,
+  describeUpdateSource,
   githubUrl,
-  type ConsoleSource,
+  type UpdateSource,
 } from '../consoleSource';
 import { isProvimuxServer, useProvimuxPresence } from '../presence';
 import { describeServerVersion } from '../version';
@@ -22,8 +22,9 @@ type Loaded =
   | { state: 'error'; message: string };
 
 /**
- * On the System page, under the server's version: this console's release and where the server downloads it from
- * (management.panel-github-repository, read the way the config pages read it), and whether it updates itself.
+ * On the System page, under the server's version: this console's release, and the update source: where the server's
+ * updater fetches new console releases (management.panel-github-repository, resolved with the updater's own rules),
+ * and whether it updates at all. Not "downloaded from": the page may be served from a local file.
  */
 export function ProvimuxConsoleSource({ serverVersion }: { serverVersion?: string | null }) {
   const { t } = useTranslation();
@@ -52,8 +53,16 @@ export function ProvimuxConsoleSource({ serverVersion }: { serverVersion?: strin
     describeServerVersion(serverVersion)?.kind === 'provimux' || provimuxEndpoints
       ? 'provimux'
       : 'cliproxyapi';
-  const source: ConsoleSource | null =
-    loaded.state === 'ready' ? describeConsoleSource(loaded.repository, server) : null;
+  const source: UpdateSource | null =
+    loaded.state === 'ready' ? describeUpdateSource(loaded.repository, server) : null;
+  const reason =
+    source === null
+      ? ''
+      : source.reason === 'default'
+        ? server === 'provimux'
+          ? t('provimux.console.reason_default_provimux')
+          : t('provimux.console.reason_default_cliproxyapi')
+        : t(`provimux.console.reason_${source.reason}`);
 
   return (
     <div className="pmx-about-console">
@@ -65,16 +74,16 @@ export function ProvimuxConsoleSource({ serverVersion }: { serverVersion?: strin
       {source && loaded.state === 'ready' ? (
         <p className="pmx-about-source">
           <span>
-            {t('provimux.console.from')}{' '}
-            <a href={githubUrl(source.repository)} target="_blank" rel="noopener noreferrer">
-              github.com/{source.repository}
-            </a>
+            {t('provimux.console.update_source')}{' '}
+            {source.repository ? (
+              <a href={githubUrl(source.repository)} target="_blank" rel="noopener noreferrer">
+                github.com/{source.repository}
+              </a>
+            ) : (
+              <code className="pmx-about-source-url">{source.releaseUrl}</code>
+            )}
             {' · '}
-            {source.reason === 'default'
-              ? server === 'provimux'
-                ? t('provimux.console.reason_default_provimux')
-                : t('provimux.console.reason_default_cliproxyapi')
-              : t(`provimux.console.reason_${source.reason}`)}
+            {reason}
           </span>
           <span>
             {loaded.autoUpdateOff ? t('provimux.console.auto_off') : t('provimux.console.auto_on')}

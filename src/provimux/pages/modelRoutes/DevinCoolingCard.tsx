@@ -1,21 +1,23 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import { getAuthFileIcon } from '@/features/authFiles/constants';
-import { apiClient } from '@/services/api/client';
-import { useConfigStore, useNotificationStore, useThemeStore } from '@/stores';
+import { useNotificationStore, useThemeStore } from '@/stores';
 import { getErrorMessage } from '@/utils/helpers';
-import { PROVIMUX_PATHS, provimuxApi } from '../../api/provimuxApi';
+import { PROVIMUX_PATHS } from '../../api/provimuxApi';
 import type { ProvimuxModel } from '../../api/types';
 import { formatDuration, serverNow, timeMs } from '../time';
 import { useSecondClock } from '../shared/clocks';
-import { devinState } from './logic';
+import { devinAbsence, devinState } from './logic';
+import type { DevinCooling } from './useDevinCooling';
 import styles from '../shared/Shared.module.scss';
 
 interface DevinCoolingCardProps {
   models: readonly ProvimuxModel[];
   offsetMs: number;
   nowMs: number;
+  /** The switch and the Devin logins, read by the page with its routes (useDevinCooling). */
+  devin: DevinCooling;
   /** Reload the routes after the switch changed. */
   onChanged: () => void;
 }
@@ -26,57 +28,32 @@ const configKey = PROVIMUX_PATHS.devinModelLevelCooling
   .join('.');
 
 /** Devin's quota pause per model: the switch (oauth.providers.devin.model-level-cooling) and what it does now. */
-export function DevinCoolingCard({ models, offsetMs, nowMs, onChanged }: DevinCoolingCardProps) {
+export function DevinCoolingCard({
+  models,
+  offsetMs,
+  nowMs,
+  devin,
+  onChanged,
+}: DevinCoolingCardProps) {
   const { t } = useTranslation();
   const resolvedTheme = useThemeStore((state) => state.resolvedTheme);
   const showNotification = useNotificationStore((state) => state.showNotification);
-  // undefined: loading; null: not set in the config (off, the default)
-  const [value, setValue] = useState<boolean | null | undefined>(undefined);
-  const [readError, setReadError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const requestRef = useRef(0);
-
-  const read = useCallback(async () => {
-    const requestId = ++requestRef.current;
-    const client = apiClient.captureConnection(() => requestId === requestRef.current);
-    try {
-      const next = await provimuxApi.devinModelLevelCooling(client);
-      if (requestId !== requestRef.current) return;
-      setValue(next);
-      setReadError(null);
-    } catch (error) {
-      if (requestId !== requestRef.current) return;
-      setReadError(getErrorMessage(error));
-    }
-  }, []);
-
-  useEffect(() => {
-    void read();
-    return () => {
-      requestRef.current += 1;
-    };
-  }, [read]);
+  const { value, readError, saving } = devin;
 
   const enabled = value === true;
   const toggle = async (next: boolean) => {
-    setSaving(true);
-    try {
-      await provimuxApi.setDevinModelLevelCooling(next);
-      setValue(next);
-      useConfigStore.getState().clearCache();
+    const result = await devin.set(next);
+    if (result.ok) {
       showNotification(
         next ? t('provimux.devin.saved_on') : t('provimux.devin.saved_off'),
         'success'
       );
       onChanged();
-    } catch (error) {
+    } else {
       showNotification(
-        t('provimux.common.save_failed', { message: getErrorMessage(error) }),
+        t('provimux.common.save_failed', { message: getErrorMessage(result.error) }),
         'error'
       );
-      void read();
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -119,7 +96,7 @@ export function DevinCoolingCard({ models, offsetMs, nowMs, onChanged }: DevinCo
       <p className={styles.featureText}>
         {enabled ? t('provimux.devin.on_text') : t('provimux.devin.off_text')}
       </p>
-      <DevinNow state={state} offsetMs={offsetMs} />
+      <DevinNow state={state} offsetMs={offsetMs} devin={devin} />
       {enabled ? <p className={styles.featureNote}>{t('provimux.devin.limit_note')}</p> : null}
       {readError ? (
         <p className={styles.featureError} role="alert">
@@ -133,11 +110,33 @@ export function DevinCoolingCard({ models, offsetMs, nowMs, onChanged }: DevinCo
   );
 }
 
-function DevinNow({ state, offsetMs }: { state: ReturnType<typeof devinState>; offsetMs: number }) {
+function DevinNow({
+  state,
+  offsetMs,
+  devin,
+}: {
+  state: ReturnType<typeof devinState>;
+  offsetMs: number;
+  devin: DevinCooling;
+}) {
   const { t } = useTranslation();
   const now = serverNow(useSecondClock(), offsetMs);
   if (state.logins === 0) {
-    return <p className={styles.featureStatus}>{t('provimux.devin.no_login')}</p>;
+    // No Devin route: say a login is missing only when the credentials list has none.
+    const absence = devinAbsence(devin.logins);
+    return (
+      <p className={styles.featureStatus}>
+        {t(`provimux.devin.absent_${absence}`)}
+        {absence !== 'no_login' ? (
+          <>
+            {' '}
+            <Link to="/auth-files" className={styles.inlineLink}>
+              {t('provimux.devin.open_auth_files')}
+            </Link>
+          </>
+        ) : null}
+      </p>
+    );
   }
   if (state.cooling.length === 0) {
     return (
