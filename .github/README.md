@@ -69,10 +69,10 @@ record, not a verdict on availability. On the same page: **Devin's quota pause p
 the OpenAI-compatible entries on openrouter.ai that Provimux gives cache markers, a session header and OpenRouter's
 own limits, with a link to edit them on AI Providers, where such an entry carries an "OpenRouter · Provimux" tag.
 
-**Live model lists** (Gateway). The `models.live-lists` switch, a refresh that follows each login until it reports
-back, and for each Claude, Codex and Meta login: its own live list or the catalog, when it was fetched, how many
-models the provider listed and how many the login serves, and the last failed fetch (when, its category and HTTP
-status).
+**Live model lists** (Gateway). The `models.live-lists` switch, a refresh request (the page says what the server
+answered; the rows then show each login's state as of the latest status read), and for each Claude, Codex and Meta
+login: its own live list or the catalog, whether a fetch is running, when it was fetched, how many models the provider
+listed and how many the login serves, and the last failed fetch (when, its category and HTTP status).
 
 **The console on the System page.** Which console release is installed, and its update source: where the server's
 updater fetches new releases (`management.panel-github-repository`, resolved with the updater's own rules, so a value

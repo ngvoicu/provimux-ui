@@ -312,15 +312,32 @@ export type UpdateSourceReason =
   | 'unusable_as_default';
 
 export interface UpdateSource {
-  /** What the updater requests. */
+  /** What the updater requests, exactly (it may carry user info, a query or a fragment: never shown). */
   releaseUrl: string;
-  /** "owner/repo" when the release URL is a repository's; null (an id, another API path): show the URL. */
+  /** "owner/repo" when the release URL is a repository's; null (an id, another API path): show `address`. */
   repository: string | null;
+  /** The release URL as shown: scheme, host and path only. */
+  address: string;
+  /** User info, a query or a fragment was removed from `address`: say "(credentials hidden)". */
+  hidden: boolean;
   reason: UpdateSourceReason;
 }
 
 const REPOSITORY_RELEASE =
   /^https:\/\/api\.github\.com\/repos\/([^/?#]+)\/([^/?#]+)\/releases\/latest$/i;
+
+/**
+ * The part of a URL the System page may show: scheme, host and path. User info (a password, a token), the query and
+ * the fragment are dropped, and `hidden` says whether there were any.
+ */
+export function displayAddress(url: string): { address: string; hidden: boolean } {
+  const parsed = goParse(url);
+  if (parsed === null || parsed.opaque) return { address: '', hidden: url !== '' };
+  const hidden =
+    parsed.user !== null || parsed.rawQuery !== '' || parsed.forceQuery || parsed.fragment !== '';
+  const prefix = parsed.scheme ? `${parsed.scheme}:` : '';
+  return { address: `${prefix}//${parsed.host}${escape(parsed.path, 'path')}`, hidden };
+}
 
 export function describeUpdateSource(
   configured: string | null,
@@ -331,7 +348,8 @@ export function describeUpdateSource(
     server === 'provimux'
       ? provimuxResolveRelease(value)
       : upstreamResolveRelease(value, STOCK_DEFAULT_RELEASE_URL);
-  const match = REPOSITORY_RELEASE.exec(resolved.url);
+  const { address, hidden } = displayAddress(resolved.url);
+  const match = REPOSITORY_RELEASE.exec(address);
   const repository = match ? `${match[1]}/${match[2]}` : null;
   let reason: UpdateSourceReason;
   switch (resolved.branch) {
@@ -348,7 +366,7 @@ export function describeUpdateSource(
     default:
       reason = 'configured';
   }
-  return { releaseUrl: resolved.url, repository, reason };
+  return { releaseUrl: resolved.url, repository, address, hidden, reason };
 }
 
 export const githubUrl = (repository: string) => `https://github.com/${repository}`;

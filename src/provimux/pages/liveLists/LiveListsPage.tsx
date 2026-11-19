@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -16,107 +16,54 @@ import { ProviderPill } from '../shared/ProviderPill';
 import { useProvimuxResource } from '../shared/useProvimuxResource';
 import { formatClock, formatExact, formatRelative, screenNow, timeMs } from '../time';
 import { failureHint, liveRowState, liveSummary, type LiveRowState } from './logic';
-import { followRefresh, type FollowProgress } from './refreshFollower';
+import { requestRefresh, type RefreshOutcome } from './refreshRequest';
+import { useRequestGuard } from '../shared/requestGuard';
 import shared from '../shared/Shared.module.scss';
 import styles from './LiveListsPage.module.scss';
 
 const fetchLists = (client: Parameters<typeof provimuxApi.liveLists>[0]) =>
   provimuxApi.liveLists(client);
 
-/** A refresh of the lists, from the click to its end. Shown in the switch card; Refresh is off only while following. */
+/** The live-list status, on the page's schedule: on open, on Reload, and every 30 s while the tab is visible. */
+const POLL_MS = 30_000;
+
+/** What the last "Refresh lists now" answer said. Nothing is followed after it: the rows tell each login's state. */
 type RefreshState =
-  | { phase: 'idle' }
-  | { phase: 'starting' }
-  | ({ phase: 'following'; catalogError: string | null } & FollowProgress)
-  | { phase: 'done'; catalogError: string | null; done: number; total: number }
-  | {
-      phase: 'deadline';
-      catalogError: string | null;
-      done: number;
-      total: number;
-      readError: string | null;
-    }
-  | { phase: 'failed'; message: string };
+  { phase: 'idle' } | { phase: 'sending' } | { phase: 'answered'; outcome: RefreshOutcome };
 
 /** Live model lists: the switch, a refresh, and per login where its model list comes from. */
 export function LiveListsPage() {
   const { t, i18n } = useTranslation();
   const showNotification = useNotificationStore((state) => state.showNotification);
-  const resource = useProvimuxResource('liveLists', fetchLists, null);
+  const resource = useProvimuxResource('liveLists', fetchLists, POLL_MS);
   const now = screenNow(usePageClock(), resource.loadedAt, resource.offsetMs);
   const [saving, setSaving] = useState(false);
   const [refresh, setRefresh] = useState<RefreshState>({ phase: 'idle' });
-  const followerRef = useRef<{ cancel: () => void } | null>(null);
+  // The refresh and the switch belong to this page and this connection: a late answer changes nothing.
+  const refreshGuard = useRequestGuard();
+  const switchGuard = useRequestGuard();
 
   const data = resource.data;
   const enabled = data?.enabled ?? null;
   const logins = useMemo(() => data?.logins ?? [], [data]);
   const summary = useMemo(() => liveSummary(logins), [logins]);
   const { load } = resource;
-  const busy = refresh.phase === 'starting' || refresh.phase === 'following';
-
-  useEffect(() => () => followerRef.current?.cancel(), []);
 
   const startRefresh = async () => {
-    followerRef.current?.cancel();
-    setRefresh({ phase: 'starting' });
-    const sinceMs = Date.now() + resource.offsetMs;
-    let catalogError: string | null;
-    try {
-      // A 502 from Provimux means the catalog could not be read, while the logins are being asked anyway.
-      ({ catalogError } = await provimuxApi.refreshModels());
-    } catch (error) {
-      setRefresh({ phase: 'failed', message: getErrorMessage(error) });
-      return;
-    }
-    const initial = data?.logins ?? [];
-    const waitingFor = initial.filter((row) => !row.disabled).length;
-    setRefresh({
-      phase: 'following',
-      catalogError,
-      done: 0,
-      total: waitingFor,
-      readError: null,
-      reads: 0,
-    });
-    followerRef.current = followRefresh({
-      sinceMs,
-      initial,
-      read: async () => {
-        const result = await load();
-        if (result === null) return null;
-        if (!result.ok) throw result.error;
-        return result.data.logins;
-      },
-      onProgress: (progress) => setRefresh({ phase: 'following', catalogError, ...progress }),
-      onEnd: (end) => {
-        followerRef.current = null;
-        if (end.kind === 'done') {
-          setRefresh({ phase: 'done', catalogError, done: end.done, total: end.total });
-          showNotification(
-            catalogError
-              ? t('provimux.live.refresh_done_catalog')
-              : t('provimux.live.refresh_done'),
-            catalogError ? 'warning' : 'success'
-          );
-        } else {
-          setRefresh({
-            phase: 'deadline',
-            catalogError,
-            done: end.done,
-            total: end.total,
-            readError: end.readError,
-          });
-          showNotification(t('provimux.live.refresh_stopped_short'), 'warning');
-        }
-      },
+    setRefresh({ phase: 'sending' });
+    await requestRefresh(refreshGuard, (outcome) => {
+      setRefresh({ phase: 'answered', outcome });
+      // One status read now, so the rows show what the server reports; then the page's own schedule.
+      if (outcome.kind !== 'failed') void load();
     });
   };
 
   const toggle = async (next: boolean) => {
+    const { client, isCurrent } = switchGuard.begin();
     setSaving(true);
     try {
-      await provimuxApi.setLiveLists(next);
+      await provimuxApi.setLiveLists(next, client);
+      if (!isCurrent()) return;
       useConfigStore.getState().clearCache();
       showNotification(
         next ? t('provimux.live.saved_on') : t('provimux.live.saved_off'),
@@ -124,12 +71,13 @@ export function LiveListsPage() {
       );
       await load();
     } catch (error) {
+      if (!isCurrent()) return;
       showNotification(
         t('provimux.common.save_failed', { message: getErrorMessage(error) }),
         'error'
       );
     } finally {
-      setSaving(false);
+      if (isCurrent()) setSaving(false);
     }
   };
 
@@ -158,7 +106,7 @@ export function LiveListsPage() {
             variant="secondary"
             size="sm"
             onClick={() => void load()}
-            loading={resource.loading && data !== null && !busy}
+            loading={resource.loading && data !== null}
           >
             <IconRefreshCw size={14} />
             {t('provimux.common.reload')}
@@ -237,19 +185,14 @@ export function LiveListsPage() {
                 variant="secondary"
                 size="sm"
                 onClick={() => void startRefresh()}
-                disabled={enabled !== true || busy}
-                loading={refresh.phase === 'starting'}
+                disabled={enabled !== true || refresh.phase === 'sending'}
+                loading={refresh.phase === 'sending'}
               >
                 <IconRefreshCw size={14} />
                 {t('provimux.live.refresh_now')}
               </Button>
               <RefreshStatus refresh={refresh} enabled={enabled} />
             </div>
-            {'catalogError' in refresh && refresh.catalogError ? (
-              <p className={styles.refreshNote} data-tone="warning" role="status">
-                {t('provimux.live.catalog_failed', { message: refresh.catalogError })}
-              </p>
-            ) : null}
           </section>
 
           {logins.length > 0 ? (
@@ -320,54 +263,41 @@ export function LiveListsPage() {
   );
 }
 
-/** The refresh's state, in words, in the switch card (a live region). */
+/** What the last refresh request's answer said, in the switch card (a live region). Nothing about the logins. */
 function RefreshStatus({ refresh, enabled }: { refresh: RefreshState; enabled: boolean | null }) {
-  const { t } = useTranslation();
-  switch (refresh.phase) {
-    case 'starting':
-      return <span className={styles.refreshHint} aria-live="polite" />;
-    case 'following':
-      return (
-        <span className={styles.refreshHint} aria-live="polite">
-          <IconLoader2 size={13} className={styles.spin} />
-          {t('provimux.live.refresh_waiting', { done: refresh.done, total: refresh.total })}
-          {refresh.readError
-            ? ` · ${t('provimux.live.refresh_read_failed', { message: refresh.readError })}`
-            : ''}
-        </span>
-      );
-    case 'done':
-      return (
-        <span className={styles.refreshHint} data-tone="ok" aria-live="polite">
-          {t('provimux.live.refresh_done_line', { done: refresh.done, total: refresh.total })}
-        </span>
-      );
-    case 'deadline':
-      return (
-        <span className={styles.refreshHint} data-tone="warning" aria-live="polite">
-          {t('provimux.live.refresh_stopped', {
-            done: refresh.done,
-            total: refresh.total,
-            count: refresh.total,
-          })}
-          {refresh.readError
-            ? ` ${t('provimux.live.refresh_stopped_reads', { message: refresh.readError })}`
-            : ''}
-        </span>
-      );
-    case 'failed':
-      return (
-        <span className={styles.refreshHint} data-tone="error" role="alert">
-          {t('provimux.live.refresh_failed', { message: refresh.message })}
-        </span>
-      );
-    default:
-      return (
-        <span className={styles.refreshHint} aria-live="polite">
-          {enabled === true ? t('provimux.live.refresh_hint') : t('provimux.live.refresh_off_hint')}
-        </span>
-      );
+  const { t, i18n } = useTranslation();
+  if (refresh.phase === 'sending') {
+    return <span className={styles.refreshHint} aria-live="polite" />;
   }
+  if (refresh.phase === 'answered') {
+    const { outcome } = refresh;
+    if (outcome.kind === 'requested') {
+      return (
+        <span className={styles.refreshHint} aria-live="polite">
+          {t('provimux.live.refresh_requested', {
+            time: formatClock(outcome.atMs, i18n.language, outcome.atMs),
+          })}
+        </span>
+      );
+    }
+    if (outcome.kind === 'catalog_failed') {
+      return (
+        <span className={styles.refreshHint} data-tone="warning" role="status">
+          {t('provimux.live.refresh_catalog_failed', { message: outcome.message })}
+        </span>
+      );
+    }
+    return (
+      <span className={styles.refreshHint} data-tone="error" role="alert">
+        {t('provimux.live.refresh_failed', { message: outcome.message })}
+      </span>
+    );
+  }
+  return (
+    <span className={styles.refreshHint} aria-live="polite">
+      {enabled === true ? t('provimux.live.refresh_hint') : t('provimux.live.refresh_off_hint')}
+    </span>
+  );
 }
 
 function LoginRow({

@@ -1,7 +1,7 @@
 // Regressions for the critical review T-74 (PUI-17) of the Provimux pages, one block per finding. Where the old code
-// had the same entry point, the test calls it the same way, so it fails on 68e1c60b and passes now. The refresh
-// follow-up (finding 1) and the update source (finding 3) have their own files: refreshFollower.test.ts and
-// consoleSource.test.ts.
+// had the same entry point, the test calls it the same way, so it fails on 68e1c60b and passes now. The update
+// source (finding 3) has its own file, consoleSource.test.ts. The re-check T-79 replaced the refresh follow-up
+// (finding 1) by a plain request: recheck.test.ts.
 import { afterAll, afterEach, describe, expect, spyOn, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { createElement } from 'react';
@@ -98,11 +98,11 @@ describe('2. a catalog failure does not stop the refresh', () => {
     }
   });
 
-  test('the page reports it and keeps following the logins', () => {
+  test('the page says what the answer says, and follows nothing (T-79: the follower was removed)', () => {
     const page = read('src/provimux/pages/liveLists/LiveListsPage.tsx');
-    expect(page).toContain("t('provimux.live.catalog_failed'");
-    expect(page).toMatch(/\(\{ catalogError \} = await provimuxApi\.refreshModels\(\)\);/);
-    expect(page).toContain('followRefresh({');
+    expect(page).toContain("t('provimux.live.refresh_catalog_failed'");
+    expect(page).toContain('requestRefresh(refreshGuard');
+    expect(page).not.toContain('followRefresh');
   });
 });
 
@@ -251,7 +251,7 @@ describe('7. unknown values stay unknown', () => {
 });
 
 describe('8. the OpenRouter tag only where Model routes exists', () => {
-  test('a server with live lists but no model routes: no tag (it would land on the dashboard)', () => {
+  test('a server with live lists but no model routes (404): no tag; a temporary error keeps it (T-79)', () => {
     const tag = (state: { modelRoutes: PresenceStatus; liveLists: PresenceStatus }) =>
       withPresence(state, () =>
         renderToStaticMarkup(
@@ -263,7 +263,9 @@ describe('8. the OpenRouter tag only where Model routes exists', () => {
         )
       );
     expect(tag({ modelRoutes: 'unsupported', liveLists: 'ready' })).toBe('');
-    expect(tag({ modelRoutes: 'error', liveLists: 'ready' })).toBe('');
+    expect(tag({ modelRoutes: 'error', liveLists: 'ready' })).toContain(
+      'href="/provimux/model-routes?provider=openrouter"'
+    );
     expect(tag({ modelRoutes: 'ready', liveLists: 'unsupported' })).toContain(
       'href="/provimux/model-routes?provider=openrouter"'
     );

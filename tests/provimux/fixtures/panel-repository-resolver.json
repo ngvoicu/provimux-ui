@@ -412,5 +412,35 @@
     "provimux": "https://api.github.com/repos/ngvoicu/provimux-ui/releases/latest",
     "provimuxDefault": false,
     "stock": "https://api.github.com/repos/router-for-me/Cli-Proxy-API-Management-Center/releases/latest"
+  },
+  {
+    "input": "https://user:p4ssw0rd@api.github.com/repos/someone/my-panel?access_token=t0k3n#frag",
+    "provimux": "https://user:p4ssw0rd@api.github.com/repos/someone/my-panel/releases/latest?access_token=t0k3n#frag",
+    "provimuxDefault": false,
+    "stock": "https://user:p4ssw0rd@api.github.com/repos/someone/my-panel/releases/latest?access_token=t0k3n#frag"
+  },
+  {
+    "input": "https://x-access-token:ghp_t0k3n@api.github.com/repositories/1296269",
+    "provimux": "https://x-access-token:ghp_t0k3n@api.github.com/repositories/1296269/releases/latest",
+    "provimuxDefault": false,
+    "stock": "https://x-access-token:ghp_t0k3n@api.github.com/repositories/1296269/releases/latest"
+  },
+  {
+    "input": "https://api.github.com/repositories/1296269?token=t0k3n",
+    "provimux": "https://api.github.com/repositories/1296269/releases/latest?token=t0k3n",
+    "provimuxDefault": false,
+    "stock": "https://api.github.com/repositories/1296269/releases/latest?token=t0k3n"
+  },
+  {
+    "input": "https://api.github.com/repos/someone/my-panel#section",
+    "provimux": "https://api.github.com/repos/someone/my-panel/releases/latest#section",
+    "provimuxDefault": false,
+    "stock": "https://api.github.com/repos/someone/my-panel/releases/latest#section"
+  },
+  {
+    "input": "https://user:p4ssw0rd@github.com/someone/my-panel?token=t0k3n",
+    "provimux": "https://api.github.com/repos/someone/my-panel/releases/latest",
+    "provimuxDefault": false,
+    "stock": "https://api.github.com/repos/someone/my-panel/releases/latest"
   }
 ]
