@@ -1,8 +1,28 @@
 // Sponsors and affiliate links hidden (PUI-07): the three seams, and no affiliate link anywhere.
-import { describe, expect, test } from 'bun:test';
+import { afterAll, describe, expect, test } from 'bun:test';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { hideSponsor, hideSponsorNav } from '../../src/provimux/sponsors';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import i18n from '../../src/i18n/index';
+import { ProviderCategoryList } from '../../src/features/providers/components/ProviderCategoryList';
+import { PROVIDER_BRAND_ORDER } from '../../src/features/providers/descriptors';
+import {
+  getSponsorProviderDefinition,
+  isMultiProtocolSponsorBrand,
+} from '../../src/features/providers/sponsorDefinitions';
+import type { ProviderGroup } from '../../src/features/providers/types';
+import {
+  SPONSOR_PRESET_BRANDS,
+  hideSponsor,
+  hideSponsorNav,
+  hideSponsorPresets,
+} from '../../src/provimux/sponsors';
+
+const initialLanguage = i18n.language;
+afterAll(async () => {
+  await i18n.changeLanguage(initialLanguage);
+});
 
 const read = (path: string) => readFileSync(path, 'utf8');
 const sourceFiles = (dir: string): string[] =>
@@ -37,6 +57,66 @@ describe('the three seams', () => {
     expect(hideSponsor({ name: 'x', url: 'https://example.com' })).toBeUndefined();
     expect(read('src/features/config/components/fields/sharedFields.tsx')).toContain(
       'const sponsor = hideSponsor(SPONSORS[0]);'
+    );
+  });
+});
+
+describe('AI Providers sponsor presets (T-45)', () => {
+  const page = read('src/features/providers/ProvidersWorkbenchPage.tsx');
+  const list = read('src/features/providers/components/ProviderCategoryList.tsx');
+
+  /** The category list as the page draws it: every brand upstream knows, through the page's own filter. */
+  const renderList = () => {
+    const groups: ProviderGroup[] = hideSponsorPresets(
+      PROVIDER_BRAND_ORDER.map((id) => ({ id, resources: [] }))
+    ).filter((group) => group.id !== 'apikeyFun');
+    return renderToStaticMarkup(
+      createElement(ProviderCategoryList, { groups, activeBrand: 'gemini', onSelect: () => {} })
+    );
+  };
+
+  test('the page builds its groups through hideSponsorPresets', () => {
+    expect(page).toContain(
+      ": hideSponsorPresets(allGroups).filter((group) => group.id !== 'apikeyFun'),"
+    );
+  });
+
+  test('the category list draws one list, the providers, and no Quick Fill', async () => {
+    await i18n.changeLanguage('en');
+    const html = renderList();
+    expect(html.match(/<aside\b/g) ?? []).toHaveLength(1);
+    expect(html).not.toContain(i18n.t('providersPage.categories.quickFill'));
+    expect(html).toContain(i18n.t('providersPage.categories.title'));
+  });
+
+  test('no sponsor preset is listed, whichever list upstream puts it in', async () => {
+    await i18n.changeLanguage('en');
+    const html = renderList();
+    // Sponsors with an affiliate sign-up (Kimi is a provider with its own API and stays).
+    const sponsors = PROVIDER_BRAND_ORDER.filter(
+      (brand) =>
+        brand !== 'kimi' &&
+        brand !== 'apikeyFun' &&
+        isMultiProtocolSponsorBrand(brand) &&
+        Boolean(getSponsorProviderDefinition(brand).affiliateUrl)
+    );
+    expect(sponsors.length).toBeGreaterThan(0);
+    for (const brand of sponsors) {
+      expect(SPONSOR_PRESET_BRANDS).toContain(brand);
+      expect(html).not.toContain(`>${i18n.t(`providersPage.providerNames.${brand}`)}<`);
+    }
+    // Upstream's own Quick Fill list holds nothing the layer would show.
+    const quickFill = list.match(/QUICK_FILL_BRAND_ORDER[^=]*=\s*\[([^\]]*)\]/)?.[1] ?? '';
+    const brands = [...quickFill.matchAll(/'(\w+)'/g)].map((m) => m[1]);
+    expect(brands.length).toBeGreaterThan(0);
+    expect(brands.filter((brand) => !SPONSOR_PRESET_BRANDS.includes(brand))).toEqual([]);
+  });
+
+  test('a remembered preset falls back to the first provider', () => {
+    const groups = hideSponsorPresets(PROVIDER_BRAND_ORDER.map((id) => ({ id, resources: [] })));
+    expect(groups.some((group) => group.id === 'fennoAI')).toBe(false);
+    expect(page).toMatch(
+      /groups\.some\(\(group\) => group\.id === uiState\.activeBrand\)\s*\? uiState\.activeBrand\s*: firstVisibleBrand/
     );
   });
 });
