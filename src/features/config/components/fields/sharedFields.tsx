@@ -5,6 +5,7 @@
 import { useTranslation } from 'react-i18next';
 import type { VisualConfigValues } from '@/types/visualConfig';
 import { SPONSORS } from '../../sponsors';
+import { hideSponsor } from '@/provimux/sponsors';
 import { ApiKeysCardEditor } from '../blocks/ApiKeysCardEditor';
 import { SettingCell, SettingList, TextSetting, ToggleSetting } from './FieldPrimitives';
 import fieldStyles from './Field.module.scss';
@@ -63,7 +64,7 @@ export function ProxyUrlField({ values, disabled, onChange, wide }: SharedFieldP
   const { t } = useTranslation();
   // 代理 URL 较长，调用处传 wide 独占整行。赞助跳转（数据见 sponsors.ts，空则不渲染）含链接，
   // 不能进 InfoTip（键盘够不到提示里的链接），也不是对输入框的说明：走 aside 常驻可见。
-  const sponsor = SPONSORS[0];
+  const sponsor = hideSponsor(SPONSORS[0]);
   return (
     <TextSetting
       fieldId="proxyUrl"
