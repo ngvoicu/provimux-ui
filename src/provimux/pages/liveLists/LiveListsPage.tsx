@@ -287,6 +287,13 @@ function RefreshStatus({ refresh, enabled }: { refresh: RefreshState; enabled: b
         </span>
       );
     }
+    if (outcome.kind === 'unconfirmed') {
+      return (
+        <span className={styles.refreshHint} data-tone="warning" role="status">
+          {t('provimux.live.refresh_unconfirmed')}
+        </span>
+      );
+    }
     return (
       <span className={styles.refreshHint} data-tone="error" role="alert">
         {t('provimux.live.refresh_failed', { message: outcome.message })}

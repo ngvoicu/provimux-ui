@@ -1,24 +1,21 @@
 // The re-check T-79 of the Provimux pages (fixed in T-83): the refresh is one request that says only what its answer
 // says, and a late answer from another connection or a closed page changes nothing (findings 1, 2); the update source
-// never shows credentials (3); the OpenRouter tag hides only on Model routes' 404 (8); a route's login opens exactly
-// its auth_index on Auth Files (9).
-import { afterAll, afterEach, describe, expect, spyOn, test } from 'bun:test';
+// never shows credentials (3); the OpenRouter tag hides only on Model routes' 404 (8). T-87 (review T-84): a lost
+// answer is "could not confirm", never "not requested" (2); a route's login opens Auth Files with its file name as
+// the ordinary search, with no exact-auth_index filter (9); "(credentials hidden)" follows the configured address (3).
+import { afterAll, describe, expect, spyOn, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import i18n from '../../src/i18n/index';
 import { apiClient } from '../../src/services/api/client';
-import { matchesAuthFileSearch } from '../../src/features/authFiles/logic';
 import { UpdateSourceLine } from '../../src/provimux/components/ProvimuxConsoleSource';
 import { describeUpdateSource, displayAddress } from '../../src/provimux/consoleSource';
 import {
   requestRefresh,
   type RefreshOutcome,
 } from '../../src/provimux/pages/liveLists/refreshRequest';
-import {
-  provimuxAuthTarget,
-  setAuthFilesTarget,
-} from '../../src/provimux/pages/shared/authFilesLink';
+import { openAuthFilesState } from '../../src/provimux/pages/shared/authFilesLink';
 import { createRequestGuard } from '../../src/provimux/pages/shared/requestGuard';
 import { useProvimuxResource } from '../../src/provimux/pages/shared/useProvimuxResource';
 import { useProvimuxPresence } from '../../src/provimux/presence';
@@ -52,9 +49,6 @@ afterAll(async () => {
   await i18n.changeLanguage(initialLanguage);
   apiClient.setConfig({ apiBase: '', managementKey: '' });
 });
-afterEach(() => {
-  setAuthFilesTarget(null);
-});
 
 describe('1, 2. Refresh lists now: one request, its answer, nothing followed', () => {
   test('a 2xx says the refresh was requested', async () => {
@@ -74,7 +68,7 @@ describe('1, 2. Refresh lists now: one request, its answer, nothing followed', (
     }
   });
 
-  test("Provimux's 502 says the catalog failed, nothing about the logins; other errors say not requested", async () => {
+  test("Provimux's 502 says the catalog failed; another HTTP error says not requested; no answer is unconfirmed", async () => {
     const post = spyOn(clientClass, 'post');
     try {
       post.mockRejectedValueOnce(
@@ -83,14 +77,24 @@ describe('1, 2. Refresh lists now: one request, its answer, nothing followed', (
           data: { ok: false, error: 'no valid model catalog source', catalogs: {}, sources: {} },
         })
       );
-      post.mockRejectedValueOnce(Object.assign(new Error('Network Error'), { status: undefined }));
+      post.mockRejectedValueOnce(
+        Object.assign(new Error('invalid sources'), { status: 400, data: { error: 'x' } })
+      );
+      // The browser lost the reply: no HTTP status, the server may have accepted it (review T-84, finding 2).
+      post.mockRejectedValueOnce(
+        Object.assign(new Error('Network Error'), { status: undefined, code: 'ERR_NETWORK' })
+      );
+      post.mockRejectedValueOnce(
+        Object.assign(new Error('timeout of 30000ms exceeded'), { code: 'ECONNABORTED' })
+      );
       const outcomes: RefreshOutcome[] = [];
       const guard = createRequestGuard();
-      await requestRefresh(guard, (outcome) => outcomes.push(outcome));
-      await requestRefresh(guard, (outcome) => outcomes.push(outcome));
+      for (let i = 0; i < 4; i++) await requestRefresh(guard, (outcome) => outcomes.push(outcome));
       expect(outcomes).toEqual([
         { kind: 'catalog_failed', message: 'no valid model catalog source' },
-        { kind: 'failed', message: 'Network Error' },
+        { kind: 'failed', message: 'invalid sources' },
+        { kind: 'unconfirmed' },
+        { kind: 'unconfirmed' },
       ]);
     } finally {
       post.mockRestore();
@@ -184,6 +188,25 @@ describe('1, 2. Refresh lists now: one request, its answer, nothing followed', (
     expect(read('tests/provimux/review.test.ts')).not.toContain("from './refreshFollower'");
   });
 
+  test('a lost answer says "could not confirm", never "not requested"', async () => {
+    await i18n.changeLanguage('en');
+    const page = read('src/provimux/pages/liveLists/LiveListsPage.tsx');
+    expect(page).toMatch(
+      /outcome\.kind === 'unconfirmed'[\s\S]*?t\('provimux\.live\.refresh_unconfirmed'\)/
+    );
+    expect(i18n.t('provimux.live.refresh_unconfirmed')).toBe(
+      'Could not confirm the refresh request — the server may still be refreshing; the rows below update on the next status read.'
+    );
+    expect(i18n.t('provimux.live.refresh_failed', { message: 'x' })).toBe(
+      'Refresh not requested: x'
+    );
+  });
+
+  test('the old follower helpers are gone from the logic module', () => {
+    const logic = read('src/provimux/pages/liveLists/logic.ts');
+    expect(logic).not.toMatch(/settledSince|refreshProgress|timeMs/);
+  });
+
   test('the switch write is bound to the page and connection too', () => {
     const page = read('src/provimux/pages/liveLists/LiveListsPage.tsx');
     expect(page).toMatch(/const \{ client, isCurrent \} = switchGuard\.begin\(\);/);
@@ -257,38 +280,55 @@ describe('3. the update source shows no credentials', () => {
     expect(text(plain)).not.toContain('(credentials hidden)');
     expect(text(plain)).toContain('https://api.github.com/repositories/1296269/releases/latest');
   });
+
+  test('a github.com address whose credentials resolution already dropped still says they are hidden', async () => {
+    await i18n.changeLanguage('en');
+    for (const configured of [
+      'https://user:p4ssw0rd@github.com/someone/my-panel',
+      'https://github.com/someone/my-panel?access_token=t0k3n',
+      'https://github.com/someone/my-panel#frag',
+      'https://github.com/someone/my-panel?',
+    ]) {
+      const source = describeUpdateSource(configured, 'provimux');
+      expect(source).toMatchObject({
+        releaseUrl: 'https://api.github.com/repos/someone/my-panel/releases/latest',
+        repository: 'someone/my-panel',
+        hidden: true,
+      });
+      const html = renderToStaticMarkup(
+        createElement(UpdateSourceLine, { source, server: 'provimux', autoUpdateOff: false })
+      );
+      expect(html).not.toMatch(/p4ssw0rd|t0k3n|access_token|user:|frag/);
+      expect(text(html)).toContain('(credentials hidden)');
+    }
+    expect(describeUpdateSource('https://github.com/someone/my-panel', 'provimux').hidden).toBe(
+      false
+    );
+    expect(describeUpdateSource('someone/my-panel', 'cliproxyapi').hidden).toBe(false);
+    expect(describeUpdateSource('', 'provimux').hidden).toBe(false);
+  });
 });
 
-describe('9. a route opens exactly its auth_index on Auth Files', () => {
-  const files = [
-    { name: 'review-cl.json', type: 'claude', authIndex: '261560b9aaeb4b27' },
-    { name: 'backup-review-cl.json', type: 'claude', authIndex: '9f00aa11bb22cc33' },
-  ];
-  const shown = (search: string) =>
-    files
-      .filter(
-        (file) =>
-          matchesAuthFileSearch(file as never, search, null) && provimuxAuthTarget(file, search)
-      )
-      .map((file) => file.name);
-
-  test("Auth Files' substring search alone finds both; the target keeps only the auth_index", () => {
-    expect(shown('review-cl.json')).toEqual(['review-cl.json', 'backup-review-cl.json']);
-    setAuthFilesTarget({ authIndex: '261560b9aaeb4b27', search: 'review-cl.json' });
-    expect(shown('review-cl.json')).toEqual(['review-cl.json']);
+describe('9. a route opens Auth Files with its file name as the ordinary search', () => {
+  test('the link sets the search to the file name, every provider and state, first page', () => {
+    expect(openAuthFilesState('review-cl.json')).toMatchObject({
+      search: 'review-cl.json',
+      filter: 'all',
+      statusFilterMode: 'all',
+      page: 1,
+    });
   });
 
-  test('editing the search ends the target', () => {
-    setAuthFilesTarget({ authIndex: '261560b9aaeb4b27', search: 'review-cl.json' });
-    expect(shown('review')).toEqual(['review-cl.json', 'backup-review-cl.json']);
-  });
-
-  test("the link passes the route's auth_index; Auth Files' filter has the one seam", () => {
-    expect(read('src/provimux/pages/modelRoutes/ModelCard.tsx')).toContain(
-      'openInAuthFiles({ name: route.login.name!, authIndex: route.auth_index! })'
+  test('no exact-auth_index target: Auth Files keeps its upstream filter, no Provimux seam', () => {
+    const page = read('src/features/authFiles/AuthFilesPage.tsx');
+    expect(page).not.toMatch(/provimux/i);
+    expect(page).toContain(
+      'return matchType && matchesAuthFileSearch(item, normalizedSearch, wildcardSearch);'
     );
-    expect(read('src/features/authFiles/AuthFilesPage.tsx')).toContain(
-      '&& provimuxAuthTarget(item, normalizedSearch);'
+    const link = read('src/provimux/pages/shared/authFilesLink.ts');
+    expect(link).not.toMatch(/provimuxAuthTarget|setAuthFilesTarget|authIndex/);
+    expect(read('src/provimux/pages/modelRoutes/ModelCard.tsx')).toContain(
+      'openInAuthFiles(route.login.name!)'
     );
   });
 });
