@@ -1,5 +1,4 @@
 import type { ProvimuxLiveListLogin } from '../../api/types';
-import { timeMs } from '../time';
 
 /**
  * What a login's row says, from the recorded facts only (02-live-lists.md, section 2): `source` is "catalog" when
@@ -52,28 +51,6 @@ export function liveSummary(logins: readonly ProvimuxLiveListLogin[]): LiveSumma
     if (login.fetching) summary.fetching += 1;
   }
   return summary;
-}
-
-/** Whether a login reported back after a refresh asked at the server's `sinceMs`. */
-export function settledSince(login: ProvimuxLiveListLogin, sinceMs: number): boolean {
-  if (login.disabled) return true;
-  if (login.fetching) return false;
-  const fetched = timeMs(login.fetched_at);
-  const failed = timeMs(login.last_failure?.at);
-  return (fetched !== null && fetched > sinceMs) || (failed !== null && failed > sinceMs);
-}
-
-/**
- * Progress of a refresh (05-console-contract.md, section 3): it is done when each login has `fetching: false` and
- * a `fetched_at` or `last_failure.at` later than the click. Disabled logins are never fetched and do not count.
- */
-export function refreshProgress(
-  logins: readonly ProvimuxLiveListLogin[],
-  sinceMs: number
-): { done: number; total: number; settled: boolean } {
-  const counted = logins.filter((login) => !login.disabled);
-  const done = counted.filter((login) => settledSince(login, sinceMs)).length;
-  return { done, total: counted.length, settled: done === counted.length };
 }
 
 export type FailureHint =
