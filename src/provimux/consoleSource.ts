@@ -318,7 +318,11 @@ export interface UpdateSource {
   repository: string | null;
   /** The release URL as shown: scheme, host and path only. */
   address: string;
-  /** User info, a query or a fragment was removed from `address`: say "(credentials hidden)". */
+  /**
+   * The configured address carried user info, a query or a fragment, or the release URL does and `address` drops
+   * them: say "(credentials hidden)". Resolution may already have discarded them (a github.com address is reduced to
+   * owner/repo), but the operator saved them and should know they are not shown.
+   */
   hidden: boolean;
   reason: UpdateSourceReason;
 }
@@ -339,6 +343,15 @@ export function displayAddress(url: string): { address: string; hidden: boolean 
   return { address: `${prefix}//${parsed.host}${escape(parsed.path, 'path')}`, hidden };
 }
 
+/** Whether a configured address carries user info, a query or a fragment (where a credential may sit). */
+export function carriesCredentials(configured: string): boolean {
+  const parsed = goParse(configured);
+  if (parsed === null) return /[?#]|\/\/[^/]*@/.test(configured);
+  return (
+    parsed.user !== null || parsed.rawQuery !== '' || parsed.forceQuery || parsed.fragment !== ''
+  );
+}
+
 export function describeUpdateSource(
   configured: string | null,
   server: 'provimux' | 'cliproxyapi'
@@ -348,7 +361,9 @@ export function describeUpdateSource(
     server === 'provimux'
       ? provimuxResolveRelease(value)
       : upstreamResolveRelease(value, STOCK_DEFAULT_RELEASE_URL);
-  const { address, hidden } = displayAddress(resolved.url);
+  const shown = displayAddress(resolved.url);
+  const { address } = shown;
+  const hidden = shown.hidden || carriesCredentials(value.trim());
   const match = REPOSITORY_RELEASE.exec(address);
   const repository = match ? `${match[1]}/${match[2]}` : null;
   let reason: UpdateSourceReason;

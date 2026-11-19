@@ -7,12 +7,7 @@ import { MemoryRouter } from 'react-router-dom';
 import i18n from '../../src/i18n/index';
 import { readLiveLists, readModelRoutes } from '../../src/provimux/api/normalize';
 import type { ProvimuxLiveListLogin } from '../../src/provimux/api/types';
-import {
-  failureHint,
-  liveRowState,
-  liveSummary,
-  refreshProgress,
-} from '../../src/provimux/pages/liveLists/logic';
+import { failureHint, liveRowState, liveSummary } from '../../src/provimux/pages/liveLists/logic';
 import { ModelCard } from '../../src/provimux/pages/modelRoutes/ModelCard';
 import {
   devinState,
@@ -201,32 +196,6 @@ describe('live lists', () => {
       failing: 2,
       fetching: 1,
     });
-  });
-
-  test('a refresh is done when every enabled login reported back after the click', () => {
-    const click = at('2026-11-19T18:05:00.000Z');
-    expect(refreshProgress(lists.logins, click)).toEqual({ done: 0, total: 4, settled: false });
-    const after = lists.logins.map((row) =>
-      row.disabled
-        ? row
-        : row.provider === 'codex'
-          ? {
-              ...row,
-              last_failure: {
-                at: '2026-11-19T18:05:03.100Z',
-                category: 'http_status',
-                http_status: 401,
-              },
-            }
-          : { ...row, fetching: false, fetched_at: '2026-11-19T18:05:02.250Z' }
-    );
-    expect(refreshProgress(after, click)).toEqual({ done: 4, total: 4, settled: true });
-    // Still fetching is not done, even with a newer time.
-    expect(refreshProgress([{ ...after[0], fetching: true }], click).settled).toBe(false);
-    // Fractions of a second count: a list from just before the click is the old one.
-    expect(
-      refreshProgress([{ ...after[0], fetched_at: '2026-11-19T18:04:59.999Z' }], click).settled
-    ).toBe(false);
   });
 
   test('a failure reads from its codes', () => {

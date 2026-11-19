@@ -84,13 +84,13 @@ export const provimuxApi = {
     return readLiveLists(await client.get<unknown>(PROVIMUX_PATHS.liveLists));
   },
 
-  /** Wakes the fetcher; returns before the lists arrive. */
   /**
    * Refreshes the catalogs and wakes the live-list fetcher. Provimux wakes the fetcher before it reports a catalog
    * that could not be read (model_definitions.go, RefreshModelDefinitions): its 502 answer, `{"ok": false, "error":
    * …, "catalogs": …}`, means the logins are being asked anyway, so it resolves with that error as `catalogError`.
-   * Anything else that fails (400 invalid sources, 401, 404, a proxy's 502 without that body) started nothing and
-   * rejects.
+   * Any other HTTP error answer (400 invalid sources, 401, 404, a proxy's 502 without that body) rejects with that
+   * status. A failure without an HTTP answer (network error, timeout, lost reply) rejects without a status: the
+   * request may have reached the server and started the refresh, so the caller must not read it as "not requested".
    */
   async refreshModels(client: Client = apiClient): Promise<{ catalogError: string | null }> {
     try {

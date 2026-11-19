@@ -200,6 +200,7 @@
       "refresh_requested": "Refresh requested at {{time}}. Each row below shows its login's state as of the latest status read; Reload reads it again.",
       "refresh_catalog_failed": "The server could not refresh the model catalog ({{message}}). Each row below shows its login's state as of the latest status read; Reload reads it again.",
       "refresh_failed": "Refresh not requested: {{message}}",
+      "refresh_unconfirmed": "Could not confirm the refresh request — the server may still be refreshing; the rows below update on the next status read.",
       "saved_on": "Live lists are on",
       "saved_off": "Live lists are off; every login uses the catalog",
       "summary_label": "Summary",
