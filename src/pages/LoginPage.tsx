@@ -11,7 +11,7 @@ import { prefersReducedMotion } from '@/hooks/motion';
 import { detectApiBaseFromLocation, normalizeApiBase } from '@/utils/connection';
 import { LANGUAGE_LABEL_KEYS, LANGUAGE_ORDER } from '@/utils/constants';
 import { isSupportedLanguage } from '@/utils/language';
-import { INLINE_LOGO_JPEG } from '@/assets/logoInline';
+import { INLINE_LOGO_JPEG, PROVIMUX_BRAND, ProvimuxTagline } from '@/provimux';
 import type { ApiError } from '@/types';
 import { LegacyBackendError } from '@/services/api/legacyBackendProbe';
 import { DotMatrixHero } from './login/DotMatrixHero';
@@ -22,7 +22,7 @@ import styles from './LoginPage.module.scss';
 export type LoginPhase = 'idle' | 'connecting' | 'success' | 'exiting';
 
 /** 左上角品牌名：产品全称，所有语言下保持英文，不走 i18n */
-export const LOGIN_BRAND_NAME = 'CLI Proxy API Management Center';
+export const LOGIN_BRAND_NAME = PROVIMUX_BRAND.name;
 
 /** 语言下拉层最小宽度：最长的语言名（繁體中文（台灣））单行显示 */
 const LANGUAGE_DROPDOWN_MIN_WIDTH = 180;
@@ -259,6 +259,7 @@ export function LoginPage() {
               <span className={styles.brandName} title={LOGIN_BRAND_NAME}>
                 {LOGIN_BRAND_NAME}
               </span>
+              <ProvimuxTagline className="pmx-login-tagline" />
             </div>
             <Select
               className={styles.languageSelect}

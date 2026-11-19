@@ -1,0 +1,7 @@
+// Provimux's theme: providers.dev's colours, type and logo on the upstream console, as CSS that loads after
+// upstream's (src/main.tsx imports it after App). No upstream stylesheet is edited.
+@use './fonts';
+@use './tokens';
+@use './login';
+@use './brand';
+@use './overrides';

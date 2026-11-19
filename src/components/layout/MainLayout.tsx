@@ -31,7 +31,7 @@ import {
   IconSidebarSystem,
   IconChevronDown,
 } from '@/components/ui/icons';
-import { INLINE_LOGO_JPEG } from '@/assets/logoInline';
+import { INLINE_LOGO_JPEG, PROVIMUX_BRAND, ProvimuxFooter, ProvimuxTagline } from '@/provimux';
 import {
   useAuthStore,
   useLoginTransitionStore,
@@ -350,7 +350,7 @@ export function MainLayout() {
   const themeMenuRef = useRef<HTMLDivElement | null>(null);
   const headerRef = useRef<HTMLElement | null>(null);
 
-  const fullBrandName = 'CLI Proxy API Management Center';
+  const fullBrandName = PROVIMUX_BRAND.fullName;
   const abbrBrandName = t('title.abbr');
   const arrivingFromLogin = useLoginTransitionStore((state) => state.phase === 'revealing');
   const isLogsPage = location.pathname.startsWith('/logs');
@@ -1154,10 +1154,11 @@ export function MainLayout() {
         >
           <div className="sidebar-header">
             <div className="sidebar-brand" title={fullBrandName}>
-              <img src={INLINE_LOGO_JPEG} alt="CPAMC logo" className="sidebar-brand-logo" />
+              <img src={INLINE_LOGO_JPEG} alt={PROVIMUX_BRAND.name} className="sidebar-brand-logo" />
               {showSidebarLabels && (
                 <span className="sidebar-brand-text">
                   <span className="sidebar-brand-title">{abbrBrandName}</span>
+                  <ProvimuxTagline className="sidebar-brand-tagline" />
                 </span>
               )}
             </div>
@@ -1209,6 +1210,7 @@ export function MainLayout() {
               getTransitionVariant={getTransitionVariant}
               scrollContainerRef={contentRef}
             />
+            <ProvimuxFooter />
           </main>
         </div>
       </div>

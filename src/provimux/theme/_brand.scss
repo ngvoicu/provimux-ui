@@ -1,0 +1,224 @@
+// Type and the Provimux pieces: the sidebar brand, the signature, the System page's about lines, the footer.
+// Rules that restyle an upstream selector name it; everything else is a pmx-* class of Provimux's own.
+
+@use '@/styles/variables.scss' as *;
+
+body {
+  font-family: var(--pmx-font-sans);
+  text-rendering: optimizeLegibility;
+}
+
+// "by providers.dev": "by" and ".dev" muted, "providers" a step stronger (colours-and-type.md)
+.pmx-tagline {
+  color: var(--text-tertiary);
+  font-weight: 450;
+  letter-spacing: 0;
+  white-space: nowrap;
+
+  .pmx-tagline-name {
+    color: var(--pmx-fg-soft);
+    font-weight: 520;
+  }
+
+  .pmx-tagline-link {
+    color: inherit;
+    text-decoration: none;
+    border-radius: 3px;
+
+    &:hover {
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--pmx-brand);
+      outline-offset: 2px;
+    }
+  }
+}
+
+// Sidebar brand (src/styles/layout.scss .sidebar-brand*): the name as providers.dev sets its own, the
+// signature under it
+.sidebar .sidebar-brand {
+  gap: 9px;
+}
+
+.sidebar .sidebar-brand-text {
+  gap: 2px;
+}
+
+.sidebar .sidebar-brand-title {
+  font-size: 15px;
+  font-weight: 620;
+  letter-spacing: -0.015em;
+  line-height: 1.1;
+}
+
+.sidebar .sidebar-brand-tagline {
+  font-size: 11.5px;
+  line-height: 1.2;
+}
+
+// On phones the menu button stays at the top left over the open drawer (layout.scss .mobile-sidebar-actions,
+// 12px gutter + 46px); the brand starts after it, on its centre line
+@media (max-width: $breakpoint-mobile) {
+  .sidebar .sidebar-header {
+    min-height: 46px;
+    padding-left: 54px;
+  }
+}
+
+// Login top bar (LoginPage.module.scss .brandMark): name then signature, as the header lockup
+[class*='LoginPage-module__brandName___'] {
+  flex-shrink: 0;
+  font-weight: 620;
+  letter-spacing: -0.015em;
+}
+
+// On the narrowest phones the signature goes under the name, as in the sidebar
+.pmx-login-tagline {
+  margin-left: -4px;
+  font-size: 13px;
+}
+
+@media (max-width: 374px) {
+  [class*='LoginPage-module__brandMark___'] {
+    display: inline-grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: 9px;
+    row-gap: 1px;
+    align-items: center;
+
+    > img {
+      grid-row: 1 / span 2;
+      width: 28px;
+      height: 28px;
+      border-radius: 7px;
+    }
+  }
+
+  [class*='LoginPage-module__brandName___'] {
+    line-height: 1.15;
+  }
+
+  .pmx-login-tagline {
+    margin-left: 0;
+    font-size: 11.5px;
+    line-height: 1.2;
+  }
+}
+
+[class*='LoginPage-module__splashTitle___'],
+[class*='DotMatrixHero-module__title___'],
+[class*='SystemPage-module__aboutTitle___'] {
+  font-weight: 650;
+  letter-spacing: -0.025em;
+}
+
+// System page: under the title
+.pmx-about {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin-top: -8px;
+  text-align: center;
+
+  .pmx-about-tagline {
+    font-size: 15px;
+  }
+
+  .pmx-about-version {
+    margin-top: 6px;
+    color: var(--text-secondary);
+    font-family: var(--pmx-font-mono);
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .pmx-about-built-on {
+    color: var(--text-tertiary);
+    font-size: 12.5px;
+    text-wrap: balance;
+  }
+}
+
+// System page link cards (SystemPage.module.scss .linkIcon is GitHub's dark square)
+.pmx-link-tile {
+  overflow: hidden;
+  background: transparent !important;
+
+  svg {
+    display: block;
+  }
+}
+
+.pmx-link-pdev {
+  color: #fafafa;
+}
+
+// The footer at the end of every page (inside .main-content, pushed to the bottom on short pages)
+.pmx-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 18px;
+  margin-top: auto;
+  padding-top: 18px;
+  border-top: 1px solid var(--border-color);
+  color: var(--text-tertiary);
+  font-size: 12.5px;
+  line-height: 1.5;
+
+  a {
+    color: inherit;
+    text-decoration: none;
+
+    &:hover {
+      color: var(--text-primary);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--pmx-brand);
+      outline-offset: 2px;
+      border-radius: 3px;
+    }
+  }
+
+  .pmx-footer-sign {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .pmx-footer-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    color: var(--text-primary);
+    font-weight: 620;
+    letter-spacing: -0.015em;
+
+    img {
+      width: 16px;
+      height: 16px;
+      border-radius: 4px;
+    }
+  }
+
+  .pmx-footer-meta {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+// Pages that fill the screen and scroll inside themselves keep the whole height
+.main-content-logs > .pmx-footer,
+.main-content-plugin-resource > .pmx-footer {
+  display: none;
+}

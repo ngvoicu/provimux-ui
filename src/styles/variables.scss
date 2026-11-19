@@ -51,3 +51,4 @@ $font-family:
 $font-mono:
   ui-monospace, 'SF Mono', 'Cascadia Mono', 'JetBrains Mono', 'Fira Code', Menlo, Consolas,
   'Liberation Mono', monospace;
+$font-mono: 'Geist Mono Variable', $font-mono; // Provimux: providers.dev's mono (src/provimux/theme)

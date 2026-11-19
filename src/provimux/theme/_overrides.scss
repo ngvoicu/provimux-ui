@@ -1,0 +1,63 @@
+// Upstream rules that tokens cannot reach. Each names the upstream code it shadows.
+
+// The theme picker draws each theme's preview with inline colours (MainLayout.tsx THEME_CARDS, in the order
+// auto, white, light, dark; tests/provimux/theme.test.ts pins that order). These show Provimux's themes instead.
+@mixin pmx-theme-preview($bg, $card, $border, $muted) {
+  .theme-card-preview {
+    background: $bg !important;
+    border-color: $border !important;
+  }
+  .theme-card-header {
+    background: $card !important;
+    border-bottom-color: $border !important;
+  }
+  .theme-card-sidebar {
+    background: $card !important;
+    border-right-color: $border !important;
+  }
+  .theme-card-content {
+    background: $bg !important;
+  }
+  .theme-card-line {
+    background: $muted !important;
+  }
+}
+
+.theme-menu-popover .theme-card {
+  &:nth-child(1) {
+    @include pmx-theme-preview(
+      linear-gradient(135deg, #ffffff 0 50%, #09090b 50% 100%),
+      linear-gradient(135deg, #ffffff 0 50%, #18181b 50% 100%),
+      #d4d4d8,
+      linear-gradient(135deg, #d4d4d8 0 50%, #3f3f46 50% 100%)
+    );
+  }
+  &:nth-child(2) {
+    @include pmx-theme-preview(#ffffff, #ffffff, #e4e4e7, #d4d4d8);
+  }
+  &:nth-child(3) {
+    @include pmx-theme-preview(#fafafa, #f4f4f5, #e4e4e7, #d4d4d8);
+  }
+  &:nth-child(4) {
+    @include pmx-theme-preview(#09090b, #18181b, #27272a, #3f3f46);
+  }
+}
+
+// Inputs focus with a halo of the warm upstream grey ($primary-color, a build-time constant); the global
+// ones take the brand instead (components.scss .input:focus)
+.input:focus {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color) 18%, transparent);
+}
+
+// providers.dev's primary button is the text colour on the page colour; the brand indigo stays for selection,
+// toggles, focus and active states (components.scss .btn.btn-primary)
+.btn.btn-primary {
+  background-color: var(--text-primary);
+  border-color: var(--text-primary);
+  color: var(--bg-secondary);
+
+  &:hover:not(:disabled) {
+    background-color: color-mix(in srgb, var(--text-primary) 84%, var(--bg-secondary));
+    border-color: color-mix(in srgb, var(--text-primary) 84%, var(--bg-secondary));
+  }
+}
