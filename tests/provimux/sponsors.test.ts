@@ -26,6 +26,7 @@ import {
   hideSponsor,
   hideSponsorNav,
   noQuickFill,
+  offersCreate,
   providerGroupsWithoutOffers,
 } from '../../src/provimux/sponsors';
 import type { Config } from '../../src/types';
@@ -191,6 +192,82 @@ describe('AI Providers sponsor groups', () => {
     expect(read('src/features/providers/ProvidersWorkbenchPage.tsx')).toMatch(
       /groups\.some\(\(group\) => group\.id === uiState\.activeBrand\)\s*\? uiState\.activeBrand\s*: firstVisibleBrand/
     );
+  });
+});
+
+// T-54: "New" on a listed sponsor group opened a blank form whose save replaced the group's saved key.
+describe('no "New" on a sponsor group', () => {
+  const page = () => read('src/features/providers/ProvidersWorkbenchPage.tsx');
+  const configured = {
+    codexApiKeys: SPONSOR_GROUP_BRANDS.map((brand, index) => ({
+      apiKey: `sk-sponsor-${index}`,
+      baseUrl: getSponsorProviderDefinition(
+        brand as Parameters<typeof getSponsorProviderDefinition>[0]
+      ).baseUrlOptions[0].codexBaseUrl,
+    })),
+  } as unknown as Config;
+  const empty = buildProviderGroups({} as Config);
+  const renderPanel = (group: ProviderGroup, filteredResources: ProviderGroup['resources']) =>
+    renderToStaticMarkup(
+      createElement(ProviderResourcePanel, {
+        group,
+        filter: filteredResources.length ? '' : 'no-such-key',
+        onFilterChange: () => {},
+        filteredResources,
+        selectedId: null,
+        onView: () => {},
+        onEdit: () => {},
+        onDelete: () => {},
+        onToggleDisabled: () => {},
+        onCreate: () => {},
+      })
+    );
+  const newButton = () => `<span>${i18n.t('providersPage.actions.new')}</span>`;
+
+  test('sponsor groups offer no "New"; every other provider does', () => {
+    for (const brand of SPONSOR_GROUP_BRANDS) expect(offersCreate(brand)).toBe(false);
+    const others = PROVIDER_BRAND_ORDER.filter((brand) => !SPONSOR_GROUP_BRANDS.includes(brand));
+    expect(others).toContain('codex');
+    expect(others).toContain('openaiCompatibility');
+    for (const brand of others) expect(offersCreate(brand)).toBe(true);
+  });
+
+  test('the page header shows "New" only for a group that offers it', () => {
+    expect(page()).toContain('showNewAction={!fixedBrand && offersCreate(activeGroup.id)}');
+    // Every way to open the create form goes through openCreate, used by exactly the header and the panel.
+    expect(page().match(/mode: 'create'/g) ?? []).toHaveLength(1);
+    expect(page().match(/\bopenCreate\b/g) ?? []).toHaveLength(3); // its definition, the header, the panel
+    expect(page()).toContain('onNew={openCreate}');
+    expect(page()).toContain('onCreate={openCreate}');
+    // The other header (no group listed) has a disabled "New" that does nothing.
+    expect(page()).toMatch(/onNew=\{\(\) => \{\}\}\s*isNewDisabled\s/);
+  });
+
+  test('a populated sponsor group: no "New" on an empty search; edit, delete and the switch stay', async () => {
+    await i18n.changeLanguage('en');
+    const sponsors = providerGroupsWithoutOffers(buildProviderGroups(configured)).filter((group) =>
+      SPONSOR_GROUP_BRANDS.includes(group.id)
+    );
+    expect(sponsors.map((group) => group.id).sort()).toEqual([...SPONSOR_GROUP_BRANDS].sort());
+    for (const group of sponsors) {
+      expect(group.resources.length).toBeGreaterThan(0);
+      expect(renderPanel(group, [])).not.toContain(newButton());
+      const rows = renderPanel(group, group.resources);
+      expect(rows).not.toContain(newButton());
+      expect(rows).toContain(`aria-label="${i18n.t('providersPage.actions.view')}"`);
+      expect(rows).toContain(`aria-label="${i18n.t('providersPage.actions.edit')}"`);
+      expect(rows).toContain(`aria-label="${i18n.t('providersPage.actions.delete')}"`);
+      expect(rows).toMatch(/<input[^>]*type="checkbox"/);
+    }
+  });
+
+  test('Codex and OpenAI Compatible keep "New" on an empty list', async () => {
+    await i18n.changeLanguage('en');
+    for (const brand of ['codex', 'openaiCompatibility']) {
+      const group = empty.find((g) => g.id === brand);
+      expect(group).toBeDefined();
+      expect(renderPanel(group as ProviderGroup, [])).toContain(newButton());
+    }
   });
 });
 
