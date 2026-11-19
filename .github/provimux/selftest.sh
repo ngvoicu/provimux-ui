@@ -11,15 +11,25 @@
 #                 moved upstream (never a fallback); the expected base; on git objects
 #                 only (a bare repository, HEAD = the candidate)
 #   release-meta  the base tag only upstream
-#   range-diff    a layer commit whose surrounding code moved (context only, accepted)
-#                 versus one whose change differs (changed: the owner decides), a
-#                 dropped one
-#   verdict       check.sh verdict from exit statuses: pass; the layer breaks verify;
-#                 upstream's own failure (still a failure); install fails; a test job
-#                 left nothing (error); the guard's rejection kept
+#   range-diff    dropped and changed commits (a "!" always needs the owner: no
+#                 context-only acceptance); two different images that range-diff calls
+#                 "=" are changed (blob ids compared), the same image is not
+#   verdict       check.sh verdict takes the test jobs' step conclusions from the API
+#                 (stub): pass; the layer breaks verify; upstream's own failure; install
+#                 fails; a missing test job (error); exit files a test job could write
+#                 are ignored; the guard's rejection kept; a state value with shell code
+#                 is refused and never runs; a state that is not JSON
+#   fetch         fetch_artifact: only the producing job's id, name, run and digest, the
+#                 download hashing to that digest; expired refused
 #   report.sh     a successful release run for the wrong SHA (not published), the right
 #                 SHA (published), a failed check job, a prerelease (not published: the
-#                 release run's errors shown); a failure result (every detail shown)
+#                 release run's errors shown); a failure result (conclusions, job links)
+#   history       releases_status: a failed .1 then a complete .2 is published, the .1
+#                 kept as history; the sweep reports a failed tag on another base in its
+#                 own issue and closes the released base's issue with the history
+#   authorization release-auth.sh: a status from a provimux-ui-publish run or the owner
+#                 passes; another workflow's run, another repository, another tag, a
+#                 failure state, another account, no status fail
 #   verifier      the inline first step of provimux-ui-publish.yml (from the workflow
 #                 file between its markers, with a stub gh and git): passes only for
 #                 workflow_sha = the check's head_sha = the live main, the event's exact
@@ -36,10 +46,13 @@
 #                 checksum, API digest or build mismatch, a third asset, a missing
 #                 title, version or MIT notice, an external script
 #   promote       the inline step of provimux-ui-release.yml's promote job (from the
-#                 workflow file between its markers): promotes a checked prerelease;
-#                 does nothing for the latest; refuses a changed digest, a newer latest,
-#                 another build; a dry run changes nothing
+#                 workflow file between its markers): promotes an authorized, immutable,
+#                 checked prerelease; refuses no or a wrong authorization, a mutable
+#                 release, a changed digest, a newer latest, an unreadable latest (503),
+#                 another build; reports a failed edit and a failed or wrong readback;
+#                 a dry run changes nothing; one repository-wide concurrency group
 # Needs bash 3.2+, git, jq.
+# shellcheck disable=SC2030,SC2031 # subshells set the stub environment on purpose
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 tmp="$(mktemp -d "${TMPDIR:-/tmp}/provimux-selftest.XXXXXX")"
@@ -147,12 +160,16 @@ fi
 if [ "$1" = issue ]; then echo "$*" >>"$STUB_API/../issue.log"; exit 0; fi
 [ "$1" = api ] || { echo "stub gh: $*" >&2; exit 1; }
 shift
-p='' q=''
+p='' q='' m=GET
+args="$*"
 while [ $# -gt 0 ]; do
-  case "$1" in --jq) q=$2; shift ;; -*) ;; *) [ -n "$p" ] || p=$1 ;; esac
+  case "$1" in --jq) q=$2; shift ;; -X | --method) m=$2; shift ;; -f | -F | -H) shift ;; -*) ;; *) [ -n "$p" ] || p=$1 ;; esac
   shift
 done
+# Writes (-X POST, ...) are recorded in $STUB_API/../write.log.
+if [ "$m" != GET ]; then echo "$m $args" >>"$STUB_API/../write.log"; exit 0; fi
 f="$STUB_API/$(printf %s "$p" | tr '/?&=' '____').json"
+[ ! -f "$f.err" ] || { cat "$f.err" >&2; exit 1; }
 [ -f "$f" ] || { echo "gh: Not Found (HTTP 404)" >&2; exit 1; }
 if [ -n "$q" ]; then jq -r "$q" "$f"; else cat "$f"; fi
 EOF
@@ -193,17 +210,17 @@ mv "$tmp/d.json" "$stub/api/repos_test_provimux-ui_releases_tags_v1.1.0-pmx.1.js
 expect "release is a draft: not published" incomplete "$(report "$tmp/published.json" success)"
 
 cat >"$tmp/fail.json" <<'EOF'
-{"status": "fail", "step": "done", "upstream": {"tag": "v1.1.0"}, "reasons": ["bun run verify fails on the candidate (exit 1)"],
+{"status": "fail", "step": "done", "upstream": {"tag": "v1.1.0"}, "reasons": ["bun run verify on the candidate: failure"],
  "rebase": {"ok": true},
  "guard": {"ok": false, "output": "::error::Commit abc has no trailer"},
- "tests": {"ok": false, "candidate": {"install": 0, "verify": 1, "tail": "(fail) TestOwner > renders"},
-           "tag": {"install": 0, "verify": 1, "tail": "src/x.ts: error TS2322"}}}
+ "tests": {"ok": false, "candidate": {"install": "success", "verify": "failure", "job": "https://github.com/test/provimux-ui/actions/runs/1/job/2"},
+           "tag": {"install": "success", "verify": "failure", "job": "https://github.com/test/provimux-ui/actions/runs/1/job/3"}}}
 EOF
 expect "failure result: reported as failed" fail "$(report "$tmp/fail.json" success)"
-contains "  ... the reason shown" "$tmp/report.out" "bun run verify fails on the candidate"
-contains "  ... the candidate's output shown" "$tmp/report.out" "(fail) TestOwner > renders"
-contains "  ... the tag's output shown" "$tmp/report.out" "error TS2322"
-contains "  ... the exit statuses shown" "$tmp/report.out" "candidate exit 0 / 1"
+contains "  ... the reason shown" "$tmp/report.out" "bun run verify on the candidate: failure"
+contains "  ... the step conclusions shown" "$tmp/report.out" "candidate success / failure"
+contains "  ... the candidate's job linked" "$tmp/report.out" "test (candidate): https://github.com/test/provimux-ui/actions/runs/1/job/2"
+contains "  ... the tag's job linked" "$tmp/report.out" "test (tag): https://github.com/test/provimux-ui/actions/runs/1/job/3"
 contains "  ... guard output shown" "$tmp/report.out" "has no trailer"
 lacks "  ... no rebase section for a clean rebase" "$tmp/report.out" "The rebase stopped at"
 jq '.rebase = {ok: false, stopped_at: "0123456789abcdef0123456789abcdef01234567", subject: "owner patch", conflicts: ["a.go"]}' \
@@ -458,7 +475,7 @@ expect "--expect-main not a SHA: refused" "exit 1" "$(ci bash "$P" v1.2.0 --expe
 mkdir -p "$tmp/p2" && printf 'TAG=v1.3.0\n' >"$tmp/p2/plan.env"
 expect "--ci --wait on a plan for another tag: refused" "exit 1" "$(ci bash "$P" v1.2.0 --ci --wait "$tmp/p2")"
 
-echo "# range-diff: dropped, changed, context only (range_diff_lists, split_changed)"
+echo "# range-diff: every change goes to the owner; binary files by blob id (range_diff_lists)"
 rd="$tmp/rd"
 git init -q -b main "$rd"
 (
@@ -482,42 +499,109 @@ mkdir -p "$tmp/rdo"
 # shellcheck source=common.sh
 (cd "$rd" && . "$here/common.sh" && range_diff_lists "$tmp/rd.txt" "$tmp/rdo" git)
 expect "the commit upstream made entirely: dropped" "layer: f3 line d" "$(cut -f2 "$tmp/rdo/dropped")"
-expect "the commit upstream made in part: changed" "layer: f2 lines b, e, g and i" "$(cut -f2 "$tmp/rdo/changed")"
-expect "the commit whose surrounding code moved: context only (accepted)" "layer: f1 line e" "$(cut -f2 "$tmp/rdo/context")"
-expect "  ... range-diff saw it as changed (!)" 2 "$(wc -l <"$tmp/rdo/changed.pairs" | tr -d ' ')"
-expect "  ... by the old main's commit" "$(git -C "$rd" rev-parse old-main~2)" "$(cut -f1 "$tmp/rdo/context")"
+expect "a commit upstream made in part, and one whose surrounding code moved: both changed (the owner decides)" \
+  "layer: f1 line e|layer: f2 lines b, e, g and i" "$(cut -f2 "$tmp/rdo/changed" | paste -sd '|' -)"
+expect "  ... no context-only list any more" "" "$(find "$tmp/rdo" \( -name '*context*' -o -name '*pairs*' \) -print)"
+# Two images under the same path and subject: the patches read alike ("Binary files differ").
+bin="$tmp/bin"
+git init -q -b main "$bin"
+(
+  cd "$bin"
+  echo base >README && git add -A && git commit -q -m base && git tag base
+  printf '\x89PNG\0one' >logo.png && echo same >note.txt && git add -A && git commit -q -m 'layer: login image' && git tag one
+  git checkout -q --detach base
+  printf '\x89PNG\0two' >logo.png && echo same >note.txt && git add -A && git commit -q -m 'layer: login image' && git tag two
+  git checkout -q --detach base
+  printf '\x89PNG\0one' >logo.png && echo same >note.txt && git add -A && git commit -q -m 'layer: login image' && git tag one-again
+  git range-diff --no-color --no-notes base..one base..two >"$tmp/bin1.txt"
+  git range-diff --no-color --no-notes base..one base..one-again >"$tmp/bin2.txt"
+)
+expect "  ... git range-diff calls two different images equal" "=" "$(awk '{print $3}' "$tmp/bin1.txt" | head -n 1)"
+mkdir -p "$tmp/bino1" "$tmp/bino2"
+# shellcheck source=common.sh
+(cd "$bin" && . "$here/common.sh" && range_diff_lists "$tmp/bin1.txt" "$tmp/bino1" git && range_diff_lists "$tmp/bin2.txt" "$tmp/bino2" git)
+expect "an '=' pair whose image differs (another blob id): changed" "layer: login image (a binary file differs)" "$(cut -f2 "$tmp/bino1/changed")"
+expect "an '=' pair with the same image (same blob id): unchanged" "" "$(cat "$tmp/bino2/changed")"
 
-echo "# check.sh verdict (exit statuses are data)"
-# verdict CI CV TI TV [GUARD_REASON]: "<status> | <reasons joined by ; >"; - = no test output at all.
-verdict() {
-  local o="$tmp/verdict" w
-  rm -rf "$o"; mkdir -p "$o/test/candidate" "$o/test/tag" "$o/logs"
-  printf 'status=test\nstep=test\ntag=v1.2.0\nbase=1.2.0\nupstream_commit=%s\nold_main=%s\nold_base_tag=v1.1.0\nold_base_commit=%s\ncandidate=%s\ncommits=2\nguard_ok=%s\n' \
-    "$v110" "$pmx_sha" "$v110" "$pmx_sha" "$([[ -n "${5:-}" ]] && echo false || echo true)" >"$o/state.env"
-  if [[ -n "${5:-}" ]]; then echo "$5" >"$o/reasons.txt"; else : >"$o/reasons.txt"; fi
-  if [[ "$1" != - ]]; then
-    for w in candidate:"$1":"$2" tag:"$3":"$4"; do
-      IFS=: read -r t i v <<<"$w"
-      echo "$i" >"$o/test/$t/install.exit"; [[ "$v" == x ]] || echo "$v" >"$o/test/$t/verify.exit"
-      echo "log of $t" >"$o/test/$t/verify.log"
-    done
-  fi
-  PMX_CHECK_OUT="$o" bash "$here/check.sh" verdict >/dev/null 2>&1 || { echo "exit $?"; return; }
-  jq -r '"\(.status) | \(.reasons | join("; "))"' "$o/result.json"
+echo "# check.sh: state is data; the verdict reads the test jobs' steps from the API"
+# vstate OUT [JQ]: a prepare state at status "test" (JQ edits it).
+vstate() {
+  rm -rf "$1"; mkdir -p "$1/logs"
+  jq -n --arg u "$v110" --arg m "$pmx_sha" '{status: "test", step: "test", tag: "v1.2.0", base: "1.2.0", upstream_commit: $u,
+    old_main: $m, old_base_tag: "v1.1.0", old_base_commit: $u, candidate: $m, commits: "2", guard_ok: "true"}' | jq "${2:-.}" >"$1/state.json"
+  : >"$1/reasons.txt"
 }
-expect "verify passes on the candidate: pass" "pass | " "$(verdict 0 0 0 0)"
-expect "verify passes on the candidate, fails on the tag: pass" "pass | " "$(verdict 0 0 0 1)"
-expect "fails on the candidate, passes on the tag: the layer breaks it" \
-  "fail | bun run verify fails on the candidate (exit 1); it passes on the pristine v1.2.0: the Provimux layer breaks it" "$(verdict 0 1 0 0)"
-r="$(verdict 0 1 0 1)"
-expect "fails on both: still a failure (the release runs the same verify)" "fail" "${r%% |*}"
+# tjobs CI CV TI TV: the jobs of run 900 attempt 1 (- leaves the test (tag) job out).
+tjobs() {
+  jq -n --arg ci "$1" --arg cv "$2" --arg ti "$3" --arg tv "$4" '
+    def job($n; $i; $v): {name: $n, status: "completed", html_url: "https://github.com/test/provimux-ui/actions/runs/900/job/1",
+      steps: [{name: "Set up job", conclusion: "success"}, {name: "bun install --frozen-lockfile", conclusion: $i},
+              {name: "bun run verify", conclusion: $v}]};
+    {jobs: ([{name: "prepare", status: "completed", steps: []}, job("test (candidate)"; $ci; $cv)]
+            + (if $ti == "-" then [] else [job("test (tag)"; $ti; $tv)] end))}' \
+    >"$stub/api/repos_test_provimux-ui_actions_runs_900_attempts_1_jobs_per_page_100.json"
+}
+# verdict [ENV...]: "<status> | <reasons joined by ; >"
+verdict() {
+  env PATH="$stub/bin:$PATH" STUB_API="$stub/api" PMX_REPO=test/provimux-ui PMX_CHECK_OUT="$tmp/v" \
+    PMX_RUN_ID=900 PMX_RUN_ATTEMPT=1 "$@" bash "$here/check.sh" verdict >"$tmp/verdict.log" 2>&1 || { echo "exit $?"; return; }
+  jq -r '"\(.status) | \(.reasons | join("; "))"' "$tmp/v/result.json"
+}
+vstate "$tmp/v"; tjobs success success success success
+expect "both trees install and verify: pass" "pass | " "$(verdict)"
+expect "  ... the conclusions recorded" "success success https://github.com/test/provimux-ui/actions/runs/900/job/1" \
+  "$(jq -r '.tests.candidate | "\(.install) \(.verify) \(.job)"' "$tmp/v/result.json")"
+vstate "$tmp/v"; tjobs success failure success success
+expect "verify fails on the candidate, passes on the tag: the layer breaks it" \
+  "fail | bun run verify on the candidate: failure; it passes on the pristine v1.2.0: the Provimux layer breaks it" "$(verdict)"
+vstate "$tmp/v"; tjobs success failure success failure
+r="$(verdict)"
+expect "fails on both: still a failure" fail "${r%% |*}"
 contains "  ... says it is upstream's own" <(echo "$r") "upstream's own failure"
-r="$(verdict 1 x 0 0)"
-expect "install fails on the candidate: fail" "fail | bun install --frozen-lockfile fails on the candidate (exit 1)" "${r%%; *}"
-r="$(verdict -)"
-expect "a test job left nothing: error" "error" "${r%% |*}"
-r="$(verdict 0 0 0 0 'the guard rejects the candidate')"
-expect "verify passes but the guard rejected the candidate: fail" "fail | the guard rejects the candidate" "$r"
+vstate "$tmp/v"; tjobs failure skipped success success
+expect "install fails on the candidate (verify skipped): fail" "fail | bun install --frozen-lockfile on the candidate: failure" "$(verdict | cut -d';' -f1)"
+vstate "$tmp/v"; tjobs success success - -
+r="$(verdict)"
+expect "no test (tag) job: error" error "${r%% |*}"
+contains "  ... says which job" <(echo "$r") 'not exactly one completed job "test (tag)"'
+vstate "$tmp/v"; tjobs success success success success
+expect "no run id: error (never files)" error "$(verdict PMX_RUN_ID= | cut -d' ' -f1)"
+# A test job writes exit files claiming success; the API says failure: the API wins.
+vstate "$tmp/v"; tjobs success failure success success
+mkdir -p "$tmp/v/test/candidate" && echo 0 >"$tmp/v/test/candidate/verify.exit"
+expect "exit files in the out dir are ignored: the step conclusion decides" fail "$(verdict | cut -d' ' -f1)"
+vstate "$tmp/v" '.guard_ok = "false"'; echo 'the guard rejects the candidate' >"$tmp/v/reasons.txt"; tjobs success success success success
+expect "verify passes but the guard rejected the candidate: fail" "fail | the guard rejects the candidate" "$(verdict)"
+rm -f "$tmp/pwned"
+vstate "$tmp/v" ".tag = \"v1.2.0\$(touch $tmp/pwned)\""; tjobs success success success success
+expect "a state value with shell code: error, not run" "error | the prepare job's state is not valid" "$(verdict)"
+if [[ -e "$tmp/pwned" ]]; then bad "  ... the code did not run"; else ok "  ... the code did not run"; fi
+vstate "$tmp/v"; echo 'status=test' >"$tmp/v/state.json"
+expect "a state that is not JSON: error" "error" "$(verdict | cut -d' ' -f1)"
+
+echo "# fetch_artifact (by the producing job's id and digest, never by name)"
+fa="$tmp/fa"; mkdir -p "$fa/src"; echo '{"status": "pass"}' >"$fa/src/result.json"
+(cd "$fa/src" && zip -q ../a.zip result.json)
+zsha="$(shasum -a 256 "$fa/a.zip" | cut -d' ' -f1)"
+cp "$fa/a.zip" "$stub/api/repos_test_provimux-ui_actions_artifacts_600_zip.json"
+fmeta() { jq -n --arg d "sha256:$zsha" '{id: 600, name: "pmx-prepare", expired: false, digest: $d, workflow_run: {id: 900}}' | jq "${1:-.}" \
+  >"$stub/api/repos_test_provimux-ui_actions_artifacts_600.json"; }
+fetch() { # fetch ID DIGEST [RUN] [NAME]: ok | fail
+  rm -rf "$fa/out"
+  # shellcheck source=common.sh
+  (export PATH="$stub/bin:$PATH" STUB_API="$stub/api" PMX_REPO=test/provimux-ui; . "$here/common.sh"
+    fetch_artifact "$1" "${4:-pmx-prepare}" "$2" "${3:-900}" "$fa/out") >/dev/null 2>&1 && echo ok || echo fail
+}
+fmeta
+expect "the producing job's id and digest: fetched" ok "$(fetch 600 "$zsha")"
+expect "  ... unpacked" '{"status": "pass"}' "$(cat "$fa/out/result.json" 2>/dev/null)"
+expect "another run's artifact: refused" fail "$(fetch 600 "$zsha" 901)"
+expect "another name under that id: refused" fail "$(fetch 600 "$zsha" 900 provimux-ui-check-v1.2.0)"
+expect "a digest the producer did not output: refused" fail "$(fetch 600 "$(printf '%064d' 0)")"
+fmeta '.expired = true'
+expect "expired: refused" fail "$(fetch 600 "$zsha")"
+fmeta; printf 'tampered' >>"$stub/api/repos_test_provimux-ui_actions_artifacts_600_zip.json"
+expect "the download does not hash to the digest: refused" fail "$(fetch 600 "$zsha")"
 
 echo "# report.sh and notify: a release that stayed a prerelease (promotion refused)"
 jq '.draft = false | .prerelease = true' "$stub/api/repos_test_provimux-ui_releases_tags_v1.1.0-pmx.1.json" >"$tmp/d.json"
@@ -537,6 +621,81 @@ expect "notify for that state: pushed, release not complete" "sync: v1.1.0 — p
   "$(notify v1.1.0 failed 'publish: the provimux-ui-release run for v1.1.0-pmx.1 ended failure')"
 contains "  ... the promotion check's error shown" "$tmp/notify.out" "smoke: no request leaves 127.0.0.1"
 contains "  ... says how to rerun" "$tmp/notify.out" "gh run rerun 7 --failed -R test/provimux-ui"
+
+echo "# releases_status: the newest tag decides, failed predecessors stay as history; the sweep"
+# v1.1.0-pmx.1 failed (a prerelease, its run failed: above); v1.1.0-pmx.2 is complete.
+git -C "$pmx" push -q "$remote" "HEAD:refs/tags/v1.1.0-pmx.2" "HEAD:refs/tags/v1.0.9-pmx.1"
+cmpl() { # cmpl TAG [JQ]: a complete release of TAG
+  expected_assets | jq -R -s --arg t "$1" '{tag_name: $t, draft: false, prerelease: false, published_at: "2026-11-19T00:00:00Z",
+    assets: (split("\n") | map(select(length > 0) | {name: ., state: "uploaded"}))}' | jq "${2:-.}" \
+    >"$stub/api/repos_test_provimux-ui_releases_tags_$1.json"
+}
+truns() { # truns TAG ID CONCLUSION: one provimux-ui-release run of TAG at the layer commit
+  jq -n --arg sha "$pmx_sha" --arg t "$1" --argjson id "$2" --arg c "$3" '{workflow_runs: [{id: $id, path: ".github/workflows/provimux-ui-release.yml",
+    event: "push", head_branch: $t, head_sha: $sha, repository: {full_name: "test/provimux-ui"},
+    status: "completed", conclusion: $c, created_at: "2026-11-19T01:00:00Z"}]}' \
+    >"$stub/api/repos_test_provimux-ui_actions_runs_event_push_branch_$1_per_page_50.json"
+}
+cmpl v1.1.0-pmx.2; truns v1.1.0-pmx.2 9 success
+cmpl v1.0.9-pmx.1 '.prerelease = true'; truns v1.0.9-pmx.1 8 failure
+echo '{"jobs": [{"id": 88, "name": "promote", "conclusion": "failure"}]}' >"$stub/api/repos_test_provimux-ui_actions_runs_8_jobs_per_page_100.json"
+echo '[{"annotation_level": "failure", "message": "v1.0.9-pmx.1 is not authorized by a provimux-ui-publish run or the owner: not promoted"}]' \
+  >"$stub/api/repos_test_provimux-ui_check-runs_88_annotations_per_page_50.json"
+jq -n '[{tag_name: "v1.1.0-pmx.2", draft: false, prerelease: false, published_at: "x",
+         assets: [{name: "management.html", state: "uploaded"}, {name: "checksums.txt", state: "uploaded"}]},
+        {tag_name: "v1.0.9-pmx.1", draft: false, prerelease: true, published_at: "x",
+         assets: [{name: "management.html", state: "uploaded"}, {name: "checksums.txt", state: "uploaded"}]},
+        {tag_name: "v1.1.0-pmx.1", draft: false, prerelease: true, published_at: "x", assets: []}]' \
+  >"$stub/api/repos_test_provimux-ui_releases_per_page_100.json"
+rs() { # rs BASE: the status, the reasons in $tmp/rs.txt
+  : >"$tmp/rs.txt"
+  # shellcheck source=common.sh
+  (export PATH="$stub/bin:$PATH" STUB_API="$stub/api" PMX_REPO=test/provimux-ui PMX_REPO_URL="$remote"; . "$here/common.sh"
+    releases_status "$1" "$tmp/rs.json" "$tmp/rs.txt")
+}
+expect "a failed .1, then a complete .2: published" published "$(rs 1.1.0)"
+contains "  ... the .1's failure kept as history" "$tmp/rs.txt" "history: tag v1.1.0-pmx.1"
+contains "  ... with its release run's error" "$tmp/rs.txt" "history: v1.1.0-pmx.1 smoke: no request leaves 127.0.0.1"
+expect "a base whose newest tag failed: incomplete" incomplete "$(rs 1.0.9)"
+expect "unreleased_bases: only the base whose newest tag has no complete release" "1.0.9" \
+  "$( (export PATH="$stub/bin:$PATH" STUB_API="$stub/api" PMX_REPO=test/provimux-ui PMX_REPO_URL="$remote"; . "$here/common.sh"; unreleased_bases) )"
+expect "report for v1.1.0: published" published "$(report "$tmp/published.json" success)"
+contains "  ... and its sweep reports the failed tag on the other base" "$tmp/report.out" "sweep: sync: v1.0.9 — release incomplete"
+contains "  ... with why" "$tmp/report.out" "is not authorized by a provimux-ui-publish run or the owner"
+# For real (the stub records issue commands): the open v1.1.0 issue is closed with the
+# history; the v1.0.9 failure gets its own issue.
+echo '[{"number": 9, "title": "sync: v1.1.0 — release incomplete"}]' >"$stub/api/repos_test_provimux-ui_issues_state_open_per_page_100.json"
+: >"$stub/issue.log"
+env PATH="$stub/bin:$PATH" STUB_API="$stub/api" PMX_REPO=test/provimux-ui PMX_REPO_URL="$remote" RESULT="$tmp/published.json" \
+  CHECK_JOB=success RUN_URL=https://example.invalid/run bash "$here/report.sh" >"$tmp/report.out" 2>&1 || true
+contains "the released base's issue is closed" "$stub/issue.log" "issue close 9"
+contains "  ... keeping the failed tag's history" "$stub/issue.log" "Earlier tags of this base that failed"
+contains "the failed tag on the other base gets its issue" "$stub/issue.log" "issue create -R test/provimux-ui --title sync: v1.0.9 — release incomplete"
+echo '[]' >"$stub/api/repos_test_provimux-ui_issues_state_open_per_page_100.json"
+
+echo "# release authorization (release_authorized, release-auth.sh)"
+asha="$pmx_sha"
+# auth STATUSES-JSON: the statuses of the layer commit; then release-auth.sh's result.
+auth() {
+  echo "$1" >"$stub/api/repos_test_provimux-ui_commits_${asha}_statuses_per_page_100.json"
+  env PATH="$stub/bin:$PATH" STUB_API="$stub/api" PMX_REPO=test/provimux-ui PMX_AUTH_WAIT=0 \
+    bash "$here/release-auth.sh" v1.1.0-pmx.2 "$asha" >"$tmp/auth.out" 2>&1 && echo pass || echo fail
+}
+jq -n '{id: 31, path: ".github/workflows/provimux-ui-publish.yml", event: "workflow_run", head_branch: "main",
+  repository: {full_name: "test/provimux-ui"}, head_repository: {full_name: "test/provimux-ui"}}' >"$stub/api/repos_test_provimux-ui_actions_runs_31.json"
+jq -n '{id: 32, path: ".github/workflows/provimux-ui-check.yml", event: "workflow_dispatch", head_branch: "main",
+  repository: {full_name: "test/provimux-ui"}, head_repository: {full_name: "test/provimux-ui"}}' >"$stub/api/repos_test_provimux-ui_actions_runs_32.json"
+st() { jq -n --arg l "$1" --arg u "$2" --arg d "${3:-v1.1.0-pmx.2}" --arg s "${4:-success}" \
+  '[{context: "provimux-ui-release", state: $s, description: $d, target_url: $u, creator: {login: $l}}]'; }
+expect "status from a provimux-ui-publish run of this repository: authorized" pass "$(auth "$(st 'github-actions[bot]' https://github.com/test/provimux-ui/actions/runs/31)")"
+expect "status from the owner: authorized" pass "$(auth "$(st test '')")"
+expect "status from another workflow's run (the check): refused" fail "$(auth "$(st 'github-actions[bot]' https://github.com/test/provimux-ui/actions/runs/32)")"
+expect "status naming a run of another repository: refused" fail "$(auth "$(st 'github-actions[bot]' https://github.com/other/provimux-ui/actions/runs/31)")"
+expect "status for another tag (the .1): refused" fail "$(auth "$(st test '' v1.1.0-pmx.1)")"
+expect "status not success: refused" fail "$(auth "$(st test '' v1.1.0-pmx.2 failure)")"
+expect "status from another account: refused" fail "$(auth "$(st someone-else '')")"
+expect "no status (a tag nobody authorized, e.g. a newer tag on an older commit): refused" fail "$(auth '[]')"
+contains "  ... says why, as an error" "$tmp/auth.out" "::error title=release not authorized::"
 
 echo "# release-check.sh (the published release as anyone downloads it)"
 rc="$tmp/rc"
@@ -600,58 +759,105 @@ contains "  ... names the notice" "$tmp/rc.out" "MIT notice"
 
 echo "# provimux-ui-release.yml: the promote step"
 sed -n '/^ *# >>> promote$/,/^ *# <<< promote$/p' "$here/../workflows/provimux-ui-release.yml" | sed 's/^          //' >"$tmp/promote.sh"
-if [[ "$(grep -c '' "$tmp/promote.sh")" -gt 20 ]]; then ok "promote lines found in the workflow"; else bad "promote lines found in the workflow"; fi
+if [[ "$(grep -c '' "$tmp/promote.sh")" -gt 40 ]]; then ok "promote lines found in the workflow"; else bad "promote lines found in the workflow"; fi
 pr="$tmp/pr"
-mkdir -p "$pr/bin" "$pr/api"
+mkdir -p "$pr/bin" "$pr/api" "$pr/after"
 cat >"$pr/bin/gh" <<'EOF'
 #!/usr/bin/env bash
-# Stub gh for the promote step: "gh release edit" is logged and applies $STUB_API/../after/.
-if [ "$1" = release ]; then echo "$*" >>"$STUB_API/../release.log"; cp "$STUB_API/../after/"*.json "$STUB_API/" 2>/dev/null; exit 0; fi
+# Stub gh for the promote step: "gh release edit" is logged and applies $STUB_API/../after/
+# (it fails when $STUB_EDIT_FAIL is set). "gh api PATH [--jq Q]" answers from files; a
+# PATH.err file is an error with that text.
+if [ "$1" = release ]; then
+  echo "$*" >>"$STUB_API/../release.log"
+  [ -z "${STUB_EDIT_FAIL:-}" ] || { echo "HTTP 422" >&2; exit 1; }
+  for f in "$STUB_API/../after/"*; do [ -e "$f" ] || continue; case "$f" in *.gone) rm -f "$STUB_API/$(basename "${f%.gone}")" ;; *) cp "$f" "$STUB_API/" ;; esac; done
+  exit 0
+fi
 [ "$1" = api ] || exit 1
 p=$2; q=''
 [ "$3" = --jq ] && q=$4
 f="$STUB_API/$(printf %s "$p" | tr '/?&=' '____').json"
+[ ! -f "$f.err" ] || { cat "$f.err" >&2; exit 1; }
 [ -f "$f" ] || { echo "gh: Not Found (HTTP 404)" >&2; exit 1; }
 if [ -n "$q" ]; then jq -r "$q" "$f"; else cat "$f"; fi
 EOF
 chmod +x "$pr/bin/gh"
 h=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-# state DIR PRERELEASE DIGEST LATEST: the release v1.1.0-pmx.2 and releases/latest in DIR.
-state() {
+csha=cccccccccccccccccccccccccccccccccccccccc
+# rel DIR PRERELEASE DIGEST LATEST [IMMUTABLE]: the release v1.1.0-pmx.2 and releases/latest in DIR.
+rel() {
   mkdir -p "$1"
-  jq -n --argjson pre "$2" --arg d "$3" '{tag_name: "v1.1.0-pmx.2", draft: false, prerelease: $pre,
+  jq -n --argjson pre "$2" --arg d "$3" --argjson im "${5:-true}" '{tag_name: "v1.1.0-pmx.2", draft: false, prerelease: $pre, immutable: $im,
     assets: [{name: "checksums.txt", digest: "sha256:cc"}, {name: "management.html", digest: $d}]}' \
     >"$1/repos_test_provimux-ui_releases_tags_v1.1.0-pmx.2.json"
+  rm -f "$1/repos_test_provimux-ui_releases_latest.json.err"
   if [[ -n "$4" ]]; then jq -n --arg t "$4" '{tag_name: $t}' >"$1/repos_test_provimux-ui_releases_latest.json"
   else rm -f "$1/repos_test_provimux-ui_releases_latest.json"; fi
 }
+# pauth LOGIN URL: the authorization status on the tag's commit.
+pauth() {
+  jq -n --arg l "$1" --arg u "$2" '[{context: "provimux-ui-release", state: "success", description: "v1.1.0-pmx.2", target_url: $u, creator: {login: $l}}]' \
+    >"$pr/api/repos_test_provimux-ui_commits_${csha}_statuses_per_page_100.json"
+}
+cp "$stub/api/repos_test_provimux-ui_actions_runs_31.json" "$stub/api/repos_test_provimux-ui_actions_runs_32.json" "$pr/api/"
+jq -n --arg s "$csha" '{sha: $s}' >"$pr/api/repos_test_provimux-ui_commits_v1.1.0-pmx.2.json"
 promote() { # promote ENV...: "<exit status> <gh release commands>"
   : >"$pr/release.log"
   local rc=0
   env PATH="$pr/bin:$PATH" STUB_API="$pr/api" GH_REPO=test/provimux-ui GITHUB_STEP_SUMMARY=/dev/null \
-    GITHUB_EVENT_NAME=push GITHUB_REF=refs/tags/v1.1.0-pmx.2 TAG=v1.1.0-pmx.2 SHA="$h" BUILT="$h" "$@" \
+    GITHUB_EVENT_NAME=push GITHUB_REF=refs/tags/v1.1.0-pmx.2 GITHUB_SHA="$csha" TAG=v1.1.0-pmx.2 SHA="$h" BUILT="$h" "$@" \
     bash "$tmp/promote.sh" >"$tmp/promote.out" 2>&1 || rc=$?
   echo "$rc $(tr '\n' ' ' <"$pr/release.log")"
 }
-state "$pr/api" true "sha256:$h" v1.1.0-pmx.1; state "$pr/after" false "sha256:$h" v1.1.0-pmx.2
-expect "a checked prerelease, older latest: promoted" "0 release edit v1.1.0-pmx.2 --prerelease=false --latest " "$(promote)"
-state "$pr/api" true "sha256:$h" v1.1.0-pmx.1
+E='release edit v1.1.0-pmx.2 --prerelease=false --latest '
+pauth 'github-actions[bot]' https://github.com/test/provimux-ui/actions/runs/31
+rel "$pr/api" true "sha256:$h" v1.1.0-pmx.1; rel "$pr/after" false "sha256:$h" v1.1.0-pmx.2
+expect "an authorized, immutable, checked prerelease, older latest: promoted" "0 $E" "$(promote)"
+contains "  ... names who authorized it" "$tmp/promote.out" "authorized by provimux-ui-publish run 31"
+rel "$pr/api" true "sha256:$h" v1.1.0-pmx.1
 expect "the same on a dry run: nothing changes" "0 " "$(promote GITHUB_EVENT_NAME=workflow_dispatch GITHUB_REF=refs/heads/main)"
 contains "  ... says what it would do" "$tmp/promote.out" "Dry run: would run gh release edit v1.1.0-pmx.2"
-state "$pr/api" false "sha256:$h" v1.1.0-pmx.2
+pauth test ''
+rel "$pr/api" true "sha256:$h" v1.1.0-pmx.1
+expect "authorized by the owner: promoted" "0 $E" "$(promote)"
+pauth 'github-actions[bot]' https://github.com/test/provimux-ui/actions/runs/32
+rel "$pr/api" true "sha256:$h" v1.1.0-pmx.1
+expect "authorized by another workflow's run: refused" "1 " "$(promote)"
+contains "  ... says it is not authorized" "$tmp/promote.out" "is not authorized"
+echo '[]' >"$pr/api/repos_test_provimux-ui_commits_${csha}_statuses_per_page_100.json"
+expect "no authorization (a tag nobody published, e.g. a newer tag on an older commit): refused" "1 " "$(promote)"
+pauth 'github-actions[bot]' https://github.com/test/provimux-ui/actions/runs/31
+rel "$pr/api" true "sha256:$h" v1.1.0-pmx.1 false
+expect "not an immutable release: refused" "1 " "$(promote)"
+contains "  ... says so" "$tmp/promote.out" "not an immutable release"
+rel "$pr/api" false "sha256:$h" v1.1.0-pmx.2
 expect "already the latest: nothing to do" "0 " "$(promote)"
-state "$pr/api" true "sha256:bbbb" v1.1.0-pmx.1
+rel "$pr/api" true "sha256:bbbb" v1.1.0-pmx.1
 expect "the asset changed since the smoke job: refused" "1 " "$(promote)"
-state "$pr/api" true "sha256:$h" v1.2.0-pmx.1
+rel "$pr/api" true "sha256:$h" v1.2.0-pmx.1
 expect "a newer release is the latest: refused (stays a prerelease)" "1 " "$(promote)"
 contains "  ... says so" "$tmp/promote.out" "newer than v1.1.0-pmx.2"
-state "$pr/api" true "sha256:$h" ''
-expect "no latest release yet: promoted" "0 release edit v1.1.0-pmx.2 --prerelease=false --latest " "$(promote)"
-state "$pr/api" true "sha256:$h" v1.1.0-pmx.1
+rel "$pr/api" true "sha256:$h" ''
+expect "no latest release yet (404): promoted" "0 $E" "$(promote)"
+rel "$pr/api" true "sha256:$h" ''; echo 'gh: Service Unavailable (HTTP 503)' >"$pr/api/repos_test_provimux-ui_releases_latest.json.err"
+expect "the latest release unreadable (503): refused, nothing changed" "1 " "$(promote)"
+contains "  ... says so" "$tmp/promote.out" "cannot read the latest release: nothing changed"
+rel "$pr/api" true "sha256:$h" v1.1.0-pmx.1
 expect "the checked file is not this run's build: refused" "1 " "$(promote BUILT=0000000000000000000000000000000000000000000000000000000000000000)"
-state "$pr/after" true "sha256:$h" v1.1.0-pmx.1
-expect "the edit did not take: refused" "1 release edit v1.1.0-pmx.2 --prerelease=false --latest " "$(promote)"
+rel "$pr/api" true "sha256:$h" v1.1.0-pmx.1
+expect "the edit itself fails: red, with what the release reads now" "1 $E" "$(promote STUB_EDIT_FAIL=1)"
+contains "  ... reported" "$tmp/promote.out" "gh release edit failed; the release now reads"
+rel "$pr/api" true "sha256:$h" v1.1.0-pmx.1; rm -f "$pr/after/"*; rel "$pr/after" true "sha256:$h" v1.1.0-pmx.1
+expect "the edit did not take: red, with what it reads back" "1 $E" "$(promote)"
+contains "  ... reported" "$tmp/promote.out" "edited, but it reads back as prerelease true"
+rel "$pr/api" true "sha256:$h" v1.1.0-pmx.1; rm -f "$pr/after/"*; touch "$pr/after/repos_test_provimux-ui_releases_tags_v1.1.0-pmx.2.json.gone"
+expect "the release cannot be read back after the edit: red, state unknown" "1 $E" "$(promote)"
+contains "  ... reported" "$tmp/promote.out" "cannot be read back: its state is unknown"
+rm -f "$pr/after/"*
 expect "no tag from the smoke job: refused" "1 " "$(promote TAG=)"
+if grep -q 'group: provimux-ui-promote' "$here/../workflows/provimux-ui-release.yml"; then
+  ok "the promote job runs in one repository-wide concurrency group"
+else bad "the promote job runs in one repository-wide concurrency group"; fi
 
 echo
 echo "$pass passed, $failed failed"
