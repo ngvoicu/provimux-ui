@@ -18,8 +18,8 @@ anything refuses or fails, nothing more happens and the issue says why. "Publish
 | Piece | Where it runs | What it may do |
 |---|---|---|
 | `provimux-ui-check.yml`, job `prepare` (`check.sh select`, `check.sh prepare`) | GitHub Actions | `contents: read`. git and the API only: runs no repository code. |
-| `provimux-ui-check.yml`, jobs `test (candidate)` and `test (tag)` (`check.sh tree`, `check.sh test`) | GitHub Actions | `contents: read`. The only jobs that run upstream's and the candidate's code (`bun install`, `bun run verify`), one tree per job. They write logs and exit statuses and decide nothing. |
-| `provimux-ui-check.yml`, job `verdict` (`check.sh verdict`) | GitHub Actions | `contents: read`. Reads the exit statuses as data, writes `result.json`, binds the artifact. Runs no repository code. |
+| `provimux-ui-check.yml`, jobs `test (candidate)` and `test (tag)` (`check.sh fetch-prepare`, `check.sh tree`, then the steps `bun install --frozen-lockfile` and `bun run verify`) | GitHub Actions | `contents`, `actions: read`. The only jobs that run upstream's and the candidate's code, one tree per job. They upload nothing; their result is their own steps' conclusions. |
+| `provimux-ui-check.yml`, job `verdict` (`check.sh verdict`) | GitHub Actions | `contents`, `actions: read`. Reads the prepare artifact by its id and digest and the test jobs' step conclusions from the API, writes `result.json`, binds the artifact. Runs no repository code. |
 | `provimux-ui-check.yml`, job `report` (`report.sh`) | GitHub Actions | `issues: write`. The run's own scripts only. |
 | `provimux-ui-publish.yml`, job `publish`, step `Verify` (inline, before any checkout) | GitHub Actions, environment `provimux-token` | No secret. Proves this workflow revision is the live `main`, the check run's exact attempt passed on it, and that attempt's verdict binds one artifact. |
 | `provimux-ui-publish.yml`, job `publish`, steps `Decide`, `Plan`, `Push values`, `Wait` (`autopublish.sh decide`, `publish.sh --ci`) | GitHub Actions, environment `provimux-token` | `GITHUB_TOKEN` with `issues: write`. `main`'s own scripts: git, gh, jq and the guard of the current `main` on git objects; never candidate or upstream code, `bun` or `node`. Never see `PROVIMUX_TOKEN`. |
@@ -41,43 +41,62 @@ Every job checks out the run's own commit (`github.sha`, the run's `head_sha`) a
 2. **Old base.** The newest `vX.Y.Z` tag of upstream (its refs, `git ls-remote`, not local tags) whose commit is an
    ancestor of `main`. A `vX.Y.Z` tag reachable from `main`, as new as that base or newer, that upstream withdrew or
    moved fails the check: it never falls back to an older tag. `guard.sh` uses the same rule.
-3. **Already done?** If `v<base>-pmx.*` exists: `published` when every such release is complete (not a draft, no
-   longer a prerelease, both assets) and the newest `provimux-ui-release` run for the tag **at the tag's commit**
-   succeeded; `in-progress` while such a run runs; `incomplete` otherwise (reported, with the release run's errors).
+3. **Already done?** If `v<base>-pmx.*` exists, its **newest** tag (version order) decides: `published` when that
+   release is complete (not a draft, no longer a prerelease, both assets) and the newest `provimux-ui-release` run for
+   the tag **at the tag's commit** succeeded; `in-progress` while that run runs; `incomplete` otherwise (reported,
+   with the release run's errors). An earlier tag of the base that failed is kept as history in the issue: a failed
+   `.1` followed by a verified `.2` is released, and the `.1`'s failure stays on record (`releases_status`).
    If `main` is already on the tag and no `-pmx` tag exists: `unreleased` (reported). If the tag does not descend
    from the old base: fail.
 4. **Rebase.** `git rebase --committer-date-is-author-date <tag commit>` in a temporary worktree, never `--onto`, so
    the same inputs give the same candidate.
-5. **range-diff** of `<old base>..<old main>` against `<new base>..<candidate>`. A layer commit the rebase **dropped**
-   (`<`) or **changed** (`!`) needs the owner's decision. A `!` whose change is identical, where only the upstream
-   code around it moved (the `-U0` patches without hunk headers are equal: `split_changed` in `common.sh`), is listed
-   as "context only" and accepted: the layer touches many upstream files, so this is the usual case of a rebase.
+5. **range-diff** of `<old base>..<old main>` against `<new base>..<candidate>`. Every layer commit the rebase
+   **dropped** (`<`) or **changed** (`!`) needs the owner's decision; nothing is accepted because "only the code
+   around it moved" (review T-73: upstream swapping two items made an unchanged layer patch hide the wrong one). A pair
+   range-diff calls **equal** (`=`) counts as changed too when one of its binary files differs: a patch shows a
+   binary file only as "Binary files differ", so the blob ids are compared (`range_diff_lists`, `binary_changes`).
 6. **Workflow files.** Every path under `.github/workflows/` new in the tag is listed, and `publish.sh` refuses such
    a release (see "New upstream workflow files").
 7. **Guard** on the candidate with `PMX_EXPECT_BASE=<tag>` and `PMX_EXPECT_BASE_COMMIT=<commit>`.
 
-**Jobs `test (candidate)` and `test (tag)`**, one runner each: `check.sh tree` makes a checkout of the commit (the
-same files, filters and modes the release's `actions/checkout` makes, so the tested tree is the released tree),
-without `.git`; then Node.js 24 and the Bun version the tree's `package.json` pins (`packageManager`; the release's
-build job uses the same), and `check.sh test`: `bun install --frozen-lockfile`, then `bun run verify` (tests, lint,
-build). They keep the logs and exit statuses and decide nothing.
+**Jobs `test (candidate)` and `test (tag)`**, one runner each: before any code of the tree runs, `check.sh
+fetch-prepare` fetches the prepare job's artifact by the id and digest that job output; `check.sh tree` makes a
+checkout of the commit (the same files, filters and modes the release's `actions/checkout` makes, so the tested tree is
+the released tree), without `.git`; then Node.js 24 and the Bun version the tree's `package.json` pins
+(`packageManager`; the release's build job uses the same), and two steps of their own, `bun install
+--frozen-lockfile` and `bun run verify` (tests, lint, build). They upload nothing.
 
-**Job `verdict`** (`check.sh verdict`): `bun run verify` must pass on the candidate, because the release's build job
+**Every input of a later job is bound to the job that produced it.** A job of the same run can replace an artifact
+under the same name (it holds the run's artifact token), so no job reads an artifact by name: the prepare job and the
+verdict job output their upload's id and digest, and `fetch_artifact` (`common.sh`) takes only that id, of this run,
+with that name and digest, and checks that the download hashes to it. The prepare job's state is JSON, read field by
+field against a pattern (`state_get`), never sourced.
+
+**Job `verdict`** (`check.sh verdict`): the test outcomes are the conclusions of the steps `bun install
+--frozen-lockfile` and `bun run verify` of the jobs `test (candidate)` and `test (tag)` of this run attempt, read
+from the API: nothing the tests wrote is read. `bun run verify` must pass on the candidate, because the release's build job
 runs the same verify and a candidate that fails it cannot be released. The pristine tag's run says whose failure it
 is: "the Provimux layer breaks it" when the tag passes, "upstream's own failure" when the tag fails too (still a
 failure). It uploads the artifact `provimux-ui-check-<tag>` (`result.json`, `candidate.bundle`, `logs/`) and binds it
 to itself: its step "Bind the artifact to the verdict" writes the artifact's id, name and digest as the job's one
 annotation titled `provimux-ui-check-artifact`. `publish.sh` and `autopublish.sh` take only that artifact
 (`check_artifact` in `common.sh`): of one given attempt of the run, the job `verdict`, exactly one such annotation, an
-artifact of that id, run, name and digest, not expired. The test jobs can upload artifacts of any name but cannot
-annotate the verdict job; whatever they upload is never read.
+artifact of that id, run, name and digest, not expired. The test jobs could upload artifacts of any name but cannot
+annotate the verdict job; whatever they upload is never read. The report job fetches it by the id and digest the
+verdict job output.
 
 **Job `report`** (`report.sh`): one issue per base, `sync: v<base> — <state>`: `ready to publish`, `failed` (the step
-and details: the rebase stop and conflicting files, the verify output of both trees, the guard output),
-`release incomplete` (with the release run's errors), `main on base, not released`. `published`, `in-progress` and
-`incomplete` are read from the releases and release runs by `report.sh` itself, never taken from `result.json`. It
-closes the issue only when every `v<base>-pmx.*` release is complete with a successful release run for the tag's
-commit and every job of the check succeeded.
+and details: the rebase stop and conflicting files, the test steps' conclusions with links to both test jobs, the
+guard output), `release incomplete` (with the release run's errors), `main on base, not released`. `published`,
+`in-progress` and `incomplete` are read from the releases and release runs by `report.sh` itself, never taken from
+`result.json`. It closes the issue only when the base's newest `-pmx` tag is released and every job of the check
+succeeded, with the failed earlier tags of the base in the closing comment.
+
+**The sweep.** The check selects one upstream release, but a tag can fail on any base (a hand-pushed `-pmx.2` on an
+older base, an automatic one that failed after a newer upstream release). After its own base, `report.sh` lists every
+`v*-pmx.*` tag and every release (`unreleased_bases`: one API call, one `ls-remote`), and for every other base whose
+newest tag has no complete release opens or updates its own `sync: v<base> — release incomplete` issue with the
+release run's errors; an open sync issue of a base that is now released is closed with its history.
 
 ## Publishing automatically: `provimux-ui-publish.yml`
 
@@ -127,7 +146,9 @@ admins) as the owner's own pushes do.
 ## Promotion: jobs `smoke` and `promote` of `provimux-ui-release.yml`
 
 Every release is published as a prerelease first (job `publish`, unchanged), so the console updater of Provimux and
-CLIProxyAPI, which reads `releases/latest`, does not see it yet. Then:
+CLIProxyAPI, which reads `releases/latest`, does not see it yet. The repository has **immutable releases** enabled:
+once published, a release's assets and its tag cannot change (GitHub still allows changing the prerelease and latest
+flags, which is all promotion does). Then:
 
 - **`smoke`** (`contents: read`, no secret): `release-check.sh <tag> <dir> <the build's sha256>` downloads the
   published `management.html` and `checksums.txt` from their public URLs and checks: exactly these two assets,
@@ -135,15 +156,51 @@ CLIProxyAPI, which reads `releases/latest`, does not see it yet. Then:
   matches its own digest; one page (doctype first, no external script or stylesheet); the title "Provimux by
   providers.dev"; every line of `LICENSE` (the tag's) in the comment after the doctype; the version (the tag) in the
   page. Then `smoke.mjs` serves the file at `http://127.0.0.1:<port>/management.html` next to a stub of the
-  management API (every `/v8/management/...` answers 401), opens it in headless Chrome over the DevTools protocol (no
-  npm package) and checks: the login page renders (a form with a password field and a submit button), signing in
-  with a throwaway key reaches the stub with that key as a bearer token and the page shows the refusal, no request
-  leaves 127.0.0.1 (scripts, styles, fonts, images, fetches), no uncaught exception.
-- **`promote`** (`contents: write` with `GITHUB_TOKEN`, no checkout, inline; `selftest.sh` runs its lines between
-  `# >>> promote` and `# <<< promote`): only after `smoke` passed. The checked sha256 must be this run's build; it
-  re-reads the release (not a draft; `management.html`'s digest still the checked one), does nothing when it is
-  already the latest, refuses when a newer release is the latest (version order), then
-  `gh release edit <tag> --prerelease=false --latest` and reads it back.
+  management API (every `/v8/management/...` answers 401), opens it in `chrome-headless-shell` (a pinned build installed
+  with `@puppeteer/browsers`; unlike full Chrome it has no Google services that call out on their own) over the
+  DevTools protocol and checks: the login page renders (a form with a password field and a submit button), signing in
+  with a throwaway key reaches the stub with that key as a bearer token and the page shows the refusal, no uncaught
+  exception, and **nothing leaves the stub for the whole browser process**: the stub is the browser's only proxy
+  (`--proxy-server`, loopback not bypassed, every host name unresolvable but 127.0.0.1, WebRTC kept off non-proxied
+  UDP); it serves only requests for its own origin and refuses and counts every other request, `CONNECT` tunnel
+  (https, wss) and upgrade, from any page, worker or WebSocket; one attempt fails the check.
+- **`promote`** (`contents: write` with `GITHUB_TOKEN`, `statuses` and `actions: read`, no checkout, inline;
+  `selftest.sh` runs its lines between `# >>> promote` and `# <<< promote`): only after `smoke` passed, and **one at
+  a time in the whole repository** (job concurrency group `provimux-ui-promote`; different tags run in different
+  release concurrency groups). The checked sha256 must be this run's build. It requires the tag's commit to carry the
+  release authorization for exactly this tag (next section); the release to be published, **immutable**, with
+  `management.html`'s digest still the checked one; and the latest release to be read for certain (a 404 is "none
+  yet", any other error stops it: an unreadable latest is never taken as "none"). It does nothing when the release is
+  already the latest, refuses when a newer release is the latest (version order), then runs
+  `gh release edit <tag> --prerelease=false --latest` and reads it back: a failed edit, an unreadable readback or a
+  readback that differs from "not a prerelease, the latest, the checked digest" is reported red with what it read.
+  (A third promotion queued while one runs replaces the waiting one, which GitHub cancels: that release stays a
+  prerelease, its run red, and the sweep reports it.)
+
+### Release authorization
+
+A tag alone does not make a release. The build job (`release-auth.sh`, before anything is built) and the promote job
+(inline) require that the tag's commit carries the **commit status `provimux-ui-release`**, state `success`,
+description = the tag exactly, created either
+
+- by a `provimux-ui-publish` run: `github-actions[bot]`, its `target_url` that run, which is read back from the API
+  (`provimux-ui-publish.yml`, event `workflow_run`, on `main`, this repository). The publish job sets it in its step
+  "Authorize the release" right after its push (the build job waits for it up to 10 minutes); it is the only job of
+  any workflow here with `statuses: write`; or
+- by the repository owner's account: `publish.sh` by hand sets it with the owner's credentials after its push, and
+  for a hand hotfix (a `-pmx.<n+1>` on the same base) the owner sets it before pushing the tag:
+
+  ```sh
+  gh api -X POST repos/ngvoicu/provimux-ui/statuses/<commit> -f state=success -f context=provimux-ui-release \
+    -f description='v1.28.3-pmx.2' -f target_url='https://github.com/ngvoicu/provimux-ui'
+  git push upstream v1.28.3-pmx.2
+  ```
+
+A tag nobody authorized, for example a higher-numbered tag on an older commit reachable from `main`, fails the build
+job (no prerelease is made) and could not be promoted. Tags `v*` can be created, moved or deleted only by repository
+admins (ruleset "v* tags: admins only"), i.e. the owner and the owner's token. One limit stays: a tag runs the workflow
+file of its own commit, so a tag on a commit older than this rule runs the old release workflow without these checks;
+only the owner can create such a tag, and a check's sweep reports a release left incomplete.
 
 If any check fails, the release stays a prerelease, the release run is red, and the sync issue quotes the failing
 job's errors (the publish job's `notify`, or the next check's report).
@@ -158,8 +215,9 @@ a browser in the token's environment. The browser runs in `smoke`, which has no 
 repository code.
 
 **Dry run.** `gh workflow run provimux-ui-release.yml -R ngvoicu/provimux-ui --ref main -f release=v1.28.3-pmx.1`
-skips the build and publish jobs, runs `smoke` against that published release and `promote`, which says what it
-would do and changes nothing.
+skips the build and publish jobs, runs `smoke` against that published release and `promote`, which runs every check
+and says what it would do, or why it would refuse, and changes nothing. (`v1.28.3-pmx.1` predates both rules: it has no
+authorization status and is not immutable, so its dry run says it would refuse.)
 
 ## The token
 
@@ -170,14 +228,22 @@ described in Provimux's `SYNC.md`, "The token". In provimux-ui it is a secret of
 environment, and only its step `Push` reads the secret. The release workflow needs no token of the owner.
 
 The environment exists (created 2026-11-19 with these calls; no reviewers, no wait timer; it may deploy only from the
-branch `main` and the tags `v*-pmx.*`):
+branch `main`, since no job of a tag's release run uses the token):
 
 ```sh
 echo '{"deployment_branch_policy": {"protected_branches": false, "custom_branch_policies": true}}' |
   gh api -X PUT repos/ngvoicu/provimux-ui/environments/provimux-token --input -
 gh api -X POST repos/ngvoicu/provimux-ui/environments/provimux-token/deployment-branch-policies -f name=main -f type=branch
-gh api -X POST repos/ngvoicu/provimux-ui/environments/provimux-token/deployment-branch-policies -f name='v*-pmx.*' -f type=tag
 ```
+
+### Repository settings the sync relies on
+
+| Setting | Value | Set with |
+|---|---|---|
+| Environment `provimux-token` | deployments from branch `main` only; secret `PROVIMUX_TOKEN` (the owner's step) | above |
+| Ruleset 27622080 "main: provimux-ui-guard required" | required check `provimux-ui-guard` on `main`; bypass: repository admins | earlier work |
+| Ruleset 27664161 "v* tags: admins only" | tags `refs/tags/v*`: creation, update and deletion restricted; bypass: repository admins (the owner, and the owner's token) | `gh api -X POST repos/ngvoicu/provimux-ui/rulesets` with `{"name": "v* tags: admins only", "target": "tag", "enforcement": "active", "conditions": {"ref_name": {"include": ["refs/tags/v*"], "exclude": []}}, "rules": [{"type": "creation"}, {"type": "update"}, {"type": "deletion"}], "bypass_actors": [{"actor_id": 5, "actor_type": "RepositoryRole", "bypass_mode": "always"}]}` |
+| Immutable releases | enabled (applies to releases published from now on; `v1.28.3-pmx.1` stays mutable) | `gh api -X PUT repos/ngvoicu/provimux-ui/immutable-releases` |
 
 **The owner's step, once:** store the same token value there: Settings → Environments → `provimux-token` →
 Environment secrets → Add secret `PROVIMUX_TOKEN`, or
@@ -217,13 +283,19 @@ cd - && git worktree remove ../pui-publish
    head is the candidate; upstream's tag is still a stable release at the recorded commit (and the old base tag
    still at its commit); the remote `main` is still the old `main`; no `v<base>-pmx.*` exists.
 3. **Verifies again locally**: ancestry (old base → new base → candidate, no merges); the range-diff (dropped,
-   changed, context only) and the new workflow paths recomputed and equal to `result.json`'s; the guard of the
+   changed) and the new workflow paths recomputed and equal to `result.json`'s; the guard of the
    current `main` on the candidate, on git objects only, with the exact base.
 4. **Decisions.** Dropped and changed layer commits are refused unless each is named (`--accept-dropped <sha,...>`,
    `--accept-changed <sha,...>`, the old `main`'s commits, 7+ hex digits). New workflow files are refused outright.
 5. **Plan, confirmation, re-checks, one atomic push**: `main` with `--force-with-lease=refs/heads/main:<old main>`
    (a literal SHA), `v<base>` at upstream's commit (when the repository lacks it), `v<base>-pmx.1` at the candidate.
+   Right after the push it sets the release authorization (owner's credentials; "Release authorization").
    GitHub first, then the NAS mirror: `git push origin main v<base>-pmx.1` afterwards.
+
+**The NAS mirror lags.** Neither the automatic publish nor `publish.sh` pushes to the NAS mirror (`origin`,
+`ssh://git@zeenas:2222/ngvoicu/provimux-ui.git`): after an automatic release its `main` and tags stay behind GitHub
+until the owner pushes them. Whoever restores from the mirror takes GitHub (`ngvoicu/provimux-ui`) as the truth for
+`main` and the `v*` tags, and checks that the mirror's `main` is an ancestor of GitHub's before using it.
 6. **Wait and close**: until the `provimux-ui-release` run of the tag at the candidate finished and the release is
    complete (promoted); then it closes the issue.
 
@@ -273,7 +345,9 @@ runner: `gh run rerun <id> --failed -R ngvoicu/provimux-ui`. Promoting by hand i
 
 - `bash .github/provimux/selftest.sh` runs the fixture tests offline (local repositories, a stub `gh` and `curl`):
   the guard and `release-meta.sh` with a base only upstream or withdrawn or moved, the range-diff's dropped, changed
-  and context-only commits, `check.sh verdict`, `report.sh`, the inline verifier of `provimux-ui-publish.yml`,
+  commits and binary blobs, `check.sh verdict` (state as data, outcomes from the API), `fetch_artifact`,
+  `releases_status` with history and the sweep, `release-auth.sh`, `report.sh`, the inline verifier of
+  `provimux-ui-publish.yml`,
   `autopublish.sh` decide and notify, `publish.sh --ci`, `release-check.sh` and the inline promote step of
   `provimux-ui-release.yml`. Run it after changing any of these.
 - `check.sh`, `report.sh`, `publish.sh`, `autopublish.sh` and `selftest.sh` run with macOS bash 3.2.
@@ -283,4 +357,6 @@ runner: `gh run rerun <id> --failed -R ngvoicu/provimux-ui`. Promoting by hand i
   result would produce; `PMX_NOTIFY_DRY_RUN=1 TAG=v1.28.4 OUTCOME=failed LOG=<log> bash
   .github/provimux/autopublish.sh notify` what a refusal would write.
 - `PMX_LICENSE=LICENSE bash .github/provimux/release-check.sh v1.28.3-pmx.1 /tmp/rc` and
-  `node .github/provimux/smoke.mjs /tmp/rc/management.html v1.28.3-pmx.1` check a published release locally.
+  `CHROME=<chrome-headless-shell> node .github/provimux/smoke.mjs /tmp/rc/management.html v1.28.3-pmx.1` check a
+  published release locally (`npx -y @puppeteer/browsers@2.13.2 install chrome-headless-shell@158.0.8127.36` installs
+  the shell).
