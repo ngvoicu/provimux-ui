@@ -10,10 +10,11 @@ import { getTypeLabel } from '@/features/authFiles/constants';
 import { provimuxApi } from '../../api/provimuxApi';
 import { usePageClock } from '../shared/clocks';
 import { useProvimuxResource } from '../shared/useProvimuxResource';
-import { formatClock, formatExact, serverNow } from '../time';
+import { formatClock, formatExact, screenNow } from '../time';
 import { DevinCoolingCard } from './DevinCoolingCard';
 import { ModelCard } from './ModelCard';
 import { OpenRouterCard } from './OpenRouterCard';
+import { useDevinCooling } from './useDevinCooling';
 import {
   compatibleEntryOf,
   filterModels,
@@ -34,8 +35,10 @@ const fetchRoutes = (client: Parameters<typeof provimuxApi.modelRoutes>[0]) =>
 export function ModelRoutesPage() {
   const { t, i18n } = useTranslation();
   const [searchParams] = useSearchParams();
-  const resource = useProvimuxResource('modelRoutes', fetchRoutes, POLL_MS);
-  const now = serverNow(usePageClock(), resource.offsetMs);
+  // The Devin switch is read with the routes on every manual refresh: another client may have changed it.
+  const devin = useDevinCooling();
+  const resource = useProvimuxResource('modelRoutes', fetchRoutes, POLL_MS, devin.read);
+  const now = screenNow(usePageClock(), resource.loadedAt, resource.offsetMs);
   const [filter, setFilter] = useState<ModelFilter>(() => ({
     query: '',
     provider: searchParams.get('provider') || 'all',
@@ -92,7 +95,7 @@ export function ModelRoutesPage() {
           <Button
             variant="secondary"
             size="sm"
-            onClick={() => void resource.load()}
+            onClick={() => void resource.refresh()}
             loading={resource.loading && resource.data !== null}
           >
             <IconRefreshCw size={14} />
@@ -154,7 +157,7 @@ export function ModelRoutesPage() {
           title={t('provimux.routes.load_failed')}
           description={resource.error ?? undefined}
           action={
-            <Button variant="secondary" onClick={() => void resource.load()}>
+            <Button variant="secondary" onClick={() => void resource.refresh()}>
               {t('provimux.common.retry')}
             </Button>
           }
@@ -166,6 +169,7 @@ export function ModelRoutesPage() {
               models={models}
               offsetMs={resource.offsetMs}
               nowMs={now}
+              devin={devin}
               onChanged={() => void resource.load()}
             />
             <OpenRouterCard

@@ -19,15 +19,20 @@ export interface ResourceState<T> {
   loadedAt: number | null;
 }
 
+/** A load's outcome; null when a newer load or another connection superseded it (its answer was dropped). */
+export type LoadResult<T> = { ok: true; data: T } | { ok: false; error: unknown } | null;
+
 /**
- * One Provimux endpoint on its page: loaded on open, on the header's refresh and, with `pollMs`, while the tab is
- * visible (never while hidden). Every answer reports to the presence store, so a 404 hides the page. Answers that
- * arrive after the connection changed, or after a newer load, are dropped.
+ * One Provimux endpoint on its page: loaded on open, on a manual refresh (the page's button, the header's) and, with
+ * `pollMs`, while the tab is visible (never while hidden). Every answer reports to the presence store, so a 404 hides
+ * the page. Answers that arrive after the connection changed, or after a newer load, are dropped.
+ * `alsoOnRefresh` runs with every manual refresh, for what the page shows beside the endpoint (a config switch).
  */
 export function useProvimuxResource<T extends { observed_at: string | null }>(
   endpoint: ProvimuxEndpoint,
   fetcher: (client: typeof apiClient) => Promise<T>,
-  pollMs: number | null
+  pollMs: number | null,
+  alsoOnRefresh?: () => Promise<unknown>
 ) {
   const connectionStatus = useAuthStore((state) => state.connectionStatus);
   const [state, setState] = useState<ResourceState<T>>({
@@ -40,7 +45,7 @@ export function useProvimuxResource<T extends { observed_at: string | null }>(
   const requestRef = useRef(0);
   const loadedAtRef = useRef(0);
 
-  const load = useCallback(async (): Promise<T | null> => {
+  const load = useCallback(async (): Promise<LoadResult<T>> => {
     const requestId = ++requestRef.current;
     const client = apiClient.captureConnection(() => requestId === requestRef.current);
     setState((prev) => ({ ...prev, loading: true }));
@@ -57,14 +62,14 @@ export function useProvimuxResource<T extends { observed_at: string | null }>(
         loadedAt: receivedAt,
       });
       useProvimuxPresence.getState().report(endpoint, {});
-      return data;
+      return { ok: true, data };
     } catch (error) {
       if (requestId !== requestRef.current) return null;
       useProvimuxPresence.getState().report(endpoint, { error });
       if (errorStatus(error) !== 404) {
         setState((prev) => ({ ...prev, loading: false, error: getErrorMessage(error) }));
       }
-      return null;
+      return { ok: false, error };
     }
   }, [endpoint, fetcher]);
 
@@ -92,10 +97,15 @@ export function useProvimuxResource<T extends { observed_at: string | null }>(
     };
   }, [load, pollMs]);
 
+  const alsoRef = useRef(alsoOnRefresh);
+  useEffect(() => {
+    alsoRef.current = alsoOnRefresh;
+  }, [alsoOnRefresh]);
+  /** A manual refresh: the endpoint and what the page reads beside it, together. */
   const refresh = useCallback(async () => {
-    await load();
+    await Promise.all([load(), alsoRef.current?.()]);
   }, [load]);
   useHeaderRefresh(refresh);
 
-  return { ...state, load };
+  return { ...state, load, refresh };
 }

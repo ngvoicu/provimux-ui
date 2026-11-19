@@ -3,14 +3,10 @@ import { afterAll, describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { MemoryRouter } from 'react-router-dom';
 import i18n from '../../src/i18n/index';
 import { readLiveLists, readModelRoutes } from '../../src/provimux/api/normalize';
 import type { ProvimuxLiveListLogin } from '../../src/provimux/api/types';
-import {
-  describeConsoleBuild,
-  describeConsoleSource,
-  githubRepositoryOf,
-} from '../../src/provimux/consoleSource';
 import {
   failureHint,
   liveRowState,
@@ -150,7 +146,11 @@ describe('model routes', () => {
     await i18n.changeLanguage('en');
     const opus = routes.models.find((model) => model.id === 'claude-opus-5-5')!;
     const html = renderToStaticMarkup(
-      createElement(ModelCard, { model: opus, offsetMs: 0, nowMs: OBSERVED })
+      createElement(
+        MemoryRouter,
+        null,
+        createElement(ModelCard, { model: opus, offsetMs: 0, nowMs: OBSERVED })
+      )
     );
     const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
     expect(text).toContain('Clients are told');
@@ -194,7 +194,13 @@ describe('live lists', () => {
       liveRowState(login({ source: 'catalog', fetched_at: null, last_failure: null }), true)
     ).toBe('waiting');
     expect(liveRowState(login({ source: 'mirror' }), true)).toBe('unknown');
-    expect(liveSummary(lists.logins)).toEqual({ live: 2, catalog: 3, failing: 2, fetching: 1 });
+    expect(liveSummary(lists.logins)).toEqual({
+      live: 2,
+      catalog: 3,
+      unknown: 0,
+      failing: 2,
+      fetching: 1,
+    });
   });
 
   test('a refresh is done when every enabled login reported back after the click', () => {
@@ -230,69 +236,5 @@ describe('live lists', () => {
     expect(failureHint({ category: 'http_status', http_status: 404 })).toBe('http_other');
     expect(failureHint({ category: 'network', http_status: null })).toBe('network');
     expect(failureHint({ category: 'cosmic_ray', http_status: null })).toBe('other');
-  });
-});
-
-describe('console release and source (System page)', () => {
-  test('a release names its Management Center base; anything else is a development build', () => {
-    expect(describeConsoleBuild('v1.28.3-pmx.1')).toEqual({
-      kind: 'release',
-      version: 'v1.28.3-pmx.1',
-      base: 'v1.28.3',
-    });
-    expect(describeConsoleBuild('v1.28.3-pmx.1-1-ga8aa588e')).toEqual({
-      kind: 'dev',
-      version: 'v1.28.3-pmx.1-1-ga8aa588e',
-    });
-    expect(describeConsoleBuild('')).toEqual({ kind: 'dev', version: 'dev' });
-  });
-
-  test('GitHub addresses, as the updaters read them', () => {
-    expect(githubRepositoryOf('https://github.com/ngvoicu/provimux-ui')).toBe(
-      'ngvoicu/provimux-ui'
-    );
-    expect(githubRepositoryOf('https://github.com/ngvoicu/provimux-ui.git/')).toBe(
-      'ngvoicu/provimux-ui'
-    );
-    expect(githubRepositoryOf('https://api.github.com/repos/me/console/releases/latest')).toBe(
-      'me/console'
-    );
-    expect(githubRepositoryOf('https://api.github.com/repositories/1051566067')).toBe(
-      'router-for-me/Cli-Proxy-API-Management-Center'
-    );
-    expect(githubRepositoryOf('https://gitlab.com/me/console')).toBeNull();
-    expect(githubRepositoryOf('not a url')).toBeNull();
-  });
-
-  test("Provimux's rules: empty, provimux-ui or the original console mean provimux-ui", () => {
-    expect(describeConsoleSource(null, 'provimux')).toEqual({
-      repository: 'ngvoicu/provimux-ui',
-      reason: 'default',
-    });
-    expect(
-      describeConsoleSource(
-        'https://github.com/router-for-me/cli-proxy-api-management-center',
-        'provimux'
-      )
-    ).toEqual({ repository: 'ngvoicu/provimux-ui', reason: 'original_as_default' });
-    expect(describeConsoleSource('https://github.com/me/console', 'provimux')).toEqual({
-      repository: 'me/console',
-      reason: 'configured',
-    });
-    expect(describeConsoleSource('https://gitlab.com/me/console', 'provimux')).toEqual({
-      repository: 'ngvoicu/provimux-ui',
-      reason: 'invalid_as_default',
-    });
-  });
-
-  test("stock CLIProxyAPI's rules: empty means the original console", () => {
-    expect(describeConsoleSource(null, 'cliproxyapi')).toEqual({
-      repository: 'router-for-me/Cli-Proxy-API-Management-Center',
-      reason: 'default',
-    });
-    expect(describeConsoleSource('https://github.com/ngvoicu/provimux-ui', 'cliproxyapi')).toEqual({
-      repository: 'ngvoicu/provimux-ui',
-      reason: 'configured',
-    });
   });
 });

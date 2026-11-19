@@ -185,7 +185,8 @@ describe('reading answers (05-console-contract.md, section 4)', () => {
     });
     // A cooldown without a usable time is not shown as one.
     expect(second.recorded_cooldown).toBeNull();
-    expect(second.priority).toBe(0);
+    // Not reported: unknown, never priority 0 (T-74, finding 7).
+    expect(second.priority).toBeNull();
   });
 
   test('the example live lists', () => {

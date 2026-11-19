@@ -125,7 +125,7 @@
       "view_cooldown": "Cooldown recorded",
       "view_several": "Several routes",
       "search_placeholder": "Search models, logins, hosts",
-      "note": "Routes that share a priority are chosen between by the routing strategy; a higher priority is tried first. A recorded cooldown is the timer Provimux wrote after a refused request, with its reason. It is not an availability verdict: a route without one can still fail (an expired login, for one), and Auth Files shows each login's state.",
+      "note": "Among the routes that can serve a new request, a higher priority is tried first, and routes that share a priority are chosen between by the routing strategy; a session already on a route may stay there. A recorded cooldown is the timer Provimux wrote after a refused request, with its reason. It is not an availability verdict: a route without one can still fail (an expired login, for one), and Auth Files shows each login's state.",
       "empty_title": "No model is registered",
       "empty_text": "Sign a login in on OAuth Login, or add an API key on AI Providers; its models appear here.",
       "no_match": "No model matches the filters",
@@ -144,7 +144,9 @@
       "clients_told": "Clients are told",
       "tier": "Priority {{priority}}",
       "tier_shared": "Priority {{priority}}: {{count}} routes share it; the routing strategy chooses between them",
-      "priority_short": "prio"
+      "priority_short": "prio",
+      "tier_unknown": "Priority not reported by the server",
+      "open_credential": "Open {{name}} on Auth Files (auth_index {{index}})"
     },
     "devin": {
       "title": "Devin: quota pause per model",
@@ -155,9 +157,13 @@
       "limit_note": "Known limit: Provimux may not learn the quota's reset time, so a paused model retries with a growing backoff (1 second up to 30 minutes, one quick refused request each time).",
       "saved_on": "Devin pauses only the refused model now",
       "saved_off": "Devin pauses the whole login again",
-      "no_login": "No Devin login. The switch applies when you add one.",
       "none_cooling": "No cooldown recorded on the Devin login ({{count}} models).",
-      "cooling_label": "Devin cooldowns recorded"
+      "cooling_label": "Devin cooldowns recorded",
+      "absent_no_login": "No Devin login. The switch applies when you add one.",
+      "absent_enabled_no_routes": "No registered Devin routes: the Devin login is enabled but serves no model (are its models excluded?).",
+      "absent_disabled": "No registered Devin routes: the Devin login is disabled.",
+      "absent_unknown": "No registered Devin routes.",
+      "open_auth_files": "Check it on Auth Files."
     },
     "openrouter": {
       "title": "OpenRouter, built in",
@@ -193,7 +199,6 @@
       "refresh_off_hint": "Turn live lists on to refresh them.",
       "refresh_waiting": "Waiting for the logins: {{done}} of {{total}} reported back",
       "refresh_done": "Every login reported back",
-      "refresh_timeout": "Still waiting for {{count}} logins after a minute; their lists keep arriving in the background.",
       "refresh_failed": "Refresh not started: {{message}}",
       "saved_on": "Live lists are on",
       "saved_off": "Live lists are off; every login uses the catalog",
@@ -234,6 +239,7 @@
       },
       "hint": {
         "signin": "The provider refused this login: sign it in again on OAuth Login.",
+        "denied": "The provider denied this account access to its model list (a policy or permission); signing in again does not change that. Check the account's permissions, or the server log.",
         "rate_limited": "The provider rate-limited the request.",
         "provider_error": "The provider answered with an error.",
         "http_other": "The provider answered with an error status.",
@@ -242,20 +248,33 @@
         "invalid_response": "The provider's answer was not a usable model list.",
         "other": "The fetch failed for another reason."
       },
-      "note": "Live lists cover logins of {{providers}}; other providers and every API key keep the catalog. A failed fetch is retried; its reason in words is in the server's log. Fetch times are the server's."
+      "note": "Live lists cover logins of {{providers}}; other providers and every API key keep the catalog. A failed fetch is retried; its reason in words is in the server's log. Fetch times are the server's.",
+      "unknown_text": "The server did not say whether live lists are on, so this console cannot show or change the switch. Reload, or check models.live-lists in the configuration.",
+      "count_unknown": "{{count}} unknown source",
+      "count_unknown_one": "{{count}} unknown source",
+      "count_unknown_other": "{{count}} unknown sources",
+      "refresh_read_failed": "the last status read failed ({{message}}); trying again",
+      "refresh_done_line": "Every login reported back ({{done}} of {{total}}).",
+      "refresh_stopped": "Stopped waiting after a minute: {{done}} of {{total}} logins reported back. The rest keep fetching in the background; Reload shows them.",
+      "refresh_stopped_one": "Stopped waiting after a minute: {{done}} of {{total}} login reported back. It keeps fetching in the background; Reload shows it.",
+      "refresh_stopped_other": "Stopped waiting after a minute: {{done}} of {{total}} logins reported back. The rest keep fetching in the background; Reload shows them.",
+      "refresh_stopped_reads": "The status could not be read: {{message}}.",
+      "refresh_stopped_short": "Stopped waiting for the live lists after a minute",
+      "catalog_failed": "The model catalog could not be refreshed ({{message}}). The logins' lists are being fetched anyway; their progress is below.",
+      "refresh_done_catalog": "Every login reported back; the model catalog could not be refreshed"
     },
     "console": {
       "release": "Console {{version}} · provimux-ui, on the Management Center {{base}}",
       "dev": "Console {{version}} · a development build, not a release",
-      "from": "Downloaded from",
+      "update_source": "Update source:",
       "reason_default_provimux": "Provimux's default",
       "reason_default_cliproxyapi": "CLIProxyAPI's default",
       "reason_configured": "set in the config",
       "reason_original_as_default": "the config names the original console, which Provimux serves as provimux-ui",
-      "reason_invalid_as_default": "the configured address is not a GitHub repository, so the server's default is used",
       "auto_on": "Checked for a new release every 3 hours",
       "auto_off": "Not updated automatically (disable-auto-update-panel is on)",
-      "source_failed": "Where the server downloads the console from: unknown ({{message}})"
+      "source_failed": "Where the server downloads the console from: unknown ({{message}})",
+      "reason_unusable_as_default": "the updater cannot use the configured address, so it uses the server's default"
     }
   },
   "theme": {
