@@ -27,7 +27,7 @@ import {
 import { APIKEY_FUN_DISPLAY_NAME } from './sponsor';
 import { isSponsorPartialMutationError } from './sponsorMutationRecovery';
 import { useProviderWorkbench } from './useProviderWorkbench';
-import { providerGroupsWithoutOffers } from '@/provimux/sponsors';
+import { offersCreate, providerGroupsWithoutOffers } from '@/provimux/sponsors';
 import {
   getProviderFilterState,
   readProvidersWorkbenchUiState,
@@ -222,7 +222,9 @@ export function ProvidersWorkbenchPage({ fixedBrand }: ProvidersWorkbenchPagePro
     (brand: ProviderBrand, fromPicker: boolean) => {
       const group = groups.find((item) => item.id === brand);
       if (!group) return;
-      setSheetState({ open: true, brand, fromPicker, ...getConnectionFormTarget(group) });
+      const target = getConnectionFormTarget(group);
+      if (target.mode === 'create' && !offersCreate(brand)) return;
+      setSheetState({ open: true, brand, fromPicker, ...target });
     },
     [groups]
   );
