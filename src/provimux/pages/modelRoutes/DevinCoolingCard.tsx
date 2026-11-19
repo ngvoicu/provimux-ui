@@ -43,6 +43,7 @@ export function DevinCoolingCard({
   const enabled = value === true;
   const toggle = async (next: boolean) => {
     const result = await devin.set(next);
+    if (result === null) return; // answered after the page closed or the connection changed
     if (result.ok) {
       showNotification(
         next ? t('provimux.devin.saved_on') : t('provimux.devin.saved_off'),

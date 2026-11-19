@@ -43,18 +43,6 @@
   }
 }
 
-// What the refresh could not do, kept beside it (the catalog's own failure).
-.refreshNote {
-  margin: 0;
-  padding: 7px 11px;
-  border: 1px solid var(--warning-border);
-  border-radius: 8px;
-  background: var(--warning-bg);
-  color: var(--warning-text);
-  font-size: 12.5px;
-  line-height: 1.45;
-}
-
 .spin {
   animation: pmx-spin 1s linear infinite;
 

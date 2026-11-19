@@ -87,14 +87,16 @@ function RouteRow({
       <div className={styles.routeMain}>
         <AccessBadge access={access} kind={route.kind} />
         <ProviderPill provider={route.provider} host={route.host} />
-        {route.login.name && login.primary ? (
+        {route.login.name && route.auth_index && login.primary ? (
           <button
             type="button"
             className={`${styles.login} ${styles.loginLink}`}
-            onClick={() => openInAuthFiles(route.login.name!)}
+            onClick={() =>
+              openInAuthFiles({ name: route.login.name!, authIndex: route.auth_index! })
+            }
             title={t('provimux.routes.open_credential', {
               name: route.login.name,
-              index: route.auth_index ?? '?',
+              index: route.auth_index,
             })}
           >
             {login.primary}

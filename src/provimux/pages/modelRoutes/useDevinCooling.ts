@@ -3,6 +3,7 @@ import { apiClient } from '@/services/api/client';
 import { useAuthStore, useConfigStore } from '@/stores';
 import { getErrorMessage } from '@/utils/helpers';
 import { provimuxApi } from '../../api/provimuxApi';
+import { useRequestGuard } from '../shared/requestGuard';
 
 export interface DevinLogins {
   enabled: number;
@@ -18,8 +19,11 @@ export interface DevinCooling {
   saving: boolean;
   /** Reads the switch and the Devin logins again: on open and with every manual refresh of Model routes. */
   read: () => Promise<void>;
-  /** Writes the switch; resolves false when the server refused it (the value is read again). */
-  set: (next: boolean) => Promise<{ ok: true } | { ok: false; error: unknown }>;
+  /**
+   * Writes the switch; `ok: false` when the server refused it (the value is read again); null when the answer came
+   * after the page closed or the connection changed (nothing is applied or said).
+   */
+  set: (next: boolean) => Promise<{ ok: true } | { ok: false; error: unknown } | null>;
 }
 
 /**
@@ -36,12 +40,15 @@ export function useDevinCooling(): DevinCooling {
 
   const read = useCallback(async () => {
     const requestId = ++requestRef.current;
-    const client = apiClient.captureConnection(() => requestId === requestRef.current);
+    const connection = apiClient.getConnectionRevision();
+    const isCurrent = () =>
+      requestId === requestRef.current && connection === apiClient.getConnectionRevision();
+    const client = apiClient.captureConnection(isCurrent);
     const [switchResult, loginsResult] = await Promise.allSettled([
       provimuxApi.devinModelLevelCooling(client),
       provimuxApi.devinLogins(client),
     ]);
-    if (requestId !== requestRef.current) return;
+    if (!isCurrent()) return;
     if (switchResult.status === 'fulfilled') {
       setValue(switchResult.value);
       setReadError(null);
@@ -59,23 +66,28 @@ export function useDevinCooling(): DevinCooling {
     };
   }, [connectionStatus, read]);
 
+  const writeGuard = useRequestGuard();
   const set = useCallback(
-    async (next: boolean): Promise<{ ok: true } | { ok: false; error: unknown }> => {
+    async (next: boolean): Promise<{ ok: true } | { ok: false; error: unknown } | null> => {
+      const { client, isCurrent } = writeGuard.begin();
       setSaving(true);
       try {
-        await provimuxApi.setDevinModelLevelCooling(next);
+        await provimuxApi.setDevinModelLevelCooling(next, client);
+        if (!isCurrent()) return null;
         requestRef.current += 1; // an older read must not undo the value just written
         setValue(next);
         setReadError(null);
         useConfigStore.getState().clearCache();
         return { ok: true };
       } catch (error) {
+        if (!isCurrent()) return null;
         void read();
         return { ok: false, error };
       } finally {
-        setSaving(false);
+        if (isCurrent()) setSaving(false);
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the guard is stable for the component's life
     [read]
   );
 
