@@ -11,6 +11,11 @@
  *   one) is not listed; one that holds configured keys (keys whose base URL is the sponsor's, APIKEY.FUN included,
  *   which upstream shows only on Quick Start) is listed with the other providers, as an ordinary row with its
  *   edit, disable and delete controls;
+ * - no "New" on a sponsor group (T-54): `offersCreate` gates the page header's "New" in
+ *   ProvidersWorkbenchPage.tsx and the empty search result's "New" in ProviderResourcePanel.tsx. Upstream created
+ *   sponsor keys only through their prefilled Quick Fill / Quick Start forms; "New" on such a group opened a blank
+ *   form whose save replaced the group's saved key. A key for one of those services is added as Codex or OpenAI
+ *   Compatible with its URL;
  * - the OAuth page's Kimi card: it is also the console's only Kimi login, and it lives under src/features/oauth/,
  *   which the guard protects; its affiliate sign-up links are hidden by the theme.
  *
@@ -60,4 +65,13 @@ export function providerGroupsWithoutOffers<
 export function noQuickFill<T>(brands: readonly T[]): T[] {
   void brands;
   return [];
+}
+
+/**
+ * Whether a provider group offers "New": not a sponsor group. Upstream created sponsor keys only through their
+ * prefilled forms (Quick Fill, Quick Start), which Provimux hides; on a listed sponsor group "New" opened a blank
+ * form whose save replaced the group's saved key (T-54). Its configured keys keep view, edit, on/off and delete.
+ */
+export function offersCreate(brand: string): boolean {
+  return !SPONSOR_GROUP_BRANDS.includes(brand);
 }

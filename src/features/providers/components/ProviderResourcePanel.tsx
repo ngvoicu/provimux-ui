@@ -10,6 +10,7 @@ import { ProviderResourceTable } from './ProviderResourceTable';
 import { ProviderResourceToolbar } from './ProviderResourceToolbar';
 import type { ProviderSortBy, SortDir } from '../types';
 import styles from './ProviderResourcePanel.module.scss';
+import { offersCreate } from '@/provimux/sponsors';
 
 export interface ProviderPanelControls {
   sortBy: ProviderSortBy;
@@ -199,7 +200,7 @@ export function ProviderResourcePanel({
                 <IconExternalLink size={16} />
                 <span>{t('providersPage.sponsor.registerLink')}</span>
               </a>
-            ) : (
+            ) : !offersCreate(group.id) ? null : (
               <button type="button" className={styles.emptyActionButton} onClick={onCreate}>
                 <IconPlus size={16} />
                 <span>{t('providersPage.actions.new')}</span>

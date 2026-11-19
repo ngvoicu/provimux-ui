@@ -23,7 +23,7 @@ import { APIKEY_FUN_DISPLAY_NAME } from './sponsor';
 import { isMultiProtocolSponsorBrand } from './sponsorDefinitions';
 import { isSponsorPartialMutationError } from './sponsorMutationRecovery';
 import { useProviderWorkbench } from './useProviderWorkbench';
-import { providerGroupsWithoutOffers } from '@/provimux/sponsors';
+import { offersCreate, providerGroupsWithoutOffers } from '@/provimux/sponsors';
 import {
   getProviderFilterState,
   readProvidersWorkbenchUiState,
@@ -417,7 +417,7 @@ export function ProvidersWorkbenchPage({ fixedBrand }: ProvidersWorkbenchPagePro
         updatedAtLabel={updatedAtLabel}
         isFetching={workbench.isFetching}
         isNewDisabled={disableMutations}
-        showNewAction={!fixedBrand}
+        showNewAction={!fixedBrand && offersCreate(activeGroup.id)}
         showSummary={fixedBrand !== 'apikeyFun'}
         newLabel={t('providersPage.actions.new')}
         variant={fixedBrand === 'apikeyFun' ? 'quickStart' : undefined}
