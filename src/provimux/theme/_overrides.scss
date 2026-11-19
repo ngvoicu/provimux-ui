@@ -50,8 +50,11 @@
 }
 
 // providers.dev's primary button is the text colour on the page colour; the brand indigo stays for selection,
-// toggles, focus and active states (components.scss .btn.btn-primary)
-.btn.btn-primary {
+// toggles, focus and active states (components.scss .btn.btn-primary; AI Providers' "New",
+// ProviderHeaderCard.module.scss .btnPrimary; the provider sheet's "Save", sharedForm.module.scss .footerBtnPrimary)
+.btn.btn-primary,
+[class*='ProviderHeaderCard-module__btnPrimary___'],
+[class*='sharedForm-module__footerBtnPrimary___'] {
   background-color: var(--text-primary);
   border-color: var(--text-primary);
   color: var(--bg-secondary);
@@ -59,5 +62,9 @@
   &:hover:not(:disabled) {
     background-color: color-mix(in srgb, var(--text-primary) 84%, var(--bg-secondary));
     border-color: color-mix(in srgb, var(--text-primary) 84%, var(--bg-secondary));
+  }
+
+  &:active:not(:disabled) {
+    background-color: color-mix(in srgb, var(--text-primary) 76%, var(--bg-secondary));
   }
 }
