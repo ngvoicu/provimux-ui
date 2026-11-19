@@ -11,11 +11,19 @@
 //     and a submit button in a form;
 //   - signing in with a throwaway key reaches the stub's /v8/management/ with that key
 //     as a bearer token, and the page stays on the login page with an error shown;
-//   - no request leaves 127.0.0.1 (scripts, styles, fonts, images, fetches; data: and
-//     blob: URLs are inline), and no uncaught exception;
+//   - nothing leaves the stub, for the WHOLE browser process (every page, worker and
+//     WebSocket, and the browser's own traffic): Chrome runs with the stub as its only
+//     proxy (--proxy-server, loopback not bypassed, every host name unresolvable except
+//     the stub, WebRTC kept off non-proxied UDP); the stub serves only requests for its
+//     own origin and refuses and counts every other request, CONNECT tunnel and upgrade;
+//     any such attempt fails the check. The page's own requests seen over the DevTools
+//     protocol must stay on the stub too (data: and blob: URLs are inline);
+//   - no uncaught exception;
 //   - with <version>: the page carries it.
 // Prints each result; every failure is an ::error line; exit 1 if any check failed.
-// Env: CHROME (the browser binary; default: google-chrome, chromium, or macOS Chrome).
+// Env: CHROME, the browser: chrome-headless-shell (the workflow installs a pinned build
+// with @puppeteer/browsers). Not full Chrome: its own Google services (sign-in, network
+// time, optimization hints) call out at start and would count as blocked attempts.
 import { spawn } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { createServer } from 'node:http';
@@ -36,9 +44,26 @@ const check = (ok, what) => {
 };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// --- the stub ---
+// --- the stub, which is also the browser's only proxy ---
 const served = [];
+const blocked = [];
+let origin = '';
+// path REQ: the path of a request for the stub (direct, or through the proxy in absolute
+// form for the stub's own origin), or null for anything else.
+const pathOf = (req) => {
+  if (req.url.startsWith('/')) return req.url;
+  if (origin && req.url.startsWith(`${origin}/`)) return req.url.slice(origin.length);
+  return null;
+};
 const server = createServer((req, res) => {
+  const path = pathOf(req);
+  if (path === null) {
+    blocked.push(`${req.method} ${req.url}`);
+    res.writeHead(403, { 'content-type': 'text/plain' });
+    res.end('blocked by the smoke check');
+    return;
+  }
+  req.url = path;
   served.push({ method: req.method, url: req.url, auth: req.headers.authorization || '' });
   if (req.url === '/management.html' || req.url === '/') {
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
@@ -51,18 +76,23 @@ const server = createServer((req, res) => {
     res.end('not found');
   }
 });
+// Tunnels (https, wss, anything over CONNECT) and upgrades (WebSocket) go nowhere.
+server.on('clientError', (err, socket) => socket.destroy());
+server.on('connect', (req, socket) => {
+  socket.on('error', () => {});
+  blocked.push(`CONNECT ${req.url}`);
+  socket.end('HTTP/1.1 403 Forbidden\r\n\r\n');
+});
+server.on('upgrade', (req, socket) => {
+  socket.on('error', () => {});
+  blocked.push(`UPGRADE ${req.url}`);
+  socket.end('HTTP/1.1 403 Forbidden\r\n\r\n');
+});
 await new Promise((r) => server.listen(0, '127.0.0.1', r));
-const origin = `http://127.0.0.1:${server.address().port}`;
+origin = `http://127.0.0.1:${server.address().port}`;
 
 // --- the browser ---
-const candidates = [
-  process.env.CHROME,
-  'google-chrome',
-  'google-chrome-stable',
-  'chromium',
-  'chromium-browser',
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-].filter(Boolean);
+const candidates = [process.env.CHROME, 'chrome-headless-shell'].filter(Boolean);
 const profile = mkdtempSync(join(tmpdir(), 'provimux-smoke-'));
 const args = [
   '--headless=new',
@@ -74,7 +104,23 @@ const args = [
   '--disable-component-update',
   '--disable-sync',
   '--disable-extensions',
+  '--disable-domain-reliability',
+  '--disable-client-side-phishing-detection',
+  // Chrome's own services, which would call Google: network time, sign-in, component
+  // extensions, hints. Whatever still calls out is blocked and fails the check.
+  '--disable-features=NetworkTimeServiceQuerying,OptimizationHints,MediaRouter,Translate,AutofillServerCommunication,CertificateTransparencyComponentUpdater,InterestFeedContentSuggestions',
+  '--disable-default-apps',
+  '--disable-component-extensions-with-background-pages',
+  '--bwsi',
+  '--disable-search-engine-choice-screen',
+  '--metrics-recording-only',
+  '--no-pings',
   '--no-sandbox',
+  // All traffic of the browser through the stub; nothing bypasses it, not even loopback.
+  `--proxy-server=${origin}`,
+  '--proxy-bypass-list=<-loopback>',
+  '--host-resolver-rules=MAP * ~NOTFOUND , EXCLUDE 127.0.0.1',
+  '--force-webrtc-ip-handling-policy=disable_non_proxied_udp',
   'about:blank',
 ];
 let chrome;
@@ -107,7 +153,7 @@ const done = (code) => {
   process.exit(code);
 };
 if (!wsUrl) {
-  console.log(`::error title=browser check::no Chrome or Chromium could be started (${candidates.join(', ')})`);
+  console.log(`::error title=browser check::no chrome-headless-shell could be started (${candidates.join(', ')})`);
   done(1);
 }
 
@@ -183,6 +229,7 @@ try {
   await sleep(1000);
   const outside = requests.filter((u) => !u.startsWith(`${origin}/`) && !u.startsWith('data:') && !u.startsWith('blob:'));
   check(outside.length === 0, `no request leaves 127.0.0.1 (${requests.length} requests${outside.length ? `; outside: ${[...new Set(outside)].slice(0, 5).join(' ')}` : ''})`);
+  check(blocked.length === 0, `the browser tried nothing outside the stub (${blocked.length} blocked attempts${blocked.length ? `: ${[...new Set(blocked)].slice(0, 8).join(' ')}` : ''})`);
   check(exceptions.length === 0, `no uncaught exception${exceptions.length ? ` (${exceptions.slice(0, 3).join('; ')})` : ''}`);
   console.log(`stub requests: ${served.map((s) => `${s.method} ${s.url}`).join(', ')}`);
 } catch (e) {
