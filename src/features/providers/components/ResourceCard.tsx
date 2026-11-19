@@ -5,6 +5,7 @@ import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import { ProviderStatusBar } from '@/components/providers/ProviderStatusBar';
 import { getSponsorBaseUrl, isSponsorResource, type ResourceUsage } from '../resourceView';
 import type { ProviderResource } from '../types';
+import { ProvimuxOpenRouterTag } from '@/provimux/components/ProvimuxOpenRouterTag';
 import styles from './ResourceCard.module.scss';
 import statusBarStyles from './providerStatusBar.module.scss';
 
@@ -154,6 +155,9 @@ export function ResourceCard({
           ) : null}
         </div>
         {subParts.length > 0 ? <div className={styles.sub}>{subParts.join(' · ')}</div> : null}
+        {resource.brand === 'openaiCompatibility' ? (
+          <ProvimuxOpenRouterTag baseUrl={resource.baseUrl} />
+        ) : null}
 
         <div className={styles.endpoint} title={endpointTitle}>
           {endpoint}
