@@ -1,23 +1,34 @@
-// Sponsors and affiliate links hidden (PUI-07): the three seams, and no affiliate link anywhere.
+// Sponsors and affiliate links hidden (PUI-07, T-45, T-49): the seams, configured sponsor keys still reachable,
+// and no referral link visible on the pages that carry them.
 import { afterAll, describe, expect, test } from 'bun:test';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { createElement } from 'react';
+import { createElement, type ReactElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { MemoryRouter } from 'react-router-dom';
+import * as sass from 'sass';
 import i18n from '../../src/i18n/index';
+import { OAuthPage } from '../../src/features/oauth/OAuthPage';
+import { OAuthFlowDialog } from '../../src/features/oauth/components/OAuthFlowDialog';
+import { OAUTH_PROVIDERS, isSponsor } from '../../src/features/oauth/providers';
 import { ProviderCategoryList } from '../../src/features/providers/components/ProviderCategoryList';
+import { ProviderResourcePanel } from '../../src/features/providers/components/ProviderResourcePanel';
 import { PROVIDER_BRAND_ORDER } from '../../src/features/providers/descriptors';
 import {
   getSponsorProviderDefinition,
   isMultiProtocolSponsorBrand,
 } from '../../src/features/providers/sponsorDefinitions';
-import type { ProviderGroup } from '../../src/features/providers/types';
+import type { ProviderBrand, ProviderGroup } from '../../src/features/providers/types';
+import { buildProviderGroups } from '../../src/features/providers/useProviderWorkbench';
+import { PROVIMUX_LINKS } from '../../src/provimux/brand';
 import {
-  SPONSOR_PRESET_BRANDS,
+  SPONSOR_GROUP_BRANDS,
   hideSponsor,
   hideSponsorNav,
-  hideSponsorPresets,
+  noQuickFill,
+  providerGroupsWithoutOffers,
 } from '../../src/provimux/sponsors';
+import type { Config } from '../../src/types';
 
 const initialLanguage = i18n.language;
 afterAll(async () => {
@@ -25,13 +36,30 @@ afterAll(async () => {
 });
 
 const read = (path: string) => readFileSync(path, 'utf8');
-const sourceFiles = (dir: string): string[] =>
+const sourceFiles = (dir: string, pattern: RegExp): string[] =>
   readdirSync(dir).flatMap((name) => {
     const path = join(dir, name);
-    return statSync(path).isDirectory() ? sourceFiles(path) : /\.(ts|tsx)$/.test(name) ? [path] : [];
+    return statSync(path).isDirectory()
+      ? sourceFiles(path, pattern)
+      : pattern.test(name)
+        ? [path]
+        : [];
   });
+const unescape = (value: string) =>
+  value.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#x27;/g, "'");
+/** Every link a rendered page holds: href and the markup around it. */
+const links = (html: string) =>
+  [...html.matchAll(/<a\b[^>]*\bhref="([^"]*)"/g)].map((m) => unescape(m[1]));
 
-describe('the three seams', () => {
+// Sponsors with an affiliate sign-up (Kimi is a provider with its own API and stays listed).
+const AFFILIATE_SPONSORS = PROVIDER_BRAND_ORDER.filter(
+  (brand) =>
+    isMultiProtocolSponsorBrand(brand) &&
+    brand !== 'kimi' &&
+    Boolean(getSponsorProviderDefinition(brand).affiliateUrl)
+);
+
+describe('seams', () => {
   test('Quick Start leaves the sidebar, wherever upstream puts it', () => {
     const groups = [
       { id: 'operate', items: [{ path: '/' }, { path: '/quick-start' }] },
@@ -59,81 +87,192 @@ describe('the three seams', () => {
       'const sponsor = hideSponsor(SPONSORS[0]);'
     );
   });
+
+  test('AI Providers builds its groups without offers, and draws no Quick Fill list', () => {
+    expect(read('src/features/providers/ProvidersWorkbenchPage.tsx')).toContain(
+      ': providerGroupsWithoutOffers(allGroups),'
+    );
+    expect(read('src/features/providers/components/ProviderCategoryList.tsx')).toContain(
+      'const QUICK_FILL_BRANDS: ReadonlySet<ProviderBrand> = new Set(noQuickFill(QUICK_FILL_BRAND_ORDER));'
+    );
+    expect(noQuickFill(['fennoAI', 'qiniuCloud'])).toEqual([]);
+  });
 });
 
-describe('AI Providers sponsor presets (T-45)', () => {
-  const page = read('src/features/providers/ProvidersWorkbenchPage.tsx');
-  const list = read('src/features/providers/components/ProviderCategoryList.tsx');
-
-  /** The category list as the page draws it: every brand upstream knows, through the page's own filter. */
-  const renderList = () => {
-    const groups: ProviderGroup[] = hideSponsorPresets(
-      PROVIDER_BRAND_ORDER.map((id) => ({ id, resources: [] }))
-    ).filter((group) => group.id !== 'apikeyFun');
-    return renderToStaticMarkup(
+describe('AI Providers sponsor groups', () => {
+  const groupsFor = (config: Config) => providerGroupsWithoutOffers(buildProviderGroups(config));
+  const renderList = (groups: ProviderGroup[]) =>
+    renderToStaticMarkup(
       createElement(ProviderCategoryList, { groups, activeBrand: 'gemini', onSelect: () => {} })
     );
-  };
+  const name = (brand: ProviderBrand) => `>${i18n.t(`providersPage.providerNames.${brand}`)}<`;
+  const codexUrl = (brand: ProviderBrand) =>
+    getSponsorProviderDefinition(brand as Parameters<typeof getSponsorProviderDefinition>[0])
+      .baseUrlOptions[0].codexBaseUrl;
 
-  test('the page builds its groups through hideSponsorPresets', () => {
-    expect(page).toContain(
-      ": hideSponsorPresets(allGroups).filter((group) => group.id !== 'apikeyFun'),"
-    );
+  // An operator's keys: one ordinary Codex key and one key at each sponsor's Codex address.
+  const configured = {
+    codexApiKeys: [
+      { apiKey: 'sk-own', baseUrl: 'https://api.openai.com/v1' },
+      ...SPONSOR_GROUP_BRANDS.map((brand, index) => ({
+        apiKey: `sk-sponsor-${index}`,
+        baseUrl: codexUrl(brand as ProviderBrand),
+      })),
+    ],
+  } as unknown as Config;
+
+  test('every sponsor with an affiliate sign-up is a group the layer knows', () => {
+    expect(AFFILIATE_SPONSORS.length).toBeGreaterThan(0);
+    expect(AFFILIATE_SPONSORS.filter((brand) => !SPONSOR_GROUP_BRANDS.includes(brand))).toEqual([]);
+    const quickFill = read('src/features/providers/components/ProviderCategoryList.tsx').match(
+      /QUICK_FILL_BRAND_ORDER[^=]*=\s*\[([^\]]*)\]/
+    )?.[1];
+    const brands = [...(quickFill ?? '').matchAll(/'(\w+)'/g)].map((m) => m[1]);
+    expect(brands.length).toBeGreaterThan(0);
+    expect(brands.filter((brand) => !SPONSOR_GROUP_BRANDS.includes(brand))).toEqual([]);
   });
 
-  test('the category list draws one list, the providers, and no Quick Fill', async () => {
+  test('with nothing configured, no sponsor is offered and there is one list', async () => {
     await i18n.changeLanguage('en');
-    const html = renderList();
+    const groups = groupsFor({} as Config);
+    expect(groups.map((group) => group.id).filter((id) => SPONSOR_GROUP_BRANDS.includes(id))).toEqual(
+      []
+    );
+    const html = renderList(groups);
     expect(html.match(/<aside\b/g) ?? []).toHaveLength(1);
     expect(html).not.toContain(i18n.t('providersPage.categories.quickFill'));
-    expect(html).toContain(i18n.t('providersPage.categories.title'));
+    for (const brand of AFFILIATE_SPONSORS) expect(html).not.toContain(name(brand));
   });
 
-  test('no sponsor preset is listed, whichever list upstream puts it in', async () => {
+  test('configured sponsor keys stay reachable: every configured key is listed', async () => {
     await i18n.changeLanguage('en');
-    const html = renderList();
-    // Sponsors with an affiliate sign-up (Kimi is a provider with its own API and stays).
-    const sponsors = PROVIDER_BRAND_ORDER.filter(
-      (brand) =>
-        brand !== 'kimi' &&
-        brand !== 'apikeyFun' &&
-        isMultiProtocolSponsorBrand(brand) &&
-        Boolean(getSponsorProviderDefinition(brand).affiliateUrl)
-    );
-    expect(sponsors.length).toBeGreaterThan(0);
-    for (const brand of sponsors) {
-      expect(SPONSOR_PRESET_BRANDS).toContain(brand);
-      expect(html).not.toContain(`>${i18n.t(`providersPage.providerNames.${brand}`)}<`);
+    const all = buildProviderGroups(configured);
+    const shown = groupsFor(configured);
+    const count = (groups: ProviderGroup[]) =>
+      groups.reduce((total, group) => total + group.resources.length, 0);
+    // Upstream holds the sponsor keys in the sponsor groups, not in Codex.
+    expect(all.find((group) => group.id === 'codex')?.resources).toHaveLength(1);
+    for (const brand of SPONSOR_GROUP_BRANDS) {
+      expect(shown.find((group) => group.id === brand)?.resources.length).toBeGreaterThan(0);
     }
-    // Upstream's own Quick Fill list holds nothing the layer would show.
-    const quickFill = list.match(/QUICK_FILL_BRAND_ORDER[^=]*=\s*\[([^\]]*)\]/)?.[1] ?? '';
-    const brands = [...quickFill.matchAll(/'(\w+)'/g)].map((m) => m[1]);
-    expect(brands.length).toBeGreaterThan(0);
-    expect(brands.filter((brand) => !SPONSOR_PRESET_BRANDS.includes(brand))).toEqual([]);
+    expect(count(shown)).toBe(count(all));
+    expect(count(shown)).toBeGreaterThanOrEqual(1 + SPONSOR_GROUP_BRANDS.length);
+    // Listed with the other providers: one list, no Quick Fill heading.
+    const html = renderList(shown);
+    expect(html.match(/<aside\b/g) ?? []).toHaveLength(1);
+    expect(html).not.toContain(i18n.t('providersPage.categories.quickFill'));
+    for (const brand of SPONSOR_GROUP_BRANDS) expect(html).toContain(name(brand as ProviderBrand));
   });
 
-  test('a remembered preset falls back to the first provider', () => {
-    const groups = hideSponsorPresets(PROVIDER_BRAND_ORDER.map((id) => ({ id, resources: [] })));
-    expect(groups.some((group) => group.id === 'fennoAI')).toBe(false);
-    expect(page).toMatch(
+  test('each configured sponsor key is a row with edit, delete and an on/off switch', async () => {
+    await i18n.changeLanguage('en');
+    for (const group of groupsFor(configured).filter((g) => SPONSOR_GROUP_BRANDS.includes(g.id))) {
+      const html = renderToStaticMarkup(
+        createElement(ProviderResourcePanel, {
+          group,
+          filter: '',
+          onFilterChange: () => {},
+          filteredResources: group.resources,
+          selectedId: null,
+          onView: () => {},
+          onEdit: () => {},
+          onDelete: () => {},
+          onToggleDisabled: () => {},
+          onCreate: () => {},
+        })
+      );
+      expect(html).toContain(`aria-label="${i18n.t('providersPage.actions.edit')}"`);
+      expect(html).toContain(`aria-label="${i18n.t('providersPage.actions.delete')}"`);
+      expect(html).toMatch(/<input[^>]*type="checkbox"/);
+    }
+  });
+
+  test('a remembered sponsor selection with nothing configured falls back to the first provider', () => {
+    expect(read('src/features/providers/ProvidersWorkbenchPage.tsx')).toMatch(
       /groups\.some\(\(group\) => group\.id === uiState\.activeBrand\)\s*\? uiState\.activeBrand\s*: firstVisibleBrand/
     );
   });
 });
 
-describe('affiliate links', () => {
-  // The stylesheet rule that hides them: a[href*='…'] and a[href^='…'] selectors.
-  const css = read('src/provimux/theme/_sponsors.scss');
-  const selectors = [...css.matchAll(/a\[href(\*|\^)='([^']+)'\]/g)].map(([, op, value]) => ({
-    op,
-    value,
-  }));
-  const hidden = (url: string) =>
-    selectors.some(({ op, value }) => (op === '*' ? url.includes(value) : url.startsWith(value)));
+describe('referral links', () => {
+  // The stylesheet as the browser gets it, and its link rules as matchers.
+  const css = sass.compile('src/provimux/theme/_sponsors.scss').css;
+  const linkRule = css.slice(0, css.indexOf('{'));
+  const matchers = [...linkRule.matchAll(/a\[href(\*|\^)="([^"]+)"( i)?\]/g)].map(
+    ([, op, value, flag]) => ({ op, value, insensitive: Boolean(flag) })
+  );
+  const hidden = (href: string) =>
+    matchers.some(({ op, value, insensitive }) => {
+      const subject = insensitive ? href.toLowerCase() : href;
+      const needle = insensitive ? value.toLowerCase() : value;
+      return op === '*' ? subject.includes(needle) : subject.startsWith(needle);
+    });
 
-  // Every URL in the source that is an affiliate link: a referral parameter, or a constant named so.
-  const REFERRAL = /[?&](aff|ref|referral|invite|invitecode|keyword|promo|coupon|via|utm_[a-z]+)=/i;
-  const affiliateUrls = sourceFiles('src')
+  // A referral is a query parameter that pays someone for a sign-up.
+  const REFERRAL =
+    /[?&](aff|affiliate|ref|referral|invite|invitecode|invite_code|keyword|promo|promo_code|coupon|via)=/i;
+  const isReferral = (href: string) => REFERRAL.test(href);
+
+  test('the rule hides every referral parameter the test knows, and keeps ordinary links', () => {
+    expect(matchers.length).toBeGreaterThan(20);
+    for (const param of ['aff', 'ref', 'referral', 'invite', 'invitecode', 'keyword', 'promo', 'coupon', 'via']) {
+      expect(hidden(`https://example.com/?${param}=x`)).toBe(true);
+      expect(hidden(`https://example.com/path?a=1&${param.toUpperCase()}=x`)).toBe(true);
+    }
+    const ordinary = [
+      ...Object.values(PROVIMUX_LINKS),
+      'https://help.router-for.me/',
+      'https://apikey.fan/dashboard',
+      'https://platform.kimi.com/console',
+      'https://github.com/router-for-me/CLIProxyAPI?tab=readme-ov-file',
+    ];
+    expect(ordinary.filter(hidden)).toEqual([]);
+    // The line that only introduces a hidden link goes too, and so does the Kimi offer.
+    expect(css).toContain('p:has(> a[href*="?aff=" i])');
+    expect(css).toContain('[class*=ProviderResourcePanel-module__kimiPromo___]');
+  });
+
+  // What the pages that carry sponsor links render.
+  const rendered = async () => {
+    await i18n.changeLanguage('en');
+    const pages: ReactElement[] = [
+      createElement(MemoryRouter, null, createElement(OAuthPage)),
+      ...PROVIDER_BRAND_ORDER.map((brand) =>
+        createElement(ProviderResourcePanel, {
+          group: { id: brand, resources: [] },
+          filter: '',
+          onFilterChange: () => {},
+          filteredResources: [],
+          selectedId: null,
+          onView: () => {},
+          onEdit: () => {},
+          onDelete: () => {},
+          onCreate: () => {},
+        })
+      ),
+      ...OAUTH_PROVIDERS.filter(isSponsor).map((card) =>
+        createElement(OAuthFlowDialog, {
+          open: true,
+          providerId: card.id,
+          heading: { title: card.id, caption: '', icon: '' },
+          state: { status: 'idle' } as never,
+          text: (suffix: string) => suffix,
+          supportsCallback: false,
+          sponsor: { url: card.sponsor.signUpUrl, label: 'Sign up' },
+          onStart: () => {},
+          onCancel: () => {},
+          onCallbackChange: () => {},
+          onCallbackSubmit: () => {},
+          onViewAuthFiles: () => {},
+          onClose: () => {},
+        })
+      ),
+    ];
+    return pages.map((page) => renderToStaticMarkup(page)).join('\n');
+  };
+
+  // Affiliate addresses in the source, code and JSON: a referral parameter, or a constant named for one.
+  const declared = sourceFiles('src', /\.(ts|tsx|json)$/)
     .filter((path) => !path.startsWith(join('src', 'provimux')))
     .flatMap((path) =>
       read(path)
@@ -144,27 +283,27 @@ describe('affiliate links', () => {
           const above = lines[index - 1] ?? '';
           const declaration = /=\s*$/.test(above) ? `${above} ${line}` : line;
           return urls
-            .filter((url) => REFERRAL.test(url) || /AFFILIATE|SPONSOR|signUp/i.test(declaration))
+            .filter((url) => isReferral(url) || /AFFILIATE|signUp/i.test(declaration))
             .map((url) => ({ path, url }));
         })
     );
+  const affiliate = new Set(declared.map(({ url }) => url));
 
-  test('the source has the affiliate links this test expects to find', () => {
-    const urls = affiliateUrls.map(({ url }) => url);
+  test('every referral or affiliate link the pages render is hidden', async () => {
+    const hrefs = links(await rendered());
+    const referrals = hrefs.filter((href) => isReferral(href) || affiliate.has(href));
+    // Not vacuous: the Kimi sign-up links (OAuth card, login dialog, AI Providers) and the reseller sign-ups.
+    expect(referrals.some((href) => href.includes('platform.kimi'))).toBe(true);
+    expect(referrals.length).toBeGreaterThanOrEqual(4);
+    expect(referrals.filter((href) => !hidden(href))).toEqual([]);
+  });
+
+  test('every affiliate address in the source (code and JSON) is hidden', () => {
+    const urls = declared.map(({ url }) => url);
     expect(urls).toContain('https://apikey.fan/register?aff=AKCPA');
     expect(urls).toContain('https://platform.kimi.com/?aff=cliproxyapi');
     expect(urls).toContain('https://bestproxy.com/?keyword=ayh7otlb');
     expect(urls).toContain('https://s.qiniu.com/miI73q');
-  });
-
-  test('every one is hidden by the stylesheet', () => {
-    expect(affiliateUrls.filter(({ url }) => !hidden(url))).toEqual([]);
-  });
-
-  test('the line that only introduces a hidden link goes with it', () => {
-    expect(css).toContain("p:has(> a[href*='aff='])");
-    expect(read('src/features/oauth/components/OAuthFlowDialog.tsx')).toMatch(
-      /<p className=\{styles\.hint\}>[\s\S]*?<a className=\{styles\.inlineLink\} href=\{sponsor\.url\}/
-    );
+    expect(declared.filter(({ url }) => !hidden(url))).toEqual([]);
   });
 });
