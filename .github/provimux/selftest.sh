@@ -212,7 +212,7 @@ expect "rebase failure: reported as failed" fail "$(report "$tmp/fail2.json" suc
 contains "  ... rebase stop shown" "$tmp/report.out" "The rebase stopped at"
 
 # --- provimux-ui-publish.yml's verifier, autopublish.sh and publish.sh --ci ----------------------------
-# checkrun ID [JQ]: attempt 1 of a provimux-check run of test/provimux-ui on main that passed (JQ edits it).
+# checkrun ID [JQ]: attempt 1 of a provimux-ui-check run of test/provimux-ui on main that passed (JQ edits it).
 checkrun() {
   jq -n --arg sha "$pmx_sha" --argjson id "$1" '{id: $id, run_attempt: 1, path: ".github/workflows/provimux-ui-check.yml", head_branch: "main",
     event: "schedule", status: "completed", conclusion: "success", head_sha: $sha,
