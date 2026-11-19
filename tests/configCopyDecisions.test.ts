@@ -61,7 +61,8 @@ describe('section headers', () => {
 });
 
 describe('proxy URL sponsor', () => {
-  test('stays a visible, keyboard-reachable link outside the input description', () => {
+  // Provimux hides sponsors (src/provimux/sponsors.ts): the row keeps its input, without the sponsor.
+  test('is hidden in Provimux, and the input keeps no description', () => {
     const sponsor = SPONSORS[0];
     expect(sponsor).toBeDefined();
     for (const Section of [SectionCommon, SectionNetwork]) {
@@ -69,13 +70,10 @@ describe('proxy URL sponsor', () => {
         renderSection(Section as ComponentType<Record<string, unknown>>),
         'proxyUrl'
       );
-      const link = row.match(/<a\b[^>]*>/)?.[0] ?? '';
-      expect(link).toContain(`href="${escapeText(sponsor.url)}"`);
-      expect(link).toContain('rel="noopener noreferrer sponsored"');
-      expect(row).toContain(t('sections.network.proxy_url_sponsor_hint'));
-      // No tooltip holding a link, and nothing visually hidden around it.
+      expect(row).not.toMatch(/<a\b/);
+      expect(row).not.toContain(escapeText(sponsor.url));
+      expect(row).not.toContain(t('sections.network.proxy_url_sponsor_hint'));
       expect(row).not.toContain('data-info-tip');
-      expect(row).not.toContain('visually-hidden');
       const input = row.match(/<input\b[^>]*>/)?.[0] ?? '';
       expect(input).not.toContain('aria-describedby');
     }
