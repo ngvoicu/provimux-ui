@@ -278,7 +278,7 @@ range_diff_lists() {
       '!') printf '%s\t%s\n' "$("$@" rev-parse "$a^{commit}")" "$subj" >>"$dir/changed" ;;
       '>') printf '%s\t%s\n' "$("$@" rev-parse "$b^{commit}")" "$subj" >>"$dir/added" ;;
       '=')
-        if [[ "$(binary_changes "$@" -- "$a")" != "$(binary_changes "$@" -- "$b")" ]]; then
+        if [[ "$(binary_changes "$@" -- "$a" | git hash-object --stdin)" != "$(binary_changes "$@" -- "$b" | git hash-object --stdin)" ]]; then
           printf '%s\t%s (a binary file differs)\n' "$("$@" rev-parse "$a^{commit}")" "$subj" >>"$dir/changed"
         fi
         ;;
@@ -286,18 +286,26 @@ range_diff_lists() {
   done < <(grep -E '^ *([0-9]+|-+): +([0-9a-f]+|-+) [=!<>] +([0-9]+|-+): +([0-9a-f]+|-+) ' "$file" || true)
 }
 
-# binary_changes GIT... -- COMMIT: the binary files COMMIT changes, as "<path> <old blob>
-# <new blob> <new mode>" lines, sorted (git diff-tree --numstat marks a binary file "-").
+# binary_changes GIT... -- COMMIT: the binary files COMMIT changes, as NUL-ended records
+# "<old mode> <new mode> <old blob> <new blob> <status>\t<path>", the full blob ids, the
+# path as git stores it (never quoted: -z throughout, so "café.png" or a name with a
+# newline is one record), sorted. A file is binary when git diff-tree --numstat counts
+# no lines for it ("-"). Compare two commits' outputs whole (e.g. by hashing them).
 binary_changes() {
-  local c="${*: -1}" bin
+  local c="${*: -1}" rec meta path
+  local -a binpaths=()
   set -- "${@:1:$#-2}"
-  bin="$("$@" diff-tree -r --no-commit-id --numstat -z --no-renames "$c" | tr '\0' '\n' | awk -F'\t' '$1 == "-" && $2 == "-" {print $3}')"
-  [[ -n "$bin" ]] || return 0
-  "$@" diff-tree -r --no-commit-id --no-renames "$c" | while IFS=$'\t' read -r meta path; do
-    grep -qxF -- "$path" <<<"$bin" || continue
-    read -r _ nmode ob nb _ <<<"$meta"
-    printf '%s %s %s %s\n' "$path" "$ob" "$nb" "$nmode"
-  done | LC_ALL=C sort
+  # --numstat -z: "<added>\t<deleted>\t<path>" NUL-ended (no renames: one path each).
+  while IFS= read -r -d '' rec; do
+    [[ "$rec" == -$'\t'-$'\t'* ]] && binpaths+=("${rec#-$'\t'-$'\t'}")
+  done < <("$@" diff-tree -r -z --no-commit-id --numstat --no-renames "$c")
+  [[ ${#binpaths[@]} -gt 0 ]] || return 0
+  # -z raw: ":<old mode> <new mode> <old blob> <new blob> <status>" NUL, then the path NUL.
+  while IFS= read -r -d '' meta && IFS= read -r -d '' path; do
+    for rec in "${binpaths[@]}"; do
+      if [[ "$rec" == "$path" ]]; then printf '%s\t%s\0' "${meta#:}" "$path"; break; fi
+    done
+  done < <("$@" diff-tree -r -z --no-commit-id --no-abbrev --no-renames "$c") | LC_ALL=C sort -z
 }
 
 # fetch_artifact ID NAME DIGEST RUN DIR: the artifact ID of this repository, unpacked into
@@ -348,6 +356,17 @@ authorize_release() {
     -f description="$1" -f target_url="$3" >/dev/null
 }
 
+# publish_pushed RUN TAG SHA: run RUN's job "publish" (any attempt) has the steps
+# "Push TAG at SHA (the only step with the token)" and "Authorize the release TAG at SHA",
+# both concluded success: that run pushed exactly this tag at this commit and set the
+# status itself. (Step names are evaluated at run time; the values were checked first.)
+publish_pushed() {
+  gh api "repos/$PMX_REPO/actions/runs/$1/jobs?filter=all&per_page=100" |
+    jq -e --arg push "Push $2 at $3 (the only step with the token)" --arg auth "Authorize the release $2 at $3" '
+      [.jobs[] | select(.name == "publish") | .steps[] | select(.conclusion == "success") | .name] as $ok
+      | ($ok | index($push)) != null and ($ok | index($auth)) != null' >/dev/null
+}
+
 # release_authorized TAG SHA: 0 when SHA carries a valid authorization for TAG; 1 when it
 # does not (the reason on stderr); 2 when the statuses cannot be read.
 release_authorized() {
@@ -362,7 +381,8 @@ release_authorized() {
     run="${BASH_REMATCH[1]}"
     if gh api "repos/$PMX_REPO/actions/runs/$run" | jq -e --arg repo "$PMX_REPO" \
       '.path == ".github/workflows/provimux-ui-publish.yml" and .event == "workflow_run" and .head_branch == "main"
-       and .repository.full_name == $repo and .head_repository.full_name == $repo' >/dev/null; then
+       and .repository.full_name == $repo and .head_repository.full_name == $repo' >/dev/null &&
+      publish_pushed "$run" "$tag" "$sha"; then
       echo "authorized by provimux-ui-publish run $run"; return 0
     fi
   done <<<"$list"
