@@ -31,11 +31,14 @@ set -euo pipefail
 upstream=${PMX_UPSTREAM:-https://github.com/router-for-me/Cli-Proxy-API-Management-Center}
 # Directories (trailing /) and single files whose content is provider-facing: the
 # quota and usage requests, their parsers, the OAuth flows, the provider model-list
-# requests, and the management api-call transport that carries them to the server.
+# requests, the AI Providers page's connection test and key usage check, and the
+# management api-call transport that carries them to the server.
 protected=(
   src/utils/quota/
   src/features/quota/providers/
   src/features/oauth/
+  src/features/providers/sheets/forms/useConnectivityTest.ts
+  src/features/providers/sheets/forms/useSponsorUsageCheck.ts
   src/services/api/apiCall.ts
   src/services/api/antigravitySubscription.ts
   src/services/api/claudeResetGrants.ts

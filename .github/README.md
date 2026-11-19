@@ -61,9 +61,12 @@ console. To use provimux-ui now, give Provimux (or CLIProxyAPI) its `management.
    3 hours with the latest release of `panel-github-repository`, which is the original console:
 
    ```yaml
-   remote-management:
+   management:
      disable-auto-update-panel: true
    ```
+
+   Put it in your config's existing `management:` block if it has one. Configs from before CLIProxyAPI v8 call that
+   block `remote-management:`; Provimux reads it too, but when a config has both, set the key in `management:`.
 
 3. Start Provimux with `MANAGEMENT_STATIC_PATH` set to that folder (or to the file itself):
 
@@ -71,11 +74,11 @@ console. To use provimux-ui now, give Provimux (or CLIProxyAPI) its `management.
    MANAGEMENT_STATIC_PATH="$HOME/provimux-ui" provimux --config /path/to/your/config.yaml
    ```
 
-4. Open `http://127.0.0.1:8317/management.html` and sign in with your management key (`remote-management.secret-key`).
+4. Open `http://127.0.0.1:8317/management.html` and sign in with your management key (`management.secret-key`).
 
 Without `MANAGEMENT_STATIC_PATH`, the console lives in a `static` folder next to your config file (or under
 `WRITABLE_PATH` when that is set): replacing `static/management.html` there, with automatic updates off, works too.
-The console is served only when `remote-management.disable-control-panel` is `false`, the default.
+The console is served only when `management.disable-control-panel` is `false`, the default.
 
 ## Build it
 
@@ -105,9 +108,9 @@ Provimux layer on top:
 - everything Provimux is in new files under `src/provimux/` (brand, theme, translations of the brand, the System
   page's lines and links, the sponsor hiding);
 - the original's files reach it only through one-line seams: an import, a logo, a line on a page;
-- the parts of the console that compose requests to AI providers (quota and usage calls, OAuth logins, model lists)
-  are never changed: a check on every push and pull request, `provimux-ui-guard`, fails when a Provimux commit touches
-  them.
+- the parts of the console that compose requests to AI providers (quota and usage calls, OAuth logins, model lists,
+  the AI Providers page's connection test and key usage check) are never changed: a check on every push and pull
+  request, `provimux-ui-guard`, fails when a Provimux commit touches them.
 
 The original's README, in [English](../README.md) and [Chinese](../README_CN.md), describes the console's features.
 

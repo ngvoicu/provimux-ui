@@ -11,6 +11,6 @@ provimux-ui's own workflows live in separately named files.
 
 | provimux-ui workflow | Trigger | What it does |
 |---|---|---|
-| `provimux-ui-guard.yml` | `push` to `main`, `pull_request` | Required check: the base is an upstream console release tag, the Provimux layer sits last, and layer commits change no provider-facing path (`src/utils/quota/`, `src/features/quota/providers/`, `src/features/oauth/`, the quota clients and `models.ts` in `src/services/api/`). Runs git and `.github/provimux/guard.sh` only. |
+| `provimux-ui-guard.yml` | `push` to `main`, `pull_request` | Required check: the base is an upstream console release tag, the Provimux layer sits last, and layer commits change no provider-facing path (`src/utils/quota/`, `src/features/quota/providers/`, `src/features/oauth/`, the AI Providers page's connection test and key usage check (`useConnectivityTest.ts`, `useSponsorUsageCheck.ts`), the quota clients and `models.ts` in `src/services/api/`). Runs git and `.github/provimux/guard.sh` only. |
 
 When a rebase brings a new upstream workflow file, disable it in the repository settings before pushing any tag, and add a row here.
