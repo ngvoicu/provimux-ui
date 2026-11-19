@@ -30,8 +30,8 @@ set -euo pipefail
 
 upstream=${PMX_UPSTREAM:-https://github.com/router-for-me/Cli-Proxy-API-Management-Center}
 # Directories (trailing /) and single files whose content is provider-facing: the
-# quota and usage requests, their parsers, the OAuth flows, and the management
-# api-call transport that carries every quota request to the server.
+# quota and usage requests, their parsers, the OAuth flows, the provider model-list
+# requests, and the management api-call transport that carries them to the server.
 protected=(
   src/utils/quota/
   src/features/quota/providers/
@@ -43,6 +43,7 @@ protected=(
   src/services/api/devinQuota.ts
   src/services/api/kimiQuota.ts
   src/services/api/metaQuota.ts
+  src/services/api/models.ts
 )
 pathspec=()
 for p in "${protected[@]}"; do pathspec+=(":(top,literal)$p"); done
