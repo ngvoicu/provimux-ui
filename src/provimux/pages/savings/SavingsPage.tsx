@@ -5,7 +5,6 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { IconAlertTriangle, IconCopy, IconInfo, IconRefreshCw } from '@/components/ui/icons';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Meter } from '@/features/dashboard/components/Meter';
-import { Sparkline } from '@/features/dashboard/components/Sparkline';
 import { useNotificationStore } from '@/stores';
 import { copyToClipboard } from '@/utils/clipboard';
 import { provimuxApi } from '../../api/provimuxApi';
@@ -20,6 +19,7 @@ import { ProviderPill } from '../shared/ProviderPill';
 import { AccessBadge } from '../shared/AccessBadge';
 import { useProvimuxResource } from '../shared/useProvimuxResource';
 import { formatClock, formatExact, screenNow, timeMs } from '../time';
+import { SavingsTrend } from './SavingsTrend';
 import {
   DEFAULT_PERIOD,
   SAVINGS_PERIODS,
@@ -39,6 +39,9 @@ import {
   formatPerMtok,
   formatRate,
   headlineOf,
+  partValue,
+  trendValues,
+  type HeadlinePart,
   hitRateOf,
   hostName,
   isSavingsPeriod,
@@ -387,6 +390,45 @@ function Money({
   );
 }
 
+/**
+ * A part of the headline (API keys, subscriptions, other): its amount only when some of its requests have a price,
+ * and then how many it covers when not all do. None priced is "not valued" with its count of requests, never
+ * $0.00. Review T-121, finding 3.
+ */
+function PartAmount({ part }: { part: HeadlinePart }) {
+  const { t, i18n } = useTranslation();
+  const value = partValue(part);
+  const requests = formatCount(part.requests, i18n.language);
+  if (value === 'empty') {
+    return <span className={styles.muted}>{t('provimux.savings.headline.part_empty')}</span>;
+  }
+  if (value === 'none') {
+    return (
+      <span className={styles.partUnvalued} data-value="none">
+        <Money amount={part.saved} valued={false} />
+        <span className={styles.partCount}>
+          {t('provimux.savings.headline.part_none', { count: part.requests, requests })}
+        </span>
+      </span>
+    );
+  }
+  return (
+    <>
+      <span data-value={value}>
+        <Money amount={part.saved} estimate />
+      </span>
+      {value === 'partial' ? (
+        <span className={styles.partialTag} data-partial="true">
+          {t('provimux.savings.headline.part_partial', {
+            priced: formatCount(part.priced, i18n.language),
+            requests,
+          })}
+        </span>
+      ) : null}
+    </>
+  );
+}
+
 function Headline({ data, states }: { data: ProvimuxSavingsResponse; states: SavingsState[] }) {
   const { t, i18n } = useTranslation();
   const headline = headlineOf(data);
@@ -397,8 +439,9 @@ function Headline({ data, states }: { data: ProvimuxSavingsResponse; states: Sav
   // From the first recorded day: the days before it are not zeros, they were not recorded.
   const since = data.recording.since ?? '';
   const recorded = days?.filter((point) => point.label >= since.slice(0, point.label.length));
-  const trend =
-    valued && recorded && recorded.length > 1 ? recorded.map((point) => point.saved) : null;
+  // A day with requests and none priced is a gap, never a point at zero (as "not valued" in the daily table).
+  const trend = valued && recorded && recorded.length > 1 ? trendValues(recorded) : null;
+  const gaps = trend?.some((value) => value === null) ?? false;
 
   return (
     <section className={`${shared.feature} ${styles.hero}`} aria-labelledby="pmx-sv-headline">
@@ -429,7 +472,7 @@ function Headline({ data, states }: { data: ProvimuxSavingsResponse; states: Sav
                 <AccessBadge access="api" kind="apikey" /> {t('provimux.savings.headline.apikey')}
               </dt>
               <dd>
-                <Money amount={headline.apikey} estimate />
+                <PartAmount part={headline.apikey} />
                 <span className={styles.partText}>
                   {t('provimux.savings.headline.apikey_text')}
                 </span>
@@ -440,15 +483,15 @@ function Headline({ data, states }: { data: ProvimuxSavingsResponse; states: Sav
                 <AccessBadge access="sub" kind="oauth" /> {t('provimux.savings.headline.oauth')}
               </dt>
               <dd>
-                <Money amount={headline.oauth} estimate />
+                <PartAmount part={headline.oauth} />
                 <span className={styles.partText}>{t('provimux.savings.headline.oauth_text')}</span>
               </dd>
             </div>
-            {headline.other !== 0 ? (
-              <div className={styles.part}>
+            {headline.other !== null ? (
+              <div className={styles.part} data-access="other">
                 <dt>{t('provimux.savings.headline.other')}</dt>
                 <dd>
-                  <Money amount={headline.other} estimate />
+                  <PartAmount part={headline.other} />
                 </dd>
               </div>
             ) : null}
@@ -462,13 +505,13 @@ function Headline({ data, states }: { data: ProvimuxSavingsResponse; states: Sav
       </div>
       {trend ? (
         <div className={styles.heroTrend}>
-          <Sparkline
-            points={trend}
+          <SavingsTrend
+            values={trend}
             color="var(--pmx-sub)"
-            ariaLabel={t('provimux.savings.days.chart_label', {
-              from: data.range.from,
-              to: data.range.to,
-            })}
+            ariaLabel={t(
+              gaps ? 'provimux.savings.days.chart_label_gaps' : 'provimux.savings.days.chart_label',
+              { from: data.range.from, to: data.range.to }
+            )}
             className={styles.sparkline}
           />
         </div>

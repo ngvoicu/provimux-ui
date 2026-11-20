@@ -120,25 +120,54 @@ export function byAccess(
   };
 }
 
+/** One part of the headline: its amount covers its priced requests only. */
+export interface HeadlinePart {
+  /** estimate.saved_by_caching_usd of the part's rows. */
+  saved: number;
+  requests: number;
+  /** Requests with a price; `saved` covers these only. */
+  priced: number;
+}
+
 export interface Headline {
   /** totals.estimate.saved_by_caching_usd */
   total: number;
   /** The part on API-key requests (money that would have been paid); null without the kind breakdown. */
-  apikey: number | null;
+  apikey: HeadlinePart | null;
   /** The part on subscription requests (quota, valued at list price); null without the kind breakdown. */
-  oauth: number | null;
-  /** The part on requests of another kind; 0 when there is none. */
-  other: number;
+  oauth: HeadlinePart | null;
+  /** The part on requests of another kind; null when there is none. */
+  other: HeadlinePart | null;
 }
+
+const partOf = (metrics: ProvimuxSavingsMetrics): HeadlinePart => ({
+  saved: metrics.estimate.saved_by_caching_usd,
+  requests: metrics.requests,
+  priced: metrics.estimate.priced_requests,
+});
+
+/**
+ * Whether a part's amount can be shown: `none` when it has requests and none priced (no amount: "not valued",
+ * never $0.00), `partial` when some are priced (the amount names how many it covers), `empty` without requests.
+ * Review T-121, finding 3.
+ */
+export const partValue = (part: Pick<HeadlinePart, 'requests' | 'priced'>) =>
+  part.requests === 0
+    ? 'empty'
+    : part.priced >= part.requests
+      ? 'known'
+      : part.priced === 0
+        ? 'none'
+        : 'partial';
 
 /** Item 1: money saved by caching, and its two parts from the `kind` rows. A missing breakdown shows the total alone. */
 export function headlineOf(data: ProvimuxSavingsResponse): Headline {
   const access = byAccess(data);
   return {
     total: data.totals.estimate.saved_by_caching_usd,
-    apikey: access ? access.apikey.estimate.saved_by_caching_usd : null,
-    oauth: access ? access.oauth.estimate.saved_by_caching_usd : null,
-    other: access ? access.other.estimate.saved_by_caching_usd : 0,
+    apikey: access ? partOf(access.apikey) : null,
+    oauth: access ? partOf(access.oauth) : null,
+    other: access && access.other.requests > 0 ? partOf(access.other) : null,
   };
 }
 
@@ -412,6 +441,13 @@ const dayToMs = (value: string): number => {
   return Date.UTC(y, m - 1, d);
 };
 const msToDay = (ms: number): string => new Date(ms).toISOString().slice(0, 10);
+
+/**
+ * The trend's values: a day with requests and none priced has no value (null, drawn as a gap), never a point
+ * at zero; a partial day is its priced requests' amount, as in the daily table. Review T-121, finding 4.
+ */
+export const trendValues = (points: readonly DayPoint[]): Array<number | null> =>
+  points.map((point) => (dayValue(point) === 'none' ? null : point.saved));
 
 /** Beyond this many days, the chart sums days by month. */
 export const MAX_DAY_BARS = 62;
