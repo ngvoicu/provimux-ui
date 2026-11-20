@@ -231,6 +231,13 @@ describe('no "New" on a sponsor group', () => {
       })
     );
   const newButton = () => `<span>${i18n.t('providersPage.actions.new')}</span>`;
+  const escapeHtml = (text: string) =>
+    text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#x27;');
 
   test('sponsor groups offer no "New"; every other provider does', () => {
     for (const brand of SPONSOR_GROUP_BRANDS) expect(offersCreate(brand)).toBe(false);
@@ -259,7 +266,11 @@ describe('no "New" on a sponsor group', () => {
     expect(sponsors.map((group) => group.id).sort()).toEqual([...SPONSOR_GROUP_BRANDS].sort());
     for (const group of sponsors) {
       expect(group.resources.length).toBeGreaterThan(0);
-      expect(renderPanel(group, [])).not.toContain(newButton());
+      const none = renderPanel(group, []);
+      expect(none).not.toContain(newButton());
+      // The empty text names no "New" that is not there: the stock text says to click it.
+      expect(none).not.toContain(escapeHtml(i18n.t('providersPage.table.empty')));
+      expect(none).toContain(escapeHtml(i18n.t('provimux.providers.sponsor_empty')));
       const rows = renderPanel(group, group.resources);
       expect(rows).not.toContain(newButton());
       expect(rows).toContain(`aria-label="${i18n.t('providersPage.actions.view')}"`);
@@ -274,7 +285,9 @@ describe('no "New" on a sponsor group', () => {
     for (const brand of ['codex', 'openaiCompatibility']) {
       const group = empty.find((g) => g.id === brand);
       expect(group).toBeDefined();
-      expect(renderPanel(group as ProviderGroup, [])).toContain(newButton());
+      const none = renderPanel(group as ProviderGroup, []);
+      expect(none).toContain(newButton());
+      expect(none).toContain(escapeHtml(i18n.t('providersPage.table.empty')));
     }
   });
 });
