@@ -383,6 +383,27 @@ const PERIOD_WORDS: ReadonlySet<string> = new Set([
 ]);
 
 /** The period's words in the line; a period the page does not know reads "so far". */
+/**
+ * Why there is no line to copy, in words. With some requests unpriced, a negative or tiny amount covers only the
+ * priced ones, so the reason says so and claims nothing for the period: the rest can change its sign (review
+ * T-124, finding 3: −$0.2125 on 1 of 4 became +$0.1295 on 4 of 4).
+ */
+export function copyBlockText(
+  data: ProvimuxSavingsResponse,
+  block: CopyBlock,
+  t: Translate,
+  language: string
+): string {
+  const coverage = coverageOf(data.totals);
+  if (coverage.partial && block !== 'nothing_priced') {
+    return t(`provimux.savings.copy.block_partial.${block}`, {
+      priced: formatCount(coverage.priced, language),
+      requests: formatCount(coverage.requests, language),
+    });
+  }
+  return t(`provimux.savings.copy.block.${block}`);
+}
+
 export const periodWordKey = (period: string | null): string =>
   `provimux.savings.copy.period.${period !== null && PERIOD_WORDS.has(period) ? period : 'all'}`;
 

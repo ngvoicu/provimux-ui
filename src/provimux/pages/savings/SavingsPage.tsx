@@ -26,6 +26,7 @@ import {
   accessOfKind,
   apiKeyCostOf,
   byAccess,
+  copyBlockText,
   copyLine,
   coverageOf,
   isBaseRates,
@@ -498,7 +499,15 @@ function Headline({ data, states }: { data: ProvimuxSavingsResponse; states: Sav
           </dl>
         ) : null}
         {states.includes('negative_saving') ? (
-          <p className={styles.heroWarn}>{t('provimux.savings.headline.negative')}</p>
+          // With requests unpriced, the negative amount is that of the priced ones only: no verdict on the period.
+          <p className={styles.heroWarn} data-partial={coverage.partial ? 'true' : undefined}>
+            {coverage.partial
+              ? t('provimux.savings.headline.negative_partial', {
+                  priced: formatCount(coverage.priced, i18n.language),
+                  requests: formatCount(coverage.requests, i18n.language),
+                })
+              : t('provimux.savings.headline.negative')}
+          </p>
         ) : null}
         {unpriced ? <UnpricedNote data={data} /> : null}
         <CopyLine data={data} />
@@ -593,7 +602,7 @@ function CopyLine({ data }: { data: ProvimuxSavingsResponse }) {
         {result.line !== null ? (
           <q aria-label={t('provimux.savings.copy.preview_label')}>{result.line}</q>
         ) : (
-          t(`provimux.savings.copy.block.${result.block}`)
+          copyBlockText(data, result.block, t, i18n.language)
         )}
       </span>
     </div>
