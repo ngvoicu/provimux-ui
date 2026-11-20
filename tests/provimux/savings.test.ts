@@ -288,7 +288,7 @@ describe('states', () => {
       'The price list is from Nov 17, 2026'
     );
     expect(text((data) => (data.totals.estimate.saved_by_caching_usd = -3.2))).toContain(
-      'Caching cost more than it saved'
+      'Caching cost more than it was worth'
     );
     expect(text((data) => (data.recording.persistent = false))).toContain(
       'in memory only and end with the next restart'
@@ -302,7 +302,7 @@ describe('states', () => {
     const negative = changed(month, (data) => (data.totals.estimate.saved_by_caching_usd = -3.2));
     const text = textOf(render(negative));
     expect(text).toContain('-$3.20');
-    expect(text).not.toContain('Provimux saved me');
+    expect(text).not.toContain('Prompt caching through Provimux was worth');
   });
 
   test('the unpriced list: models without a price, most tokens first; ~other is not a model', () => {
@@ -330,9 +330,9 @@ describe('the copy line', () => {
     expect(copyAmount(100)).toBe('$100');
   });
 
-  test("the month fixture gives the chief's line", () => {
+  test("the month fixture gives the owner's line (T-110: worth, not saved)", () => {
     expect(copyLine(month, en())).toEqual({
-      line: 'Provimux saved me $1,429 this month with prompt caching (estimate at OpenRouter list prices).',
+      line: 'Prompt caching through Provimux was worth $1,429 this month at API list prices.',
       block: null,
     });
   });
@@ -354,15 +354,15 @@ describe('the copy line', () => {
         en()
       ).line;
       expect(line).toBe(
-        `Provimux saved me $1,429 ${phrase} with prompt caching (estimate at OpenRouter list prices).`
+        `Prompt caching through Provimux was worth $1,429 ${phrase} at API list prices.`
       );
     }
   });
 
-  test('"OpenRouter list prices" only when every priced model is OpenRouter\'s', () => {
+  test('the line says API list prices, whichever list priced the models', () => {
     const table = changed(month, (data) => (data.models[4].price!.source = 'provimux'));
     expect(copyLine(table, en()).line).toBe(
-      'Provimux saved me $1,429 this month with prompt caching (estimate at list prices).'
+      'Prompt caching through Provimux was worth $1,429 this month at API list prices.'
     );
   });
 
@@ -397,7 +397,9 @@ describe('the copy line', () => {
     }
     await i18n.changeLanguage('zh-CN');
     try {
-      expect(copyLine(month, i18n.getFixedT('en')).line).toContain('Provimux saved me $1,429');
+      expect(copyLine(month, i18n.getFixedT('en')).line).toContain(
+        'Prompt caching through Provimux was worth $1,429'
+      );
     } finally {
       await i18n.changeLanguage('en');
     }
@@ -422,7 +424,8 @@ describe('the words that keep it honest', () => {
       ) ?? [];
     expect(amounts.length).toBeGreaterThan(4);
     for (const amount of amounts) expect(amount).toMatch(/estimate|reported/);
-    expect(text).toMatch(/Saved by caching estimate \$1,429\.74/);
+    expect(text).toMatch(/Worth of prompt caching estimate \$1,429\.74/);
+    expect(text).toContain('Valued at API list prices');
   });
 
   test('the price list and its date are there', () => {
@@ -443,7 +446,7 @@ describe('the words that keep it honest', () => {
 
   test("the headline items come in the owner's order", () => {
     const order = [
-      'Saved by caching',
+      'Worth of prompt caching',
       'Subscription and API key',
       'Subscription requests at API prices',
       'What the API keys cost',
@@ -458,9 +461,14 @@ describe('the words that keep it honest', () => {
     expect(text).toContain('Not what the subscription saved');
     const strings = readFileSync('src/provimux/locales/en.json', 'utf8');
     expect(strings).not.toMatch(
-      /save[sd]? \d+ ?%|\d+ ?% (saved|cheaper)|cheapest|subscription first/i
+      /save[sd]? \d+ ?%|\d+ ?% (saved|cheaper)|cheapest|subscription first|saved me/i
     );
     expect(text).not.toMatch(/subscription (saved|saves) (you )?\$/i);
+    // T-110: the headline sums subscription value, so nothing that sums it says "saved".
+    expect(text).not.toMatch(/saved by caching|saved me|caching saved/i);
+    expect(text).toContain('on API keys');
+    expect(text).toContain('money that would have been paid');
+    expect(text).toContain('saves quota, not dollars; value at list price');
   });
 });
 

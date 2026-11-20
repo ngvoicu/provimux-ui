@@ -55,7 +55,7 @@
     "nav_meta": {
       "model_routes": "Which subscription or API key serves each model",
       "live_lists": "Each login's own model list, live or from the catalog",
-      "savings": "What prompt caching saved, and what each account kind served"
+      "savings": "What prompt caching was worth, and what each account kind served"
     },
     "providers": {
       "sponsor_empty": "No keys match the search or filters. To add a key for this service, choose Codex or OpenAI Compatible in the provider list and click \"New\" there, with the service's base URL."
@@ -276,7 +276,7 @@
     },
     "savings": {
       "title": "Savings",
-      "lede": "What prompt caching saved, how many requests subscriptions and API keys served, and what the API keys really cost. Every amount marked estimate is at list prices.",
+      "lede": "What prompt caching was worth at API list prices, how many requests subscriptions and API keys served, and what the API keys really cost. Every amount marked estimate is at list prices.",
       "load_failed": "Could not load Savings",
       "period_label": "Period",
       "period": {
@@ -304,15 +304,15 @@
         "label": "What these numbers cover"
       },
       "headline": {
-        "title": "Saved by caching",
-        "text": "At list prices, net of what writing the cache cost: every input token at the input price, minus what the cached mix cost.",
+        "title": "Worth of prompt caching",
+        "text": "Valued at API list prices, net of what writing the cache cost: every input token at the input price, minus what the cached mix cost. Only the part on API keys is money saved.",
         "apikey": "on API keys",
         "apikey_text": "money that would have been paid",
         "oauth": "on subscriptions",
-        "oauth_text": "on a subscription caching saves quota, not dollars: this is its value at list price",
+        "oauth_text": "saves quota, not dollars; value at list price",
         "other": "on other requests",
         "lower_bound": "At least this: requests of models without a price are not in it.",
-        "negative": "Caching cost more than it saved in this period: the cache was written and not read enough to pay for the writes.",
+        "negative": "Caching cost more than it was worth in this period: the cache was written and not read enough to pay for the writes.",
         "unvalued": "No amount: nothing in this period has a price, so nothing can be valued."
       },
       "unpriced": {
@@ -328,9 +328,7 @@
         "copied": "Line copied",
         "failed": "Copy failed",
         "preview_label": "The line to copy",
-        "line": "Provimux saved me {{amount}} {{period}} with prompt caching (estimate at {{prices}}).",
-        "prices_openrouter": "OpenRouter list prices",
-        "prices_list": "list prices",
+        "line": "Prompt caching through Provimux was worth {{amount}} {{period}} at API list prices.",
         "period": {
           "today": "today",
           "yesterday": "yesterday",
@@ -343,8 +341,8 @@
         },
         "block": {
           "nothing_priced": "Nothing in this period has a price, so there is no amount to copy.",
-          "negative": "Caching saved nothing in this period, so there is no line to copy.",
-          "under_cent": "The saving is under $0.01, so there is no line to copy."
+          "negative": "Prompt caching was worth nothing in this period, so there is no line to copy.",
+          "under_cent": "Its worth is under $0.01, so there is no line to copy."
         }
       },
       "access": {
@@ -380,7 +378,7 @@
         "text": "The key your tools send to Provimux, shown by its last 4 characters; Provimux never stores more of it.",
         "col_key": "Client key",
         "col_requests": "Requests",
-        "col_saved": "Saved by caching",
+        "col_saved": "Worth of caching",
         "col_cost": "Cost",
         "tail": "…{{tail}}",
         "id": "id {{id}}…",
@@ -425,13 +423,13 @@
       },
       "days": {
         "title": "Per day",
-        "summary": "When it was earned: the saving and the requests of each day",
-        "summary_months": "When it was earned: the saving and the requests of each month",
+        "summary": "When it was earned: the worth of caching and the requests of each day",
+        "summary_months": "When it was earned: the worth of caching and the requests of each month",
         "col_day": "Day",
         "col_month": "Month",
-        "col_saved": "Saved (estimate)",
+        "col_saved": "Worth of caching (estimate)",
         "col_requests": "Requests",
-        "chart_label": "Saving per day, {{from}} to {{to}}",
+        "chart_label": "Worth of caching per day, {{from}} to {{to}}",
         "missing": "The answer has no per-day breakdown."
       },
       "hosts": {
