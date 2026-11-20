@@ -308,6 +308,161 @@ binary_changes() {
   done < <("$@" diff-tree -r -z --no-commit-id --no-abbrev --no-renames "$c") | LC_ALL=C sort -z
 }
 
+# --- the root README commit (design/root-readme.md; SYNC.md, "The root README commit") ---
+# One layer commit, the README commit (trailer "Provimux-Readme: root"), replaces upstream's
+# root READMEs: it changes exactly the paths of this set (root, literal) and leaves
+# README.md (the pointer) and no other. guard.sh has its own copy of the set (the selftest
+# checks that the two are equal). With no README commit on either side, every function
+# below gives what the scripts computed before.
+PMX_README_PATHS=(README.md README_CN.md)
+
+# readme_path NAME: status 0 when NAME, whole, is a path of the set.
+readme_path() {
+  local p
+  for p in "${PMX_README_PATHS[@]}"; do [[ "$1" == "$p" ]] && return 0; done
+  return 1
+}
+
+# readme_commits RANGE GIT...: the commits of RANGE (A..B) whose trailer Provimux-Readme
+# has the value "root", full SHAs, oldest first, one per line.
+readme_commits() {
+  local rng=$1 c v
+  shift
+  for c in $("$@" rev-list --reverse --topo-order "$rng"); do
+    v="$("$@" log -1 --format='%(trailers:key=Provimux-Readme,valueonly)' "$c" | sed 's/[[:space:]]*$//')"
+    if grep -qx 'root' <<<"$v"; then echo "$c"; fi
+  done
+}
+
+# root_entry COMMIT NAME GIT...: "<mode> <type> <object>" of the root entry NAME (whole,
+# NUL-delimited) of COMMIT's tree, or nothing when there is none.
+root_entry() {
+  local c=$1 name=$2 rec
+  shift 2
+  while IFS= read -r -d '' rec; do
+    if [[ "${rec#*$'\t'}" == "$name" ]]; then printf '%s\n' "${rec%%$'\t'*}"; return 0; fi
+  done < <("$@" ls-tree -z "$c^{tree}")
+}
+
+# changed_paths COMMIT GIT...: the paths COMMIT changes against its first parent, NUL-ended,
+# no rename detection.
+changed_paths() {
+  local c=$1
+  shift
+  "$@" diff-tree -r --no-renames -z --name-only "$c^" "$c"
+}
+
+# readme_normal OLD NEW OLD_TIP NEW_TIP GIT...: status 0 when NEW is OLD re-applied (the
+# normal form, five conditions on git objects); status 1 and the first failed condition on
+# stderr.
+readme_normal() {
+  local o=$1 n=$2 ot=$3 nt=$4 c p name
+  shift 4
+  for c in "$o" "$n"; do
+    [[ "$("$@" rev-list --parents -n 1 "$c" | wc -w | tr -d ' ')" == 2 ]] ||
+      { echo "condition 1: the README commit ${c:0:12} has not exactly one parent" >&2; return 1; }
+  done
+  [[ "$("$@" cat-file commit "$o" | sed -n '/^$/q; /^author /p' | git hash-object --stdin)" == \
+     "$("$@" cat-file commit "$n" | sed -n '/^$/q; /^author /p' | git hash-object --stdin)" ]] ||
+    { echo "condition 2: the README commit ${n:0:12} has another author than ${o:0:12}" >&2; return 1; }
+  [[ "$("$@" cat-file commit "$o" | sed '1,/^$/d' | git hash-object --stdin)" == \
+     "$("$@" cat-file commit "$n" | sed '1,/^$/d' | git hash-object --stdin)" ]] ||
+    { echo "condition 2: the README commit ${n:0:12} has another message than ${o:0:12}" >&2; return 1; }
+  for p in "${PMX_README_PATHS[@]}"; do
+    [[ "$(root_entry "$o" "$p" "$@")" == "$(root_entry "$n" "$p" "$@")" ]] ||
+      { echo "condition 3: $p in the README commit ${n:0:12} is not what ${o:0:12} has" >&2; return 1; }
+  done
+  while IFS= read -r -d '' name; do
+    readme_path "$name" ||
+      { echo "condition 4: the README commit ${n:0:12} changes ${name//$'\n'/?}, which is not a root README" >&2; return 1; }
+  done < <(changed_paths "$n" "$@")
+  for p in "${PMX_README_PATHS[@]}"; do
+    [[ "$(root_entry "$ot" "$p" "$@")" == "$(root_entry "$nt" "$p" "$@")" ]] ||
+      { echo "condition 5: $p at the candidate ${nt:0:12} is not what the old main ${ot:0:12} has" >&2; return 1; }
+  done
+}
+
+# one_sided OP RANGE GIT...: every commit of RANGE as a git range-diff header line, OP "<"
+# (the old side) or ">" (the new side), full SHAs, so range_diff_lists reads them as
+# dropped or added. git range-diff itself refuses an empty range.
+one_sided() {
+  local op=$1 rng=$2 c i=0 dash=----------------------------------------
+  shift 2
+  for c in $("$@" rev-list --reverse --topo-order "$rng"); do
+    i=$((i + 1))
+    if [[ "$op" == '<' ]]; then
+      printf '%s:  %s < -:  %s %s\n' "$i" "$c" "$dash" "$("$@" log -1 --format=%s "$c")"
+    else
+      printf -- '-:  %s > %s:  %s %s\n' "$dash" "$i" "$c" "$("$@" log -1 --format=%s "$c")"
+    fi
+  done
+}
+
+# segment_range_diff OLD-RANGE NEW-RANGE GIT...: git range-diff of the two ranges; when one
+# is empty, the other's commits one-sided; when both are, nothing.
+segment_range_diff() {
+  local a=$1 b=$2 na nb
+  shift 2
+  na="$("$@" rev-list --count "$a")" nb="$("$@" rev-list --count "$b")"
+  if [[ "$na" != 0 && "$nb" != 0 ]]; then
+    "$@" range-diff --no-color --no-notes "$a" "$b"
+  elif [[ "$na" != 0 ]]; then
+    one_sided '<' "$a" "$@"
+  elif [[ "$nb" != 0 ]]; then
+    one_sided '>' "$b" "$@"
+  fi
+}
+
+# stack_range_diff OLD_BASE OLD_MAIN NEW_BASE CANDIDATE OUT GIT...: writes the stack's
+# range-diff to OUT (the file range_diff_lists reads) and prints "<R> <R'>" (the README
+# commits of the old main and of the candidate), or nothing when the two are not both
+# there. The only place git range-diff runs for check.sh and publish.sh.
+#   no README commit on either side, or on one side only: one git range-diff of the whole
+#     ranges, byte for byte what the scripts ran before (a README commit on one side only
+#     is then dropped "<" or added ">", refused as any other);
+#   one on each side: the range-diff of the commits below them, the line
+#     "README  <R> -> <R'>  <subject>", the range-diff of the commits above them; and R'
+#     must be R re-applied (readme_normal): otherwise status 1 (OUT still written);
+#   more than one on either side, a merge commit, or parts that do not add up: status 1.
+# The README line is no range-diff header, so the README commit is in no list.
+stack_range_diff() {
+  local ob=$1 om=$2 nb=$3 cand=$4 out=$5 ro rn no nn
+  shift 5
+  if ! ro="$(readme_commits "$ob..$om" "$@")" || ! rn="$(readme_commits "$nb..$cand" "$@")"; then
+    echo "cannot list the README commits" >&2; return 1
+  fi
+  no="$(grep -c . <<<"$ro" || true)" nn="$(grep -c . <<<"$rn" || true)"
+  if [[ "$no" -gt 1 || "$nn" -gt 1 ]]; then
+    "$@" range-diff --no-color --no-notes "$ob..$om" "$nb..$cand" >"$out" || true
+    echo "more than one README commit (trailer Provimux-Readme: root): $no in the old main, $nn in the candidate" >&2
+    return 1
+  fi
+  if [[ "$no" == 0 || "$nn" == 0 ]]; then
+    "$@" range-diff --no-color --no-notes "$ob..$om" "$nb..$cand" >"$out"
+    return
+  fi
+  if [[ -n "$("$@" rev-list --merges "$ob..$om")" || -n "$("$@" rev-list --merges "$nb..$cand")" ]]; then
+    "$@" range-diff --no-color --no-notes "$ob..$om" "$nb..$cand" >"$out" || true
+    echo "a merge commit in the stack: the README rule needs linear ranges" >&2
+    return 1
+  fi
+  if [[ "$("$@" rev-list --parents -n 1 "$ro" | wc -w | tr -d ' ')" != 2 ||
+        "$("$@" rev-list --parents -n 1 "$rn" | wc -w | tr -d ' ')" != 2 ||
+        $(( $("$@" rev-list --count "$ob..$ro^") + 1 + $("$@" rev-list --count "$ro..$om") )) != "$("$@" rev-list --count "$ob..$om")" ||
+        $(( $("$@" rev-list --count "$nb..$rn^") + 1 + $("$@" rev-list --count "$rn..$cand") )) != "$("$@" rev-list --count "$nb..$cand")" ]]; then
+    "$@" range-diff --no-color --no-notes "$ob..$om" "$nb..$cand" >"$out" || true
+    echo "the commits below and above the README commit do not add up to the stack" >&2
+    return 1
+  fi
+  {
+    segment_range_diff "$ob..$ro^" "$nb..$rn^" "$@"
+    printf 'README  %s -> %s  %s\n' "$ro" "$rn" "$("$@" log -1 --format=%s "$rn")"
+    segment_range_diff "$ro..$om" "$rn..$cand" "$@"
+  } >"$out" || { echo "git range-diff failed" >&2; return 1; }
+  readme_normal "$ro" "$rn" "$om" "$cand" "$@" || return 1
+  echo "$ro $rn"
+}
+
 # fetch_artifact ID NAME DIGEST RUN DIR: the artifact ID of this repository, unpacked into
 # DIR, only if it belongs to RUN, has NAME and DIGEST (sha256:<hex>, as the uploading
 # job's upload step gave it), is not expired, and the downloaded zip hashes to DIGEST.

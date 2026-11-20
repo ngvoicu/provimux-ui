@@ -130,6 +130,7 @@ esac
       echo "| candidate | \`$candidate\`, $(j .commits) commits on \`$tag\` |"
       echo "| \`bun run verify\` | candidate: passes; pristine \`$tag\`: $(jq -r 'if .tests.tag.install == "success" and .tests.tag.verify == "success" then "passes" else "install \(.tests.tag.install), verify \(.tests.tag.verify)" end' "$r" | tr -cd 'A-Za-z0-9 ,.;:()_-') |"
       echo "| guard | ok |"
+      [[ "$(sha .readme.old)" == "" ]] || echo "| root READMEs | the README commit \`$(sha .readme.old | cut -c1-12)\` re-applied as \`$(sha .readme.new | cut -c1-12)\` (normal form)$(jq -r '.readme.reapplied // [] | if length > 0 then "; reapplied at the rebase stop: " + join(", ") else "" end' "$r" | tr -cd 'A-Za-z0-9 ,.;:_-') |"
       echo
       nd="$(jq '.decisions.dropped | length' "$r")"; nc="$(jq '.decisions.changed | length' "$r")"; nw="$(jq '.decisions.new_workflows | length' "$r")"
       if [[ "$nd$nc$nw" == "000" ]]; then

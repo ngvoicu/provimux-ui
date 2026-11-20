@@ -4,7 +4,9 @@
 the Provimux layer (commits with the trailer `Provimux-Layer: branding`). When the upstream console publishes a release
 (about 11 a month), provimux-ui moves the layer onto it, publishes `v<base>-pmx.1` and makes it the latest release,
 with no step by the owner. It is Provimux's sync (`ngvoicu/provimux`, `.github/provimux/SYNC.md`) in the same shape,
-adapted to a console that is one HTML file.
+adapted to a console that is one HTML file. One commit of the layer, **the README commit**, replaces upstream's root
+`README.md` and `README_CN.md` with a pointer of its own, and the sync re-applies it on every release ("The root README
+commit"). Until that commit is on `main` the rule checks nothing and every script behaves as before.
 
 **Check, publish and promote automatically; the owner only for what needs a decision.** A workflow checks each new
 release and reports in an issue. When the check passes, a second workflow, started only by that check run's
@@ -49,8 +51,20 @@ Every job checks out the run's own commit (`github.sha`, the run's `head_sha`) a
    If `main` is already on the tag and no `-pmx` tag exists: `unreleased` (reported). If the tag does not descend
    from the old base: fail.
 4. **Rebase.** `git rebase --committer-date-is-author-date <tag commit>` in a temporary worktree, never `--onto`, so
-   the same inputs give the same candidate.
-5. **range-diff** of `<old base>..<old main>` against `<new base>..<candidate>`. Every layer commit the rebase
+   the same inputs give the same candidate. The check resolves one stop itself, at the README commit, only when all of
+   these hold: the old `main` has exactly one README commit `R` and the stop is at it (`REBASE_HEAD` = `R`); it is the
+   first stop; `R` has one parent and changes only root READMEs (the set: `README.md`, `README_CN.md`); at least one
+   path is unmerged and every unmerged path is in the set; every path the index holds differently from `HEAD` is in the
+   set (names NUL-delimited, whole). Then each path of the set gets `R`'s entry (`git checkout R -- <path>`) or none
+   (`git rm`), and `git rebase --continue` runs with the rebase's own `-c` options. Any other stop, and a second stop,
+   fail the check as before; `rebase.json` records the README commit and the paths that conflicted.
+5. **range-diff** of `<old base>..<old main>` against `<new base>..<candidate>` (`stack_range_diff` in `common.sh`,
+   the only place either script runs `git range-diff`). With a README commit on both sides it is the range-diff of
+   the commits below the README commits and of those above them, with the line `README  <R> -> <R'>  <subject>`
+   between; the README commit is in no list and is checked instead by its **normal form**: `R'` is `R` re-applied
+   (both one parent; the same author line and message; the same entries for the set; `R'` changes no other path; the
+   candidate's tip has the old `main`'s entries for the set). A failure is a reason (the check fails), and no flag
+   accepts it. `result.json`'s `readme` is `null` or `{old, new, reapplied}`. Every layer commit the rebase
    **dropped** (`<`) or **changed** (`!`) needs the owner's decision; nothing is accepted because "only the code
    around it moved" (review T-73: upstream swapping two items made an unchanged layer patch hide the wrong one). A pair
    range-diff calls **equal** (`=`) counts as changed too when one of its binary files differs: a patch shows a
@@ -58,7 +72,10 @@ Every job checks out the run's own commit (`github.sha`, the run's `head_sha`) a
    them (a non-ASCII name such as `café.png` included) (`range_diff_lists`, `binary_changes`).
 6. **Workflow files.** Every path under `.github/workflows/` new in the tag is listed, and `publish.sh` refuses such
    a release (see "New upstream workflow files").
-7. **Guard** on the candidate with `PMX_EXPECT_BASE=<tag>` and `PMX_EXPECT_BASE_COMMIT=<commit>`.
+7. **Guard** on the candidate with `PMX_EXPECT_BASE=<tag>` and `PMX_EXPECT_BASE_COMMIT=<commit>`. Its rule 5 checks the
+   README commit: at most one, with `Provimux-Layer: branding`, one parent, only paths of the set, `README.md` a
+   regular file and `README_CN.md` absent; and then at the candidate exactly one root entry whose name begins with
+   `readme` (any case), the regular file `README.md`. A root README upstream adds (`README_JA.md`) fails here, named.
 
 **Jobs `test (candidate)` and `test (tag)`**, one runner each: before any code of the tree runs, `check.sh
 fetch-prepare` fetches the prepare job's artifact by the id and digest that job output; `check.sh tree` makes a
@@ -102,6 +119,24 @@ older base, an automatic one that failed after a newer upstream release). After 
 `v*-pmx.*` tag and every release (`unreleased_bases`: one API call, one `ls-remote`), and for every other base whose
 newest tag has no complete release opens or updates its own `sync: v<base> — release incomplete` issue with the
 release run's errors; an open sync issue of a base that is now released is closed with its history.
+
+## The root README commit
+
+The design is `design/root-readme.md` (task T-100); Provimux has the same rule for its three root READMEs.
+
+| | |
+|---|---|
+| Trailers | `Provimux-Layer: branding` and `Provimux-Readme: root`, in one trailer block |
+| Paths, the set | exactly `README.md` and `README_CN.md` (root), in `PMX_README_PATHS` (`common.sh`) and `readme_paths` (`guard.sh`) |
+| State it leaves | `README.md` the pointer (mode 100644), `README_CN.md` absent |
+| How many | exactly one in `<base>..main` |
+
+A commit is the README commit when its trailer `Provimux-Readme` has the value `root`. To change the pointer, add a
+layer commit on top that edits `README.md`; it rebases cleanly, since the README commit always leaves the same file.
+`tests/toolchainVersion.test.ts` (a one-line seam) no longer reads the root READMEs, and `.github/README.md` links the
+original's README in its own repository. What still fails on purpose: upstream renames or moves a root README (the
+rebase stops outside the set), another commit conflicts on a README, upstream adds a root README the set does not name
+(the guard).
 
 ## Publishing automatically: `provimux-ui-publish.yml`
 
@@ -271,7 +306,8 @@ meanwhile (the release workflow needs no token of the owner).
 
 The token, once (or when it expires); a dropped or changed layer commit (`--accept-dropped`/`--accept-changed`); a
 release with new workflow files ("New upstream workflow files"); a failed check, a rebase conflict, a failing
-verify ("Manual cases"); a release that stayed a prerelease ("Check a release"); a `-pmx.2` on the same base; a
+verify ("Manual cases"); a root README upstream adds, renames or moves ("Upstream added or moved a root README"; upstream
+editing its READMEs needs nothing); a release that stayed a prerelease ("Check a release"); a `-pmx.2` on the same base; a
 release older than the newest stable one (the scheduled check only checks the newest: start a check with its `tag`).
 
 ## Publishing by hand: `publish.sh`
@@ -294,10 +330,13 @@ cd - && git worktree remove ../pui-publish
    head is the candidate; upstream's tag is still a stable release at the recorded commit (and the old base tag
    still at its commit); the remote `main` is still the old `main`; no `v<base>-pmx.*` exists.
 3. **Verifies again locally**: ancestry (old base → new base → candidate, no merges); the range-diff (dropped,
-   changed) and the new workflow paths recomputed and equal to `result.json`'s; the guard of the
-   current `main` on the candidate, on git objects only, with the exact base.
+   changed; by segments around the README commit, `stack_range_diff` on its own temporary repository) and the new
+   workflow paths recomputed and equal to `result.json`'s; the README commit in normal form, and its pair `<R> <R'>`
+   equal to `result.json`'s `readme`; the guard of the current `main` on the candidate, on git objects only, with the
+   exact base. The plan shows `root READMEs    <R> -> <R'>`.
 4. **Decisions.** Dropped and changed layer commits are refused unless each is named (`--accept-dropped <sha,...>`,
-   `--accept-changed <sha,...>`, the old `main`'s commits, 7+ hex digits). New workflow files are refused outright.
+   `--accept-changed <sha,...>`, the old `main`'s commits, 7+ hex digits). New workflow files are refused outright,
+   and so is a README commit out of normal form: no flag accepts it.
 5. **Plan, confirmation, re-checks, one atomic push**: `main` with `--force-with-lease=refs/heads/main:<old main>`
    (a literal SHA), `v<base>` at upstream's commit (when the repository lacks it), `v<base>-pmx.1` at the candidate.
    Right after the push it sets the release authorization (owner's credentials; "Release authorization").
@@ -328,6 +367,25 @@ The issue names the layer commit and the conflicting files. Rebase the layer ont
 then push `main` (`--force-with-lease=refs/heads/main:$lease`) and the tag `v<base>-pmx.1` yourself (the release
 workflow checks and promotes it), or push only `main` on the old base with the layer adjusted so that the next check
 rebases cleanly.
+
+At the README commit, in any hand rebase onto a new base, take the README commit's own paths:
+
+```sh
+git checkout REBASE_HEAD -- README.md
+git rm -q -f --ignore-unmatch README_CN.md
+GIT_EDITOR=true git rebase --continue
+```
+
+### Upstream added or moved a root README
+
+Added (the guard names it, e.g. `README_JA.md`): read it (`git show v<base>:<path>`). On the old `main`, one layer
+commit adds the path to the set in `guard.sh` (`readme_paths`) and `common.sh` (`PMX_README_PATHS`); push it (lease as
+above) and start a check of the tag. A release that adds a translation usually edits `README.md` too, so the rebase stops
+at the README commit and the check removes the new file with the rest. If it stops nowhere, the check says the README
+commit is not in normal form: rebase by hand as in "The rebase stops", amend the README commit so that it also removes
+the file, push `main` with the lease and the tag `v<base>-pmx.1` yourself. Moved or renamed (the rebase stops at the
+README commit with a path outside the set): the file is then elsewhere in the tree with its links; decide there, then
+the same.
 
 ### A layer commit was dropped or changed
 
@@ -379,7 +437,15 @@ The owner decided (2026-11-19, after review T-77) to accept these and not build 
   `releases_status` with history and the sweep, `release-auth.sh`, `report.sh`, the inline verifier of
   `provimux-ui-publish.yml`,
   `autopublish.sh` decide and notify, `publish.sh --ci`, `release-check.sh` and the inline promote step of
-  `provimux-ui-release.yml`. Run it after changing any of these.
+  `provimux-ui-release.yml`, and the root README commit: the rebase stop through `check.sh prepare` (each condition
+  broken in turn), `readme_normal` and `stack_range_diff` on candidates built by hand (one failing case per condition,
+  empty segments, git range-diff's output byte for byte without a README commit), guard rule 5, and `publish.sh --ci
+  --plan` offline end to end. Run it after changing any of these.
+- Rehearsing a README change upstream: a bare repository with upstream's tags and one commit on the newest that edits
+  `README.md` and `README_CN.md`, tagged as the next patch release; from a clone whose `HEAD` is the `main` to check,
+  a state file at status `check` (`check.sh select`'s fields) in `<dir>/state.json`, then
+  `PMX_UPSTREAM_URL=<that repository> PMX_CHECK_OUT=<dir> bash .github/provimux/check.sh prepare`. Expected: status
+  `test` in `state.json`, the guard ok, every commit `=`, and the candidate's tree equal to the old `main`'s.
 - `check.sh`, `report.sh`, `publish.sh`, `autopublish.sh` and `selftest.sh` run with macOS bash 3.2.
 - actionlint (1.7.12, the newest) does not know `concurrency.queue` yet, which GitHub accepts (a probe run in the
   sandbox, 2026-11-19): run it as `actionlint -ignore 'unexpected key "queue" for "concurrency" section'
