@@ -70,7 +70,9 @@ export function ProviderResourcePanel({
   );
   const emptyText = showSponsorRegistrationLink
     ? t('providersPage.sponsor.emptyRegisterHint')
-    : t('providersPage.table.empty');
+    : offersCreate(group.id)
+      ? t('providersPage.table.empty')
+      : t('provimux.providers.sponsor_empty');
   const logoClassName = [
     styles.logo,
     logo?.themeSurface ? styles.logoThemeSurface : '',
