@@ -314,6 +314,11 @@
         "other": "on other requests",
         "negative": "Caching cost more than it was worth in this period: the cache was written and not read enough to pay for the writes.",
         "unvalued": "No amount: nothing in this period has a price, so nothing can be valued.",
+        "part_none": "{{requests}} requests, none with a price",
+        "part_none_one": "{{requests}} request, without a price",
+        "part_none_other": "{{requests}} requests, none with a price",
+        "part_partial": "{{priced}} of {{requests}} with a price",
+        "part_empty": "no requests",
         "partial": "Only the {{priced}} of {{requests}} requests with a price are in this amount. It is not a lower bound: a request without a price can be worth less than nothing, because writing the cache costs more than plain input.",
         "text_base": "Valued at base API list prices, net of what writing the cache cost: every input token at the input price, minus what the cached mix cost. Only the part on API keys is money saved."
       },
@@ -438,6 +443,7 @@
         "col_saved": "Worth of caching (estimate)",
         "col_requests": "Requests",
         "chart_label": "Worth of caching per day, {{from}} to {{to}}",
+        "chart_label_gaps": "Worth of caching per day, {{from}} to {{to}}; a day with no priced request is left out of the line",
         "missing": "The answer has no per-day breakdown.",
         "partial": "{{priced}} of {{requests}} priced",
         "partial_title": "Only the requests with a price are in this amount"
