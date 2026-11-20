@@ -48,3 +48,17 @@ export function IconLiveLists({ size = 20, ...props }: IconProps) {
     </svg>
   );
 }
+
+/** A coin over a cache layer: what the cache kept from being paid again. */
+export function IconSavings({ size = 20, ...props }: IconProps) {
+  return (
+    <svg {...base} width={size} height={size} {...props}>
+      <circle cx="12" cy="9" r="6" />
+      <path d="M14 7h-3a1.5 1.5 0 0 0 0 3h2a1.5 1.5 0 0 1 0 3h-3" />
+      <path d="M12 5.5v1.5" />
+      <path d="M12 13v1.5" />
+      <path d="M4 19h16" />
+      <path d="M7 22h10" />
+    </svg>
+  );
+}

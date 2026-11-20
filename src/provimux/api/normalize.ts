@@ -9,6 +9,14 @@ import type {
   ProvimuxModelRoutesResponse,
   ProvimuxReasoning,
   ProvimuxRecordedCooldown,
+  ProvimuxSavingsBreakdown,
+  ProvimuxSavingsDimension,
+  ProvimuxSavingsKey,
+  ProvimuxSavingsMetrics,
+  ProvimuxSavingsModel,
+  ProvimuxSavingsPrice,
+  ProvimuxSavingsResponse,
+  ProvimuxSavingsRow,
 } from './types';
 
 /**
@@ -145,5 +153,173 @@ export const readLiveLists = (value: unknown): ProvimuxLiveListsResponse => {
     enabled: bool(rec.enabled),
     providers: list(rec.providers, str),
     logins: list(rec.logins, readLiveLogin),
+  };
+};
+
+/*
+ * Savings (04-console-page.md section 6): a missing count or amount is 0 (the contract's "0 when"), a missing
+ * rate, price or time is null, a missing list is empty, an unknown kind, source, match or basis stays as it came.
+ */
+
+const zero = (value: unknown): number => num(value) ?? 0;
+
+/** A calendar day, YYYY-MM-DD, or null. */
+const day = (value: unknown): string | null => {
+  const text = str(value);
+  return text !== null && /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : null;
+};
+
+export const readSavingsMetrics = (value: unknown): ProvimuxSavingsMetrics => {
+  const rec = isRec(value) ? value : {};
+  const tokens = isRec(rec.tokens) ? rec.tokens : {};
+  const input = isRec(tokens.input) ? tokens.input : {};
+  const output = isRec(tokens.output) ? tokens.output : {};
+  const estimate = isRec(rec.estimate) ? rec.estimate : {};
+  const reported = isRec(rec.reported_cost) ? rec.reported_cost : {};
+  const uncached = zero(input.uncached);
+  const cacheRead = zero(input.cache_read);
+  const cacheWrite = zero(input.cache_write);
+  return {
+    requests: zero(rec.requests),
+    failures: zero(rec.failures),
+    tokens: {
+      input: {
+        uncached,
+        cache_read: cacheRead,
+        cache_write: cacheWrite,
+        cache_write_5m: zero(input.cache_write_5m),
+        cache_write_1h: zero(input.cache_write_1h),
+        total: num(input.total) ?? uncached + cacheRead + cacheWrite,
+      },
+      output: { total: zero(output.total), reasoning: zero(output.reasoning) },
+      unclassified: zero(tokens.unclassified),
+    },
+    cache_hit_rate: num(rec.cache_hit_rate),
+    estimate: {
+      cost_usd: zero(estimate.cost_usd),
+      cost_without_cache_usd: zero(estimate.cost_without_cache_usd),
+      saved_by_caching_usd: zero(estimate.saved_by_caching_usd),
+      priced_requests: zero(estimate.priced_requests),
+      unpriced_requests: zero(estimate.unpriced_requests),
+      unpriced_tokens: zero(estimate.unpriced_tokens),
+      floating_requests: zero(estimate.floating_requests),
+    },
+    reported_cost: {
+      usd: zero(reported.usd),
+      byok_upstream_usd: zero(reported.byok_upstream_usd),
+      requests: zero(reported.requests),
+    },
+  };
+};
+
+export const readSavingsKey = (value: unknown): ProvimuxSavingsKey | null => {
+  if (!isRec(value) || typeof value.id !== 'string') return null;
+  return { id: value.id, tail: str(value.tail), name: str(value.name) };
+};
+
+const DIMENSIONS: ReadonlySet<string> = new Set([
+  'day',
+  'month',
+  'kind',
+  'provider',
+  'host',
+  'model',
+  'key',
+]);
+
+export const readSavingsRow = (value: unknown): ProvimuxSavingsRow | null => {
+  if (!isRec(value)) return null;
+  const row: ProvimuxSavingsRow = readSavingsMetrics(value);
+  const dayValue = day(value.day);
+  if (dayValue !== null) row.day = dayValue;
+  if (typeof value.month === 'string') row.month = value.month;
+  if (typeof value.kind === 'string') row.kind = value.kind;
+  if (typeof value.provider === 'string') row.provider = value.provider;
+  if (typeof value.host === 'string') row.host = value.host;
+  if (typeof value.model === 'string') row.model = value.model;
+  const key = readSavingsKey(value.key);
+  if (key !== null) row.key = key;
+  return row;
+};
+
+export const readSavingsBreakdown = (value: unknown): ProvimuxSavingsBreakdown | null => {
+  if (!isRec(value)) return null;
+  const by = list(value.by, str).filter((dimension): dimension is ProvimuxSavingsDimension =>
+    DIMENSIONS.has(dimension)
+  );
+  if (by.length === 0) return null;
+  return { by, rows: list(value.rows, readSavingsRow), truncated: value.truncated === true };
+};
+
+export const readSavingsPrice = (value: unknown): ProvimuxSavingsPrice | null => {
+  if (!isRec(value)) return null;
+  const input = num(value.input_per_mtok);
+  const output = num(value.output_per_mtok);
+  if (input === null || output === null) return null;
+  return {
+    source: str(value.source) ?? 'unknown',
+    id: str(value.id) ?? '',
+    match: str(value.match) ?? 'unknown',
+    basis: str(value.basis) ?? 'unknown',
+    input_per_mtok: input,
+    output_per_mtok: output,
+    cache_read_per_mtok: num(value.cache_read_per_mtok),
+    cache_write_per_mtok: num(value.cache_write_per_mtok),
+    cache_write_1h_per_mtok: num(value.cache_write_1h_per_mtok),
+  };
+};
+
+export const readSavingsModel = (value: unknown): ProvimuxSavingsModel | null => {
+  if (!isRec(value)) return null;
+  const model = str(value.model);
+  if (model === null) return null;
+  return {
+    provider: str(value.provider) ?? 'unknown',
+    model,
+    requests: zero(value.requests),
+    tokens: zero(value.tokens),
+    price: readSavingsPrice(value.price),
+  };
+};
+
+export const readSavings = (value: unknown): ProvimuxSavingsResponse => {
+  const rec = isRec(value) ? value : {};
+  const range = isRec(rec.range) ? rec.range : {};
+  const recording = isRec(rec.recording) ? rec.recording : {};
+  const prices = isRec(rec.prices) ? rec.prices : {};
+  const openrouter = isRec(prices.openrouter) ? prices.openrouter : {};
+  const table = isRec(prices.provimux) ? prices.provimux : {};
+  const today = day(rec.today) ?? '';
+  return {
+    observed_at: time(rec.observed_at),
+    timezone: str(rec.timezone) ?? '',
+    utc_offset_seconds: zero(rec.utc_offset_seconds),
+    today,
+    range: {
+      period: str(range.period),
+      from: day(range.from) ?? today,
+      to: day(range.to) ?? today,
+    },
+    recording: {
+      since: day(recording.since),
+      persistent: recording.persistent === true,
+      saved_at: time(recording.saved_at),
+      folded_days: zero(recording.folded_days),
+    },
+    prices: {
+      currency: str(prices.currency) ?? 'USD',
+      openrouter: {
+        url: str(openrouter.url) ?? '',
+        fetched_at: time(openrouter.fetched_at),
+        models: zero(openrouter.models),
+        remote: openrouter.remote !== false,
+      },
+      provimux: { updated: day(table.updated), models: zero(table.models) },
+    },
+    totals: readSavingsMetrics(rec.totals),
+    breakdowns: list(rec.breakdowns, readSavingsBreakdown),
+    models: list(rec.models, readSavingsModel),
+    models_truncated: rec.models_truncated === true,
+    reported_cost_hosts: list(rec.reported_cost_hosts, str),
   };
 };

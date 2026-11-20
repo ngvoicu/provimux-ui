@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react';
-import { IconLiveLists, IconModelRoutes } from './components/ProvimuxIcons';
+import { IconLiveLists, IconModelRoutes, IconSavings } from './components/ProvimuxIcons';
 import { isListed, type PresenceEntry, type ProvimuxEndpoint } from './presence';
 import { hideSponsorNav } from './sponsors';
 
@@ -25,11 +25,18 @@ export const PROVIMUX_PAGES: ReadonlyArray<{
     labelKey: 'provimux.nav.live_lists',
     metaKey: 'provimux.nav_meta.live_lists',
   },
+  {
+    endpoint: 'savings',
+    path: '/provimux/savings',
+    labelKey: 'provimux.nav.savings',
+    metaKey: 'provimux.nav_meta.savings',
+  },
 ];
 
 const ICONS: Record<ProvimuxEndpoint, () => ReactElement> = {
   modelRoutes: () => <IconModelRoutes size={18} />,
   liveLists: () => <IconLiveLists size={18} />,
+  savings: () => <IconSavings size={18} />,
 };
 
 const GROUP = 'gateway';
@@ -44,10 +51,15 @@ const pathOf = (item: object): string | null =>
  */
 export function provimuxNav<G extends { id: string; items: object[] }>(
   groups: G[],
-  pages: Record<ProvimuxEndpoint, PresenceEntry>
+  pages: Partial<Record<ProvimuxEndpoint, PresenceEntry>>
 ): G[] {
   hideSponsorNav(groups);
-  const items = PROVIMUX_PAGES.filter((page) => isListed(pages[page.endpoint])).map((page) => ({
+  // A caller that knows fewer endpoints (an older presence record) lists none of the others.
+  const listed = (endpoint: ProvimuxEndpoint) => {
+    const entry: PresenceEntry | undefined = pages[endpoint];
+    return entry !== undefined && isListed(entry);
+  };
+  const items = PROVIMUX_PAGES.filter((page) => listed(page.endpoint)).map((page) => ({
     path: page.path,
     labelKey: page.labelKey,
     metaKey: page.metaKey,

@@ -52,17 +52,19 @@ describe('what an answer means', () => {
 });
 
 describe('probes', () => {
-  test('stock CLIProxyAPI: both endpoints answer 404, both pages are absent', async () => {
+  test('stock CLIProxyAPI: every endpoint answers 404, every page is absent', async () => {
     const get = spyOn(clientClass, 'get').mockRejectedValue(apiError(404));
     try {
       await useProvimuxPresence.getState().probe('1|http://cpa|8.0.78');
       const state = useProvimuxPresence.getState();
       expect(state.modelRoutes.status).toBe('unsupported');
       expect(state.liveLists.status).toBe('unsupported');
+      expect(state.savings.status).toBe('unsupported');
       expect(isProvimuxServer(state)).toBe(false);
       expect(get.mock.calls.map((call) => call[0]).sort()).toEqual([
         '/provimux/live-lists',
         '/provimux/model-routes?model=',
+        '/provimux/savings?period=today',
       ]);
     } finally {
       get.mockRestore();
@@ -82,8 +84,9 @@ describe('probes', () => {
       const state = useProvimuxPresence.getState();
       expect(state.modelRoutes.status).toBe('ready');
       expect(state.liveLists).toEqual({ status: 'error', message: 'live-list status unavailable' });
+      expect(state.savings.status).toBe('ready');
       expect(isProvimuxServer(state)).toBe(true);
-      expect(get).toHaveBeenCalledTimes(2);
+      expect(get).toHaveBeenCalledTimes(3);
     } finally {
       get.mockRestore();
     }
@@ -125,6 +128,44 @@ describe('probes', () => {
   });
 });
 
+describe('Savings presence', () => {
+  test('404 hides the page and its nav item; 503 and a network error keep it, with the error; a later 200 clears it', async () => {
+    const get = spyOn(clientClass, 'get').mockImplementation(async (url: string) => {
+      if (url.startsWith('/provimux/savings')) throw apiError(404);
+      return { observed_at: null, models: [], logins: [] };
+    });
+    try {
+      const presence = useProvimuxPresence.getState();
+      await presence.probe('3|http://pmx|8.0.80-pmx.1');
+      expect(useProvimuxPresence.getState().savings.status).toBe('unsupported');
+      const hidden = provimuxNav([{ id: 'gateway', items: [{ path: '/routing' }] }], {
+        modelRoutes: entry('ready'),
+        liveLists: entry('ready'),
+        savings: useProvimuxPresence.getState().savings,
+      });
+      expect(hidden[0].items.map((item) => (item as { path: string }).path)).not.toContain(
+        '/provimux/savings'
+      );
+
+      presence.report('savings', { error: apiError(503, 'savings store unavailable') });
+      expect(useProvimuxPresence.getState().savings).toEqual({
+        status: 'error',
+        message: 'savings store unavailable',
+      });
+      presence.report('savings', { error: new Error('Network Error') });
+      expect(useProvimuxPresence.getState().savings).toEqual({
+        status: 'error',
+        message: 'Network Error',
+      });
+      expect(isListed(useProvimuxPresence.getState().savings)).toBe(true);
+      presence.report('savings', {});
+      expect(useProvimuxPresence.getState().savings).toEqual({ status: 'ready', message: null });
+    } finally {
+      get.mockRestore();
+    }
+  });
+});
+
 describe('sidebar', () => {
   const groups = () => [
     { id: 'operate', items: [{ path: '/' }, { path: '/quick-start' }] },
@@ -138,10 +179,18 @@ describe('sidebar', () => {
     const result = provimuxNav(groups(), {
       modelRoutes: entry('ready'),
       liveLists: entry('error'),
+      savings: entry('ready'),
     });
     expect(paths(result)).toEqual([
       ['/'],
-      ['/ai-providers', '/routing', '/provimux/model-routes', '/provimux/live-lists', '/later'],
+      [
+        '/ai-providers',
+        '/routing',
+        '/provimux/model-routes',
+        '/provimux/live-lists',
+        '/provimux/savings',
+        '/later',
+      ],
       ['/system'],
     ]);
     const item = result[1].items[2] as { labelKey: string; metaKey: string };
@@ -154,12 +203,14 @@ describe('sidebar', () => {
       const result = provimuxNav(groups(), {
         modelRoutes: entry(status),
         liveLists: entry(status),
+        savings: entry(status),
       });
       expect(paths(result)).toEqual([['/'], ['/ai-providers', '/routing', '/later'], ['/system']]);
     }
     const one = provimuxNav(groups(), {
       modelRoutes: entry('unsupported'),
       liveLists: entry('ready'),
+      savings: entry('unsupported'),
     });
     expect(paths(one)[1]).toEqual(['/ai-providers', '/routing', '/provimux/live-lists', '/later']);
   });
@@ -174,7 +225,7 @@ describe('sidebar', () => {
 // state object the values under test for one render, then put it back.
 const withPresence = <T>(
   state: Partial<
-    Pick<ReturnType<typeof useProvimuxPresence.getState>, 'modelRoutes' | 'liveLists'>
+    Pick<ReturnType<typeof useProvimuxPresence.getState>, 'modelRoutes' | 'liveLists' | 'savings'>
   >,
   render: () => T
 ): T => {
@@ -183,6 +234,7 @@ const withPresence = <T>(
     key: initial.key,
     modelRoutes: initial.modelRoutes,
     liveLists: initial.liveLists,
+    savings: initial.savings,
   };
   Object.assign(initial, { key: 'k', ...state });
   try {

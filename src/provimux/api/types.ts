@@ -116,3 +116,128 @@ export interface ProvimuxLiveListsResponse {
   providers: string[];
   logins: ProvimuxLiveListLogin[];
 }
+
+/*
+ * Savings (T-108): GET /v8/management/provimux/savings. Contract: Provimux `.github/provimux/design/savings/`
+ * (`openapi.yaml`, `04-console-page.md` section 6). Daily totals of the server's zone, valued at list prices.
+ */
+
+/** A calendar day of the server's zone, YYYY-MM-DD. */
+export type ProvimuxDay = string;
+
+/** The `period` values the endpoint takes; the page offers all but `yesterday`. */
+export type ProvimuxSavingsPeriod =
+  'today' | 'yesterday' | '7d' | '30d' | 'month' | 'last_month' | 'year' | 'all';
+
+export interface ProvimuxSavingsMetrics {
+  requests: number;
+  failures: number;
+  tokens: {
+    input: {
+      uncached: number;
+      cache_read: number;
+      cache_write: number;
+      cache_write_5m: number;
+      cache_write_1h: number;
+      total: number;
+    };
+    output: { total: number; reasoning: number };
+    unclassified: number;
+  };
+  /** 0..1; null when there are no input tokens. */
+  cache_hit_rate: number | null;
+  /** Estimates at list prices. Amounts can be negative. */
+  estimate: {
+    cost_usd: number;
+    cost_without_cache_usd: number;
+    saved_by_caching_usd: number;
+    priced_requests: number;
+    unpriced_requests: number;
+    unpriced_tokens: number;
+    /** Priced with today's list because their day recorded no price. */
+    floating_requests: number;
+  };
+  /** Charges an upstream reported; not an estimate. */
+  reported_cost: { usd: number; byok_upstream_usd: number; requests: number };
+}
+
+export interface ProvimuxSavingsKey {
+  /** 16 hex characters; '' = no client key; '~other' = folded rows. */
+  id: string;
+  /** The key's last 4 characters, only for keys of 16 characters or more. */
+  tail: string | null;
+  /** Reserved; null in this version. */
+  name: string | null;
+}
+
+export type ProvimuxSavingsDimension =
+  'day' | 'month' | 'kind' | 'provider' | 'host' | 'model' | 'key';
+
+/** The metrics of one combination; only the dimensions named in `by` are present. */
+export interface ProvimuxSavingsRow extends ProvimuxSavingsMetrics {
+  day?: ProvimuxDay;
+  /** YYYY-MM */
+  month?: string;
+  kind?: 'oauth' | 'apikey' | 'unknown' | (string & {});
+  provider?: string;
+  /** '' for a login and for a key on its provider's own address. */
+  host?: string;
+  /** '~other' for folded rows. */
+  model?: string;
+  key?: ProvimuxSavingsKey;
+}
+
+export interface ProvimuxSavingsBreakdown {
+  by: ProvimuxSavingsDimension[];
+  rows: ProvimuxSavingsRow[];
+  truncated: boolean;
+}
+
+export interface ProvimuxSavingsPrice {
+  source: 'openrouter' | 'provimux' | (string & {});
+  /** The price list entry, e.g. anthropic/claude-opus-5.5. */
+  id: string;
+  match: 'exact' | 'variant' | 'normalized' | 'table' | (string & {});
+  basis: 'recorded' | 'current' | 'mixed' | (string & {});
+  /** US dollars per million tokens. */
+  input_per_mtok: number;
+  output_per_mtok: number;
+  cache_read_per_mtok: number | null;
+  cache_write_per_mtok: number | null;
+  cache_write_1h_per_mtok: number | null;
+}
+
+export interface ProvimuxSavingsModel {
+  provider: string;
+  model: string;
+  requests: number;
+  tokens: number;
+  /** null = unpriced. */
+  price: ProvimuxSavingsPrice | null;
+}
+
+export interface ProvimuxSavingsResponse {
+  /** The contract's Timestamp; null only when a server sent none (read leniently). */
+  observed_at: Timestamp | null;
+  timezone: string;
+  utc_offset_seconds: number;
+  today: ProvimuxDay;
+  range: { period: string | null; from: ProvimuxDay; to: ProvimuxDay };
+  recording: {
+    since: ProvimuxDay | null;
+    persistent: boolean;
+    saved_at: Timestamp | null;
+    folded_days: number;
+  };
+  prices: {
+    currency: 'USD' | (string & {});
+    openrouter: { url: string; fetched_at: Timestamp | null; models: number; remote: boolean };
+    provimux: { updated: ProvimuxDay | null; models: number };
+  };
+  totals: ProvimuxSavingsMetrics;
+  /** In the order of the request's `group` values. */
+  breakdowns: ProvimuxSavingsBreakdown[];
+  models: ProvimuxSavingsModel[];
+  models_truncated: boolean;
+  reported_cost_hosts: string[];
+}
