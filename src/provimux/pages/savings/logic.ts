@@ -513,6 +513,39 @@ export function dayPoints(data: ProvimuxSavingsResponse): DayPoint[] | null {
   return months;
 }
 
+/* ---------- dates ---------- */
+
+/** A calendar day of the answer (YYYY-MM-DD), as the page shows it. */
+export function formatDay(day: string, language: string, withYear = true): string {
+  const [y, m, d] = day.split('-').map(Number);
+  if (!y || !m || !d) return day;
+  try {
+    return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString(language, {
+      timeZone: 'UTC',
+      day: 'numeric',
+      month: 'short',
+      ...(withYear ? { year: 'numeric' } : {}),
+    });
+  } catch {
+    return day;
+  }
+}
+
+/** A moment (the price list's fetch), as the page shows it: date and time in the reader's zone. */
+export function formatDate(ms: number, language: string): string {
+  try {
+    return new Date(ms).toLocaleString(language, {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return new Date(ms).toISOString();
+  }
+}
+
 /* ---------- numbers ---------- */
 
 /** Money in the page's language; amounts under a cent are "under $0.01", never $0.00. */
