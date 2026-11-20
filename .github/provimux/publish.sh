@@ -27,7 +27,10 @@
 #    from the old base, the candidate from the new base, no merge commits; git range-diff
 #    of <old base>..<old main> against <new base>..<candidate>; the new workflow paths;
 #    the guard of the current main (the remote main, = the old main) with the expected
-#    base. Dropped or changed layer commits are refused unless named exactly with the
+#    base. With a README commit on both sides (trailer "Provimux-Readme: root"), the
+#    range-diff is of the commits below and above it, the README commit must be the old
+#    one re-applied (its normal form) and the pair must be result.json's "readme"; no
+#    flag accepts a failure (stack_range_diff in common.sh). Dropped or changed layer commits are refused unless named exactly with the
 #    --accept-* flags (commits: the old main's commit, 7 or more hex digits); a pair
 #    range-diff calls equal counts as changed when a binary file of it differs
 #    (range_diff_lists in common.sh). A release that adds or renames workflow files is
@@ -64,7 +67,7 @@ here="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=common.sh
 . "$here/common.sh"
 
-usage() { sed -n '2,62p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+usage() { sed -n '2,64p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 die() { echo "publish: $*" >&2; exit 1; }
 log() { echo "==> $*" >&2; }
 
@@ -302,7 +305,13 @@ g merge-base --is-ancestor "$old_base_commit" "$upstream_commit" || die "$tag do
 g merge-base --is-ancestor "$upstream_commit" "$candidate" || die "the candidate is not built on $tag"
 [[ -z "$(g rev-list --merges "$upstream_commit..$candidate")" ]] || die "the candidate has merge commits above $tag"
 
-g range-diff --no-color --no-notes "$old_base_commit..$old_main" "$upstream_commit..$candidate" >"$work/range-diff.txt"
+# The stack's range-diff (stack_range_diff in common.sh): with a README commit on both
+# sides, the commits below and above it, and the README commit by its normal form. No
+# --accept-* flag covers a README commit that is not in normal form.
+readme_pair="$(stack_range_diff "$old_base_commit" "$old_main" "$upstream_commit" "$candidate" "$work/range-diff.txt" git --git-dir="$repo" 2>"$work/readme.err")" ||
+  die "the root README rule: $(tr '\n' ' ' <"$work/readme.err")(see $work/range-diff.txt; no --accept-* flag covers it, SYNC.md \"The root README commit\")"
+[[ "$readme_pair" == "$(jq -r 'if .readme == null then "" else "\(.readme.old) \(.readme.new)" end' "$res")" ]] ||
+  die "result.json's README commits ($(jq -c '.readme' "$res")) differ from this range-diff's (${readme_pair:-none})"
 range_diff_lists "$work/range-diff.txt" "$work" git --git-dir="$repo"
 [[ ! -s "$work/added" ]] && [[ -n "$(cat "$work/range-diff.txt")" ]] || die "the range-diff is empty or has commits not in the old main: see $work/range-diff.txt"
 g ls-tree -r --name-only "$old_base_commit" -- .github/workflows/ | sort >"$work/wf-old"
@@ -386,6 +395,7 @@ provimux-ui publish: upstream console $tag ($upstream_commit)
   guard (here)    $guard_ok
   verify (check)  candidate passes; pristine $tag: $(jq -r '.tests.tag | if .install == "success" and .verify == "success" then "passes" else "install \(.install), verify \(.verify)" end' "$res")
 EOF
+[[ -z "$readme_pair" ]] || echo "  root READMEs    ${readme_pair% *} -> ${readme_pair#* } (normal form)"
 for f in dropped changed; do
   if [[ -s "$work/$f" ]]; then echo "  $f:"; sed 's/^/    /' "$work/$f"; fi
 done

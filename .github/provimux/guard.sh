@@ -21,7 +21,14 @@
 #      commits since the merge base touch no protected path, it merges cleanly, and
 #      the merged tree differs from the target in no protected path. Changes to
 #      protected paths reach main only from upstream, by a rebase onto a new upstream
-#      release pushed by the owner, never through a PR.
+#      release pushed by the owner, never through a PR;
+#   5. the root README commit (design/root-readme.md; SYNC.md, "The root README commit"):
+#      at most one commit of base..HEAD has the trailer "Provimux-Readme: root" (none
+#      fails once require_readme=1); it carries "Provimux-Layer: branding", has one
+#      parent, changes only the paths of readme_paths, and leaves README.md a regular
+#      file (100644) and the other paths absent; and then at HEAD the root entries whose
+#      name begins with "readme" (ASCII, any case) are exactly the 100644 blob README.md.
+#      With no README commit (and require_readme=0) this rule checks nothing.
 #
 # Env: PMX_TARGET (optional, pull requests), PMX_UPSTREAM (default: the upstream
 # console), PMX_EXPECT_BASE / PMX_EXPECT_BASE_COMMIT (optional: the sync check and
@@ -48,6 +55,10 @@ protected=(
   src/services/api/metaQuota.ts
   src/services/api/models.ts
 )
+# The root READMEs the README commit replaces (rule 5): the same set as PMX_README_PATHS in
+# common.sh (the selftest checks it). The README commit leaves README.md, the pointer.
+readme_paths=(README.md README_CN.md)
+require_readme=0
 pathspec=()
 for p in "${protected[@]}"; do pathspec+=(":(top,literal)$p"); done
 protected_list="${protected[*]}"
@@ -180,6 +191,60 @@ if [ -n "${PMX_TARGET:-}" ]; then
   while IFS= read -r f; do
     [ -n "$f" ] && err "This pull request changes protected path $f relative to main ($(short "$target")). Changes to $protected_list reach main only from upstream (a rebase onto a new upstream release pushed by the owner), never through a pull request."
   done <<<"$hits"
+fi
+
+# --- 5. The root README commit ------------------------------------------------------
+in_readme_set() { local p; for p in "${readme_paths[@]}"; do [ "$1" = "$p" ] && return 0; done; return 1; }
+# root_entries C: the root entries of C's tree, "<mode> <type> <object>\t<name>", NUL-ended.
+root_entries() { git ls-tree -z "$1^{tree}"; }
+readme_commits=''
+for c in $(git rev-list --reverse --topo-order "$base_commit..HEAD"); do
+  v=$(git log -1 --format='%(trailers:key=Provimux-Readme,valueonly)' "$c" | sed 's/[[:space:]]*$//')
+  if grep -qx 'root' <<<"$v"; then readme_commits="$readme_commits $c"; fi
+done
+n_readme=$(wc -w <<<"$readme_commits" | tr -d ' ')
+if [ "$n_readme" -gt 1 ]; then
+  err "$n_readme commits in $base..$(short "$head") carry the trailer 'Provimux-Readme: root' ($(for c in $readme_commits; do short "$c"; done | paste -sd ' ' -)); exactly one commit is the README commit."
+elif [ "$n_readme" -eq 0 ] && [ "$require_readme" -eq 1 ]; then
+  err "No commit in $base..$(short "$head") carries the trailer 'Provimux-Readme: root': the README commit, which replaces the root READMEs, is missing."
+elif [ "$n_readme" -eq 1 ]; then
+  r=${readme_commits# }
+  rs="$(short "$r") (\"$(subject "$r")\")"
+  lv=$(git log -1 --format='%(trailers:key=Provimux-Layer,valueonly)' "$r" | sed 's/[[:space:]]*$//')
+  grep -qx 'branding' <<<"$lv" || err "The README commit $rs has no 'Provimux-Layer: branding' trailer."
+  if [ "$(git rev-list --parents -n 1 "$r" | wc -w | tr -d ' ')" -ne 2 ]; then
+    err "The README commit $rs has not exactly one parent."
+  else
+    while IFS= read -r -d '' f; do
+      in_readme_set "$f" || err "The README commit $rs changes ${f//$'\n'/?}; it may change only: ${readme_paths[*]}."
+    done < <(git diff-tree -r --no-renames -z --name-only "$r^" "$r")
+  fi
+  for p in "${readme_paths[@]}"; do
+    e=''
+    while IFS= read -r -d '' rec; do
+      if [ "${rec#*$'\t'}" = "$p" ]; then e=${rec%%$'\t'*}; fi
+    done < <(root_entries "$r")
+    if [ "$p" = README.md ]; then
+      case "$e" in "100644 blob "*) ;; *) err "The README commit $rs leaves README.md as '${e:-absent}', not a regular file (100644 blob)." ;; esac
+    elif [ -n "$e" ]; then
+      err "The README commit $rs leaves $p in place; it must delete it."
+    fi
+  done
+  # At HEAD: exactly one root README, the 100644 blob README.md (a README upstream adds
+  # or a later commit brings back is named here).
+  seen=0
+  while IFS= read -r -d '' rec; do
+    name=${rec#*$'\t'} meta=${rec%%$'\t'*}
+    lc=$(printf '%s' "${name:0:6}" | LC_ALL=C tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' 'abcdefghijklmnopqrstuvwxyz')
+    [ "$lc" = readme ] || continue
+    if [ "$name" = README.md ] && case "$meta" in "100644 blob "*) true ;; *) false ;; esac; then
+      seen=1
+    else
+      err "HEAD has the root entry ${name//$'\n'/?} ($meta): the only root README is README.md, the pointer (a 100644 blob). A root README upstream added or moved needs the owner: SYNC.md, \"Upstream added or moved a root README\"."
+    fi
+  done < <(LC_ALL=C root_entries HEAD)
+  [ "$seen" -eq 1 ] || err "HEAD has no root README.md (a 100644 blob): the README commit's pointer is missing."
+  [ "$fail" -ne 0 ] || echo "README commit: $rs; the root README is README.md only."
 fi
 
 if [ "$fail" -ne 0 ]; then exit 1; fi
