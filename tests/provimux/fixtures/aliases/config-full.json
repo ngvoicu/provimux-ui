@@ -1,0 +1,190 @@
+{
+  "config-version": 8,
+  "routing": {
+    "strategy": "round-robin",
+    "force-model-prefix": false
+  },
+  "api-keys": {
+    "gemini": [
+      {
+        "name": "gemini-1",
+        "keys": [
+          {
+            "api-key": "fixture-key-gemini-1",
+            "auth-index": "ai-gemini-1",
+            "models": [{ "name": "gemini-2.5-pro", "alias": "g-pro" }]
+          }
+        ]
+      }
+    ],
+    "interactions": [
+      {
+        "name": "interactions-1",
+        "keys": [{ "api-key": "fixture-key-interactions-1", "auth-index": "ai-interactions-1" }]
+      }
+    ],
+    "codex": [
+      {
+        "name": "codex-relay",
+        "keys": [
+          {
+            "api-key": "fixture-key-codex-1",
+            "auth-index": "ai-codex-1",
+            "base-url": "https://User:pw@Relay.Example.invalid:8443/v1",
+            "prefix": "relay",
+            "models": [
+              { "name": "gpt-5.5", "alias": "fast", "support-configuration-update": false }
+            ]
+          }
+        ]
+      }
+    ],
+    "claude": [
+      {
+        "name": "claude-team",
+        "base-url": "https://claude.example.invalid",
+        "x-group-unknown": "kept",
+        "models": [
+          {
+            "name": "claude-opus-5-5",
+            "alias": "opus",
+            "display-name": "Opus 5.5",
+            "max-context-length": 200000,
+            "force-mapping": true,
+            "is-compat": false,
+            "priority": 2,
+            "thinking": { "levels": ["low", "high"] },
+            "test-model": true,
+            "x-unknown": "keep-me"
+          },
+          { "name": "claude-sonnet-5", "alias": "claude-sonnet-5" },
+          { "name": "claude-haiku-5" }
+        ],
+        "keys": [
+          { "api-key": "fixture-key-claude-1", "auth-index": "ai-claude-1" },
+          { "api-key": "fixture-key-claude-2", "auth-index": "ai-claude-2", "models": null }
+        ]
+      },
+      {
+        "name": "claude-own",
+        "keys": [
+          {
+            "api-key": "fixture-key-claude-3",
+            "auth-index": "ai-claude-3",
+            "models": [
+              { "name": "claude-opus-5-5", "alias": "opus" },
+              "stray-string",
+              { "name": "  ", "alias": "no-name" },
+              { "name": "claude-opus-5-5", "alias": " " }
+            ]
+          },
+          {
+            "api-key": "fixture-key-claude-4",
+            "auth-index": "ai-claude-4",
+            "excluded-models": ["*"],
+            "models": [{ "name": "claude-opus-5-5", "alias": "opus" }]
+          }
+        ]
+      }
+    ],
+    "xai": [
+      {
+        "name": "xai-1",
+        "keys": [
+          {
+            "api-key": "fixture-key-xai-1",
+            "auth-index": "ai-xai-1",
+            "models": [{ "name": "grok-5", "alias": "grok", "force-mapping": false }]
+          }
+        ]
+      }
+    ],
+    "meta": [
+      {
+        "name": "meta-1",
+        "keys": [
+          {
+            "api-key": "fixture-key-meta-1",
+            "auth-index": "ai-meta-1",
+            "models": [{ "name": "muse-spark", "alias": "spark" }]
+          }
+        ]
+      }
+    ],
+    "vertex": [
+      {
+        "name": "vertex-1",
+        "base-url": "https://vertex.example.invalid/v1",
+        "keys": [
+          {
+            "api-key": "fixture-key-vertex-1",
+            "auth-index": "ai-vertex-1",
+            "models": [
+              { "name": "gemini-x" },
+              { "name": "gemini-s", "alias": "gemini-s", "openapi": true },
+              { "name": "gemini-y", "alias": "why" }
+            ]
+          }
+        ]
+      }
+    ],
+    "openai-compatibility": [
+      {
+        "name": "openrouter",
+        "base-url": "https://openrouter.ai/api/v1",
+        "prefix": "or",
+        "auth-index": "ai-openrouter",
+        "test-model": "anthropic/claude-opus-5.5",
+        "keys": [
+          { "api-key": "fixture-key-openrouter-1", "auth-index": "ai-openrouter-1" },
+          { "api-key": "fixture-key-openrouter-2", "auth-index": "ai-openrouter-2" }
+        ],
+        "models": [
+          {
+            "name": "anthropic/claude-opus-5.5",
+            "alias": "opus",
+            "image": true,
+            "input-modalities": ["text", "image"],
+            "use-max-completion-tokens": true
+          },
+          { "name": "openai/gpt-5.5", "alias": "opus" }
+        ]
+      },
+      {
+        "name": "local-off",
+        "base-url": "http://localhost:4000/v1",
+        "disabled": true,
+        "auth-index": "ai-local-off",
+        "keys": [{ "api-key": "fixture-key-local-1" }],
+        "models": [{ "name": "llama-5", "alias": "opus" }]
+      }
+    ]
+  },
+  "oauth": {
+    "model-alias": {
+      "claude": [
+        {
+          "name": "claude-opus-5-5",
+          "alias": "opus-login",
+          "fork": true,
+          "force-mapping": false,
+          "display-name": "Opus (login)",
+          "x-unknown": 1
+        },
+        { "name": "claude-sonnet-5", "alias": "claude-sonnet-5" },
+        { "name": "claude-haiku-5" },
+        { "name": "claude-opus-5-5", "alias": "OPUS-LOGIN" },
+        "stray-string"
+      ],
+      "codex": [
+        {
+          "name": "gpt-5.5",
+          "alias": "g55",
+          "openapi": true
+        }
+      ],
+      "CODEX": [{ "name": "gpt-5.4", "alias": "g54", "fork": true }]
+    },
+    "excluded-models": { "claude": ["claude-haiku-5"] }
+  }
+}
