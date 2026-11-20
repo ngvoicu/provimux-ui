@@ -17,6 +17,7 @@ import {
   copyAmount,
   copyLine,
   dayPoints,
+  dayValue,
   floorAmount,
   headlineOf,
   hitRateOf,
@@ -40,6 +41,13 @@ const changed = (
   return copy;
 };
 const en = () => i18n.getFixedT('en');
+/** The month with every request priced (the unpriced swe-2 requests counted as priced). */
+const fullyPriced = (base: ProvimuxSavingsResponse) =>
+  changed(base, (data) => {
+    data.totals.estimate.priced_requests = data.totals.requests;
+    data.totals.estimate.unpriced_requests = 0;
+    data.totals.estimate.unpriced_tokens = 0;
+  });
 
 const render = (data: ProvimuxSavingsResponse) =>
   renderToStaticMarkup(createElement(MemoryRouter, null, createElement(SavingsView, { data })));
@@ -174,7 +182,8 @@ describe('the headline', () => {
       reportedUsd: 22.145526,
       reportedRequests: 208,
       estimateUsd: 22.2705,
-      unreported: { requests: 26, estimateUsd: 0.0405 },
+      pricedRequests: 239,
+      unreported: { requests: 26, pricedRequests: 26, estimateUsd: 0.0405 },
     });
     const text = textOf(render(month));
     expect(text).toContain('Reported by OpenRouter for 208 of 239 API-key requests');
@@ -331,8 +340,8 @@ describe('the copy line', () => {
   });
 
   test("the month fixture gives the owner's line (T-110: worth, not saved)", () => {
-    expect(copyLine(month, en())).toEqual({
-      line: 'Prompt caching through Provimux was worth $1,429 this month at API list prices.',
+    expect(copyLine(fullyPriced(month), en())).toEqual({
+      line: 'Prompt caching through Provimux was worth $1,429 this month at base API list prices.',
       block: null,
     });
   });
@@ -350,19 +359,22 @@ describe('the copy line', () => {
     };
     for (const [period, phrase] of Object.entries(words)) {
       const line = copyLine(
-        changed(month, (data) => (data.range.period = period)),
+        changed(fullyPriced(month), (data) => (data.range.period = period)),
         en()
       ).line;
       expect(line).toBe(
-        `Prompt caching through Provimux was worth $1,429 ${phrase} at API list prices.`
+        `Prompt caching through Provimux was worth $1,429 ${phrase} at base API list prices.`
       );
     }
   });
 
   test('the line says API list prices, whichever list priced the models', () => {
-    const table = changed(month, (data) => (data.models[4].price!.source = 'provimux'));
+    const table = changed(
+      fullyPriced(month),
+      (data) => (data.models[4].price!.source = 'provimux')
+    );
     expect(copyLine(table, en()).line).toBe(
-      'Prompt caching through Provimux was worth $1,429 this month at API list prices.'
+      'Prompt caching through Provimux was worth $1,429 this month at base API list prices.'
     );
   });
 
@@ -425,7 +437,7 @@ describe('the words that keep it honest', () => {
     expect(amounts.length).toBeGreaterThan(4);
     for (const amount of amounts) expect(amount).toMatch(/estimate|reported/);
     expect(text).toMatch(/Worth of prompt caching estimate \$1,429\.74/);
-    expect(text).toContain('Valued at API list prices');
+    expect(text).toContain('Valued at base API list prices');
   });
 
   test('the price list and its date are there', () => {
@@ -435,9 +447,9 @@ describe('the words that keep it honest', () => {
     expect(text).toContain('recording since Nov 18, 2026');
   });
 
-  test('the unpriced model swe-2 is named near the headline, and the headline is a lower bound', () => {
+  test('the unpriced model swe-2 is named near the headline', () => {
     expect(text).toContain('90 requests (877.5K tokens) are of models without a price: swe-2');
-    expect(text).toContain('At least this');
+    expect(text).not.toMatch(/at least/i);
   });
 
   test('requests are attempts', () => {
@@ -499,9 +511,14 @@ describe('days', () => {
   test("missing days are zero; the range is the answer's from and to", () => {
     const days = dayPoints(withDays)!;
     expect(days).toHaveLength(20);
-    expect(days[0]).toEqual({ label: '2026-11-01', requests: 0, saved: 0 });
-    expect(days[17]).toEqual({ label: '2026-11-18', requests: 2245, saved: 1429.74 });
-    expect(days[18]).toEqual({ label: '2026-11-19', requests: 0, saved: 0 });
+    expect(days[0]).toEqual({ label: '2026-11-01', requests: 0, priced: 0, saved: 0 });
+    expect(days[17]).toEqual({
+      label: '2026-11-18',
+      requests: 2245,
+      priced: 2155,
+      saved: 1429.74,
+    });
+    expect(days[18]).toEqual({ label: '2026-11-19', requests: 0, priced: 0, saved: 0 });
     expect(days[19].label).toBe('2026-11-20');
     // Never the browser's date: the answer's range, even across a daylight-saving change.
     const dst = changed(withDays, (data) => {
@@ -658,5 +675,112 @@ describe('nothing priced', () => {
     // Requests and the hit rate as usual.
     expect(text).toContain('93.5%');
     expect(text).toContain('2,006');
+  });
+});
+
+// Review T-112 (task T-117): one test per console finding.
+describe('review T-112', () => {
+  test('3. a partial sum is not a lower bound: it names how many requests it covers, on the page and in the line', () => {
+    // The review's case: one priced request worth +$0.114, one write-heavy request without a price.
+    const partial = changed(empty, (data) => {
+      data.recording.since = '2026-11-20';
+      data.prices = structuredClone(month.prices);
+      data.totals.requests = 2;
+      data.totals.estimate = {
+        ...data.totals.estimate,
+        saved_by_caching_usd: 0.114,
+        priced_requests: 1,
+        unpriced_requests: 1,
+        unpriced_tokens: 53000,
+      };
+      data.models = [
+        { provider: 'claude', model: 'claude-x', requests: 1, tokens: 53000, price: null },
+        structuredClone(month.models[0]),
+      ];
+    });
+    expect(copyLine(partial, en()).line).toBe(
+      'Prompt caching through Provimux was worth $0.11 today at base API list prices, for the 1 of 2 requests with a price.'
+    );
+    const text = textOf(render(partial));
+    expect(text).toContain('Only the 1 of 2 requests with a price are in this amount');
+    expect(text).toContain('It is not a lower bound');
+    expect(text).not.toMatch(/at least/i);
+    expect(readFileSync('src/provimux/locales/en.json', 'utf8')).not.toMatch(/at least/i);
+    // Once every request is priced, the line carries no qualifier.
+    expect(copyLine(fullyPriced(partial), en()).line).toBe(
+      'Prompt caching through Provimux was worth $0.11 today at base API list prices.'
+    );
+  });
+
+  test('3. the API-key and subscription estimates say they cover only the priced requests', () => {
+    const apikeyPartial = changed(month, (data) => {
+      for (const breakdown of data.breakdowns) {
+        for (const row of breakdown.rows) {
+          if (row.kind !== 'apikey') continue;
+          row.estimate.priced_requests = Math.max(0, row.estimate.priced_requests - 13);
+          row.estimate.unpriced_requests += 13;
+        }
+      }
+    });
+    expect(apiKeyCostOf(apikeyPartial)?.pricedRequests).toBe(226);
+    const text = textOf(render(apikeyPartial));
+    expect(text).toContain('Estimate for the 226 of 239 API-key requests with a price');
+    expect(text).not.toContain('Estimate for all API-key requests');
+    expect(text).toContain(
+      'Estimate for the 13 of 26 requests with a price, on hosts that reported no cost'
+    );
+    // The month fixture's subscription row has 90 unpriced requests.
+    expect(textOf(render(month))).toContain(
+      'For the 1,916 of 2,006 subscription requests with a price.'
+    );
+    expect(textOf(render(fullyPriced(month)))).toContain('Estimate for all API-key requests');
+    // Per key: the key whose requests include the unpriced ones says so beside its amount.
+    expect(textOf(render(month))).toMatch(/…x9Qz 2,006 \$1,389\.20 1,916 of 2,006 priced/);
+  });
+
+  test('4. a day with requests and none priced is "not valued", never $0.00; a partial day says so', () => {
+    const withDays = changed(month, (data) => {
+      const row = (day: string, requests: number, priced: number, saved: number) => {
+        const metrics = structuredClone(empty.totals);
+        metrics.requests = requests;
+        metrics.estimate.priced_requests = priced;
+        metrics.estimate.unpriced_requests = requests - priced;
+        metrics.estimate.saved_by_caching_usd = saved;
+        return { ...metrics, day };
+      };
+      data.breakdowns.push({
+        by: ['day'],
+        truncated: false,
+        rows: [
+          row('2026-11-18', 3, 3, 1.5),
+          row('2026-11-19', 4, 2, 0.4),
+          row('2026-11-20', 1, 0, 0),
+        ],
+      });
+    });
+    const days = dayPoints(withDays)!;
+    expect(days.slice(17).map(dayValue)).toEqual(['known', 'partial', 'none']);
+    expect(dayValue(days[0])).toBe('known');
+    const html = render(withDays);
+    const rows = html.match(/<tr[^>]*>(?:(?!<\/tr>)[\s\S])*<\/tr>/g) ?? [];
+    const row20 = textOf(rows.find((row) => row.includes('Nov 20<')) ?? '');
+    expect(row20).toContain('not valued');
+    expect(row20).not.toContain('$0.00');
+    const row19 = textOf(rows.find((row) => row.includes('Nov 19<')) ?? '');
+    expect(row19).toContain('2 of 4 priced');
+    // A month of such days keeps the counts.
+    const year = changed(withDays, (data) => {
+      data.range = { period: 'year', from: '2026-01-01', to: '2026-11-20' };
+    });
+    expect(dayPoints(year)!.at(-1)).toMatchObject({ label: '2026-11', requests: 8, priced: 5 });
+  });
+
+  test('10. base rates: the price source and the line say long-context tiers are not applied', () => {
+    const text = textOf(render(month));
+    expect(text).toContain('at base rates (long-context tiers not applied)');
+    expect(text).toContain('Valued at base API list prices');
+    expect(copyLine(fullyPriced(month), en()).line).toContain('at base API list prices.');
+    // Still one sentence.
+    expect((copyLine(month, en()).line ?? '').match(/\./g)?.length).toBe(1);
   });
 });

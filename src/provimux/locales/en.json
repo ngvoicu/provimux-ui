@@ -276,7 +276,7 @@
     },
     "savings": {
       "title": "Savings",
-      "lede": "What prompt caching was worth at API list prices, how many requests subscriptions and API keys served, and what the API keys really cost. Every amount marked estimate is at list prices.",
+      "lede": "What prompt caching was worth at base API list prices, how many requests subscriptions and API keys served, and what the API keys really cost. Every amount marked estimate is at list prices.",
       "load_failed": "Could not load Savings",
       "period_label": "Period",
       "period": {
@@ -298,22 +298,22 @@
         "range_one": "{{day}}",
         "zone": "days of the server's zone, {{zone}}",
         "since": "recording since {{day}}",
-        "prices_openrouter": "Prices: OpenRouter's public list of {{date}}",
+        "prices_openrouter": "Prices: OpenRouter's public list of {{date}}, at base rates (long-context tiers not applied)",
         "prices_none": "Prices: no list yet",
         "prices_table": "and Provimux's own table of {{date}}",
         "label": "What these numbers cover"
       },
       "headline": {
         "title": "Worth of prompt caching",
-        "text": "Valued at API list prices, net of what writing the cache cost: every input token at the input price, minus what the cached mix cost. Only the part on API keys is money saved.",
+        "text": "Valued at base API list prices, net of what writing the cache cost: every input token at the input price, minus what the cached mix cost. Only the part on API keys is money saved.",
         "apikey": "on API keys",
         "apikey_text": "money that would have been paid",
         "oauth": "on subscriptions",
         "oauth_text": "saves quota, not dollars; value at list price",
         "other": "on other requests",
-        "lower_bound": "At least this: requests of models without a price are not in it.",
         "negative": "Caching cost more than it was worth in this period: the cache was written and not read enough to pay for the writes.",
-        "unvalued": "No amount: nothing in this period has a price, so nothing can be valued."
+        "unvalued": "No amount: nothing in this period has a price, so nothing can be valued.",
+        "partial": "Only the {{priced}} of {{requests}} requests with a price are in this amount. It is not a lower bound: a request without a price can be worth less than nothing, because writing the cache costs more than plain input."
       },
       "unpriced": {
         "title": "Not in the amounts",
@@ -328,7 +328,7 @@
         "copied": "Line copied",
         "failed": "Copy failed",
         "preview_label": "The line to copy",
-        "line": "Prompt caching through Provimux was worth {{amount}} {{period}} at API list prices.",
+        "line": "Prompt caching through Provimux was worth {{amount}} {{period}} at base API list prices.",
         "period": {
           "today": "today",
           "yesterday": "yesterday",
@@ -343,7 +343,8 @@
           "nothing_priced": "Nothing in this period has a price, so there is no amount to copy.",
           "negative": "Prompt caching was worth nothing in this period, so there is no line to copy.",
           "under_cent": "Its worth is under $0.01, so there is no line to copy."
-        }
+        },
+        "line_partial": "Prompt caching through Provimux was worth {{amount}} {{period}} at base API list prices, for the {{priced}} of {{requests}} requests with a price."
       },
       "access": {
         "title": "Subscription and API key",
@@ -357,7 +358,8 @@
       "subscription": {
         "title": "Subscription requests at API prices",
         "text": "What the subscription requests would have cost on an API key, at list prices. Not what the subscription saved: Provimux does not know what the subscription costs.",
-        "none": "No subscription requests in this period."
+        "none": "No subscription requests in this period.",
+        "partial": "For the {{priced}} of {{requests}} subscription requests with a price."
       },
       "apikeys": {
         "title": "What the API keys cost",
@@ -365,7 +367,9 @@
         "reported_none": "No provider reported a cost for the {{requests}} API-key requests.",
         "estimate": "Estimate for all API-key requests",
         "unreported": "Estimate for the {{count}} requests on hosts that reported no cost",
-        "none": "No API-key requests in this period."
+        "none": "No API-key requests in this period.",
+        "estimate_partial": "Estimate for the {{priced}} of {{requests}} API-key requests with a price",
+        "unreported_partial": "Estimate for the {{priced}} of {{count}} requests with a price, on hosts that reported no cost"
       },
       "hit_rate": {
         "title": "Cache hit rate",
@@ -430,7 +434,9 @@
         "col_saved": "Worth of caching (estimate)",
         "col_requests": "Requests",
         "chart_label": "Worth of caching per day, {{from}} to {{to}}",
-        "missing": "The answer has no per-day breakdown."
+        "missing": "The answer has no per-day breakdown.",
+        "partial": "{{priced}} of {{requests}} priced",
+        "partial_title": "Only the requests with a price are in this amount"
       },
       "hosts": {
         "title": "Per provider and host",
@@ -472,7 +478,7 @@
         "folded_days_other": "On {{count}} days the row limit was reached: some models and keys of those days are summed under \"other\"."
       },
       "attempts": "A request is one attempt at one upstream: a request retried on another account counts twice.",
-      "note": "Estimates are at list prices of the day each request was recorded: OpenRouter's public list, and Provimux's own table for models it lacks. A reported cost is what the provider said it charged. Days are the server's.",
+      "note": "Estimates are at base list prices of the day each request was recorded (long-context tiers not applied): OpenRouter's public list, and Provimux's own table for models it lacks. A reported cost is what the provider said it charged. Days are the server's.",
       "not_valued": "not valued"
     }
   },
