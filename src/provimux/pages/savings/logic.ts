@@ -260,10 +260,6 @@ export function unpricedModels(data: ProvimuxSavingsResponse): ProvimuxSavingsMo
     .sort((a, b) => b.tokens - a.tokens);
 }
 
-/** Every priced model of the range is valued at OpenRouter's list (so the line may say "OpenRouter list prices"). */
-export const allOpenRouter = (data: ProvimuxSavingsResponse): boolean =>
-  data.models.every((model) => model.price === null || model.price.source === 'openrouter');
-
 /** A model of the range is valued from Provimux's own table. */
 export const usesProvimuxTable = (data: ProvimuxSavingsResponse): boolean =>
   data.models.some((model) => model.price?.source === 'provimux');
@@ -330,7 +326,8 @@ export const periodWordKey = (period: string | null): string =>
 
 /**
  * The line, in English (`t` is the English translator), or null with the reason. It names no key, host, model or
- * account: only the amount, the period and the price list.
+ * account: only the amount and the period. The amount includes subscription requests valued at list price, so the
+ * line says what caching was worth, never what it saved (owner, 2026-11-20).
  */
 export function copyLine(
   data: ProvimuxSavingsResponse,
@@ -342,11 +339,6 @@ export function copyLine(
     line: t('provimux.savings.copy.line', {
       amount: copyAmount(data.totals.estimate.saved_by_caching_usd),
       period: t(periodWordKey(data.range.period)),
-      prices: t(
-        allOpenRouter(data)
-          ? 'provimux.savings.copy.prices_openrouter'
-          : 'provimux.savings.copy.prices_list'
-      ),
       interpolation: { escapeValue: false },
     }),
     block: null,

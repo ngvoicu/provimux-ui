@@ -76,7 +76,7 @@ describe('Savings strings', () => {
     for (const language of languages) {
       await i18n.changeLanguage(language);
       expect(i18n.t('provimux.nav.savings')).toBe('Savings');
-      expect(i18n.t('provimux.savings.headline.title')).toBe('Saved by caching');
+      expect(i18n.t('provimux.savings.headline.title')).toBe('Worth of prompt caching');
     }
   });
 });
