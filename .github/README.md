@@ -11,10 +11,16 @@
   <a href="https://github.com/router-for-me/Cli-Proxy-API-Management-Center"><img alt="Built on the CLI Proxy API Management Center" src="https://img.shields.io/badge/built%20on-CLI%20Proxy%20API%20Management%20Center-4338ca"></a>
 </p>
 
+**One key for every AI account.**
+
+The web console for Provimux and CLIProxyAPI. With Provimux, it shows which account serves each model, why a route is
+paused, and each login's own model list.
+
 **provimux-ui**, by [providers.dev](https://providers.dev), is the web console of
-[Provimux](https://github.com/ngvoicu/provimux): one page in your browser to sign in to your subscriptions
-(subscription login, `oauth`), manage API keys (API key, `apikey`) and auth files, see which login or key serves each
-model, watch quotas and logs, and edit the config. It is built on the
+[Provimux](https://github.com/ngvoicu/provimux), the self-hosted AI gateway that keeps your prompt cache in use and
+shows which account answered each request. One page in your browser to manage your API keys (API key, `apikey`) and
+accounts, see on **Model routes** which accounts serve each model, by priority, with the cooldown recorded and its
+reason, check each login's **Live model list**, watch quotas and logs, and edit the config. It is built on the
 [CLI Proxy API Management Center](https://github.com/router-for-me/Cli-Proxy-API-Management-Center) by router-for-me:
 every page of the original, in the providers.dev look, plus Provimux's own pages. Provimux downloads it by itself.
 
@@ -28,16 +34,16 @@ repository) &nbsp;·&nbsp; **[providers.dev](https://providers.dev)**
 
 ## What provimux-ui adds
 
-- **[Provimux's own pages](#provimuxs-own-pages)**: **Model routes**, which subscription logins and API keys serve
-  each model, by priority, with the cooldowns Provimux recorded; and **Live model lists**, each login's own model list,
-  with a refresh.
+- **[Provimux's own pages](#provimuxs-own-pages)**: **Model routes**, which API keys and logins serve each model, by
+  priority, with the cooldowns Provimux recorded and their reasons, and which OpenRouter entries get Provimux's cache
+  markers; and **Live model lists**, each login's own model list, with a refresh.
 - **[The providers.dev look](#the-providersdev-look)**: "Provimux by providers.dev" throughout, in three themes.
 - **[The Provimux version](#the-provimux-version-and-the-console-on-the-system-page)** and the console's update source
   on the System page.
 - **[No sponsors or affiliate links](#no-sponsors-or-affiliate-links).**
 
 Then: [Use it](#use-it) · [Versions and releases](#versions-and-releases) · [Build it](#build-it) ·
-[Built on](#built-on-the-cli-proxy-api-management-center) · [License](#license)
+[Support](#support) · [Built on](#built-on-the-cli-proxy-api-management-center) · [License](#license)
 
 ### Provimux's own pages
 
@@ -151,6 +157,15 @@ of a [release](https://github.com/ngvoicu/provimux-ui/releases) of this reposito
 
 4. Open `http://127.0.0.1:8317/management.html` and sign in with your management key (`management.secret-key`).
 
+**Accounts.** Add API keys on the AI Providers page. For a company, use API keys and cloud accounts (for example
+Vertex), billed to the company under its own agreement with the provider.
+
+The OAuth Login page adds subscription logins (`oauth`). Provimux also accepts subscription logins for your own
+account, for your own use. Whether a provider allows a third-party tool to use its subscription login is that
+provider's decision: Anthropic's terms do not allow it, and OpenAI has not authorized it. Read your provider's terms
+before you add a login; the account is yours and so is the risk. Provimux is not affiliated with or endorsed by
+Anthropic or OpenAI.
+
 Without `MANAGEMENT_STATIC_PATH`, the console lives in a `static` folder next to your config file (or under
 `WRITABLE_PATH` when that is set): replacing `static/management.html` there, with automatic updates off, works too.
 The console is served only when `management.disable-control-panel` is `false`, the default.
@@ -181,6 +196,15 @@ The build is a single file, `dist/index.html`, with its scripts, styles and font
 `management.html` to serve it as above. `bun run dev` starts a local server for working on it, and `bun run verify`
 runs the tests, the linter and the build.
 
+## Support
+
+Provimux is free and stays open source (MIT). For companies that run it, providers.dev offers support plans:
+**Community** (free: GitHub issues and discussions, best effort) and **Team**, **Business** and **Priority** (paid),
+listed with prices and terms at [providers.dev/support](https://providers.dev/support/). A paid plan buys a private
+channel and a first reply within a stated number of business days: a reply, not a promised fix. Provimux has one
+maintainer, and we say so: announced holidays pause the clock, there is no 24/7 and no uptime promise for a service
+you host yourself, and the code stays MIT, so you can always fork it.
+
 ## Built on the CLI Proxy API Management Center
 
 provimux-ui is the [CLI Proxy API Management Center](https://github.com/router-for-me/Cli-Proxy-API-Management-Center)
@@ -200,6 +224,8 @@ Provimux layer on top:
   request, `provimux-ui-guard`, fails when a Provimux commit touches them.
 
 The original's README, in [English](../README.md) and [Chinese](../README_CN.md), describes the console's features.
+
+A GitHub **Sponsor** button for providers.dev's own GitHub Sponsors will come later.
 
 ## License
 
