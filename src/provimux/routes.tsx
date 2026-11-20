@@ -1,6 +1,7 @@
 import { ProvimuxPageGate } from './components/ProvimuxPageGate';
 import { LiveListsPage } from './pages/liveLists/LiveListsPage';
 import { ModelRoutesPage } from './pages/modelRoutes/ModelRoutesPage';
+import { SavingsPage } from './pages/savings/SavingsPage';
 
 /** Spread into upstream's route table (src/router/MainRoutes.tsx). */
 export const PROVIMUX_ROUTES = [
@@ -17,6 +18,14 @@ export const PROVIMUX_ROUTES = [
     element: (
       <ProvimuxPageGate endpoint="liveLists">
         <LiveListsPage />
+      </ProvimuxPageGate>
+    ),
+  },
+  {
+    path: '/provimux/savings',
+    element: (
+      <ProvimuxPageGate endpoint="savings">
+        <SavingsPage />
       </ProvimuxPageGate>
     ),
   },
