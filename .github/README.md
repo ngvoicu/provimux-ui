@@ -223,7 +223,8 @@ Provimux layer on top:
   the AI Providers page's connection test and key usage check) are never changed: a check on every push and pull
   request, `provimux-ui-guard`, fails when a Provimux commit touches them.
 
-The original's README, in [English](../README.md) and [Chinese](../README_CN.md), describes the console's features.
+The original's README, in [English](https://github.com/router-for-me/Cli-Proxy-API-Management-Center/blob/main/README.md) and [Chinese](https://github.com/router-for-me/Cli-Proxy-API-Management-Center/blob/main/README_CN.md), describes the
+console's features.
 
 A GitHub **Sponsor** button for providers.dev's own GitHub Sponsors will come later.
 
