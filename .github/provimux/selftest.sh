@@ -1391,6 +1391,10 @@ done
 echo "# root README commit: structure"
 expect "git range-diff runs in common.sh only (not in check.sh or publish.sh)" "" \
   "$(grep -nE 'range-diff --' "$here/check.sh" "$here/publish.sh" | grep -vE ':[0-9]+: *#' || true)"
+expect "guard.sh ships require_readme=1 (the README commit is required)" "require_readme=1" "$(grep '^require_readme=' "$here/guard.sh")"
+expect "  ... the shipped guard fails the stack without a README commit" fail "$(rguard plain "$here/guard.sh")"
+contains "  ... saying the README commit is missing" "$tmp/rguard.out" "the README commit, which replaces the root READMEs, is missing"
+expect "  ... and passes the stack with it" pass "$(rguard L3 "$here/guard.sh")"
 expect "the set in guard.sh equals PMX_README_PATHS" "$(sed -n 's/^PMX_README_PATHS=(\(.*\))$/\1/p' "$here/common.sh")" \
   "$(sed -n 's/^readme_paths=(\(.*\))$/\1/p' "$here/guard.sh")"
 

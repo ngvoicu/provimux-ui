@@ -23,12 +23,13 @@
 #      protected paths reach main only from upstream, by a rebase onto a new upstream
 #      release pushed by the owner, never through a PR;
 #   5. the root README commit (design/root-readme.md; SYNC.md, "The root README commit"):
-#      at most one commit of base..HEAD has the trailer "Provimux-Readme: root" (none
-#      fails once require_readme=1); it carries "Provimux-Layer: branding", has one
+#      exactly one commit of base..HEAD has the trailer "Provimux-Readme: root" (none
+#      fails: require_readme=1, since the README commit is on main); it carries "Provimux-Layer: branding", has one
 #      parent, changes only the paths of readme_paths, and leaves README.md a regular
 #      file (100644) and the other paths absent; and then at HEAD the root entries whose
 #      name begins with "readme" (ASCII, any case) are exactly the 100644 blob README.md.
-#      With no README commit (and require_readme=0) this rule checks nothing.
+#      (require_readme=0 would make a stack without a README commit pass; the selftest
+#      runs both values.)
 #
 # Env: PMX_TARGET (optional, pull requests), PMX_UPSTREAM (default: the upstream
 # console), PMX_EXPECT_BASE / PMX_EXPECT_BASE_COMMIT (optional: the sync check and
@@ -58,7 +59,7 @@ protected=(
 # The root READMEs the README commit replaces (rule 5): the same set as PMX_README_PATHS in
 # common.sh (the selftest checks it). The README commit leaves README.md, the pointer.
 readme_paths=(README.md README_CN.md)
-require_readme=0
+require_readme=1
 pathspec=()
 for p in "${protected[@]}"; do pathspec+=(":(top,literal)$p"); done
 protected_list="${protected[*]}"
