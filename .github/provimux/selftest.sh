@@ -963,6 +963,28 @@ rr >/dev/null
 contains "an open issue for the base: retitled and updated" "$stub/issue.log" "issue edit 12 -R test/provimux-ui --title sync: v1.2.0 — release incomplete"
 contains "  ... with a comment" "$stub/issue.log" "issue comment 12"
 echo '[]' >"$stub/api/repos_test_provimux-ui_issues_state_open_per_page_100.json"
+# The promote job edited the release, then could not read it back: the issue says "state
+# unknown", as the run's annotation does, never "not the latest".
+echo '{"jobs": [{"id": 71, "name": "build", "conclusion": "success"}, {"id": 72, "name": "smoke", "conclusion": "success"},
+  {"id": 73, "name": "promote", "conclusion": "failure"}]}' >"$stub/api/repos_test_provimux-ui_actions_runs_77_jobs_per_page_100.json"
+echo '[{"annotation_level": "failure", "message": "edited, but v1.2.0-pmx.1 cannot be read back: its state is unknown, check it by hand"}]' \
+  >"$stub/api/repos_test_provimux-ui_check-runs_73_annotations_per_page_50.json"
+expect "promotion edited, readback failed: sync: v1.2.0 — release incomplete" "sync: v1.2.0 — release incomplete" "$(rr PMX_REPORT_DRY_RUN=1)"
+contains "  ... says the state is unknown" "$tmp/rr.out" "so the release's state is unknown (it may or may not be the latest)"
+lacks "  ... never that it is not the latest" "$tmp/rr.out" "the release is not (or not yet) the latest"
+contains "  ... quotes the annotation" "$tmp/rr.out" "promote: edited, but v1.2.0-pmx.1 cannot be read back: its state is unknown"
+echo '[{"annotation_level": "failure", "message": "edited, but the latest release cannot be read back: the state is unknown, check it by hand"}]' \
+  >"$stub/api/repos_test_provimux-ui_check-runs_73_annotations_per_page_50.json"
+rr PMX_REPORT_DRY_RUN=1 >/dev/null
+contains "latest unreadable after the edit: state unknown too" "$tmp/rr.out" "so the release's state is unknown"
+echo '[{"number": 12, "title": "sync: v1.2.0 — release incomplete"}]' >"$stub/api/repos_test_provimux-ui_issues_state_open_per_page_100.json"; : >"$stub/issue.log"
+rr >/dev/null
+contains "  ... and the comment on the open issue says so" "$stub/issue.log" "release incomplete, state unknown"
+echo '[{"annotation_level": "failure", "message": "edited, but it reads back as prerelease true, latest '"'v1.1.0-pmx.1'"', digest sha256:x: check it by hand"}]' \
+  >"$stub/api/repos_test_provimux-ui_check-runs_73_annotations_per_page_50.json"
+rr PMX_REPORT_DRY_RUN=1 >/dev/null
+contains "edited, read back as not the latest: not the latest" "$tmp/rr.out" "the release is not (or not yet) the latest"
+echo '[]' >"$stub/api/repos_test_provimux-ui_issues_state_open_per_page_100.json"
 
 echo
 echo "$pass passed, $failed failed"
