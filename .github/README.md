@@ -5,25 +5,81 @@
   </picture></a>
 </h1>
 
-provimux-ui, by [providers.dev](https://providers.dev), is the web console of
-[Provimux](https://github.com/ngvoicu/provimux): one page in your browser to sign in to your AI subscriptions, manage
-API keys and auth files, watch quotas and logs, and edit the config of your local Provimux. It is the
-[CLI Proxy API Management Center](https://github.com/router-for-me/Cli-Proxy-API-Management-Center) with the look of
-providers.dev, so it also works with CLIProxyAPI itself.
+<p>
+  <a href="https://github.com/ngvoicu/provimux-ui/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/ngvoicu/provimux-ui?label=release&amp;color=4338ca"></a>
+  <a href="../LICENSE"><img alt="License: MIT" src="https://img.shields.io/github/license/ngvoicu/provimux-ui?color=4338ca"></a>
+  <a href="https://github.com/router-for-me/Cli-Proxy-API-Management-Center"><img alt="Built on the CLI Proxy API Management Center" src="https://img.shields.io/badge/built%20on-CLI%20Proxy%20API%20Management%20Center-4338ca"></a>
+</p>
+
+**provimux-ui**, by [providers.dev](https://providers.dev), is the web console of
+[Provimux](https://github.com/ngvoicu/provimux): one page in your browser to sign in to your subscriptions
+(subscription login, `oauth`), manage API keys (API key, `apikey`) and auth files, see which login or key serves each
+model, watch quotas and logs, and edit the config. It is built on the
+[CLI Proxy API Management Center](https://github.com/router-for-me/Cli-Proxy-API-Management-Center) by router-for-me:
+every page of the original, in the providers.dev look, plus Provimux's own pages. Provimux downloads it by itself.
+
+**[Provimux](https://github.com/ngvoicu/provimux)** · the endpoint &nbsp;·&nbsp; **provimux-ui** · its web console (this
+repository) &nbsp;·&nbsp; **[providers.dev](https://providers.dev)**
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/dashboard-desktop-dark.png">
-  <img alt="The console's dashboard. The sidebar reads Provimux by providers.dev and lists Dashboard, AI Providers, Auth Files (3), OAuth Login, Routing, Quota Management, Logs Viewer, Config Panel and Management Center Info. The page headline reads Quiet for now, with v8.0.78-pmx.1 · Connected below it, a Manage providers button and an Inspect logs link; a card on the right shows 0 requests handled. Below: success rate –, credentials 3, provider keys 0, models 5, and an empty live-traffic chart." src="assets/dashboard-desktop-light.png">
+  <img alt="The console's dashboard. The sidebar reads Provimux by providers.dev and lists Dashboard, AI Providers, Auth Files (3), OAuth Login, Routing, Quota Management, Logs Viewer, Config Panel and Management Center Info. The page headline reads Quiet for now, with the server version and Connected below it, a Manage providers button and an Inspect logs link; a card on the right shows 0 requests handled. Below: success rate –, credentials 3, provider keys 0, models 5, and an empty live-traffic chart." src="assets/dashboard-desktop-light.png">
 </picture>
 
-Then: [What differs from the original console](#what-differs-from-the-original-console) · [Use it](#use-it) ·
-[Build it](#build-it) · [Built on](#built-on) · [License](#license)
+## What provimux-ui adds
 
-## What differs from the original console
+- **[Provimux's own pages](#provimuxs-own-pages)**: **Model routes**, which subscription logins and API keys serve
+  each model, by priority, with the cooldowns Provimux recorded; and **Live model lists**, each login's own model list,
+  with a refresh.
+- **[The providers.dev look](#the-providersdev-look)**: "Provimux by providers.dev" throughout, in three themes.
+- **[The Provimux version](#the-provimux-version-and-the-console-on-the-system-page)** and the console's update source
+  on the System page.
+- **[No sponsors or affiliate links](#no-sponsors-or-affiliate-links).**
 
-**The providers.dev look.** The console reads "Provimux by providers.dev" in the tab title, favicon, sidebar, login
-page and footer, with providers.dev's colours and type (Geist and Geist Mono), in three themes: white, soft grey and
-dark. The original's pages, settings and requests are unchanged; Provimux's own pages come on top of them (below).
+Then: [Use it](#use-it) · [Versions and releases](#versions-and-releases) · [Build it](#build-it) ·
+[Built on](#built-on-the-cli-proxy-api-management-center) · [License](#license)
+
+### Provimux's own pages
+
+From v1.28.3-pmx.2, in the sidebar under Gateway:
+
+<table>
+  <tr>
+    <td width="50%"><picture>
+      <source media="(prefers-color-scheme: dark)" srcset="assets/model-routes-desktop-dark.png">
+      <img alt="The Model routes page. Chips read 9 models, 5 subscriptions, 3 API keys, 4 cooldowns recorded. Two cards: Devin: quota pause per model, switched on, with devin-opus-5-5 paused for this model, 55 min left; and OpenRouter, built in, with the entry openrouter (2 models, 1 key). Below a search field, a provider filter and the views All, Cooldown recorded and Several routes, one card per model: anthropic/claude-opus-5.5 on an API key at openrouter.ai, 1M context, 128K output, levels low, medium, high; claude-haiku-5-5 with two Claude subscriptions at priority 10 and a Claude API key at api.anthropic.com at priority 0, joined by a rail." src="assets/model-routes-desktop-light.png">
+    </picture></td>
+    <td width="50%"><picture>
+      <source media="(prefers-color-scheme: dark)" srcset="assets/live-lists-desktop-dark.png">
+      <img alt="The Live model lists page. The Live lists switch is on, with Refresh lists now. Chips read 2 live, 3 catalog, 2 failing, 1 fetching. A table lists five logins: Claude ada@example.com, live list, fetched 2 hours ago, 9 served, 11 listed; Claude grace@example.com, live list kept after HTTP 529 a few minutes ago; Codex ada@example.com, catalog after HTTP 401, with the hint to sign it in again; a disabled Codex login; a Meta login whose fetch is running." src="assets/live-lists-desktop-light.png">
+    </picture></td>
+  </tr>
+</table>
+
+**Model routes.** For each model, every subscription login and API key that serves it, by priority (a higher priority
+is tried first; routes that share one are chosen between by the routing strategy): subscription in green, API key in
+amber, the provider, the login as Auth Files names it or the key's host, its context and output limits, its reasoning
+levels, and the cooldown Provimux recorded on it, counting down. A recorded cooldown is a record, not a verdict on
+availability. On the same page: **Devin's quota pause per model** (`oauth.providers.devin.model-level-cooling`), with
+the Devin cooldowns it is causing now, and **OpenRouter**: the OpenAI-compatible entries on openrouter.ai that Provimux
+gives cache markers, a session header and OpenRouter's own limits, with a link to edit them on AI Providers, where
+such an entry carries an "OpenRouter · Provimux" tag.
+
+**Live model lists.** The `models.live-lists` switch, a refresh request (the page says what the server answered; the
+rows then show each login's state as of the latest status read), and for each Claude, Codex and Meta login: its own
+live list or the catalog, whether a fetch is running, when it was fetched, how many models the provider listed and how
+many the login serves, and the last failed fetch (when, its category and HTTP status).
+
+These pages use endpoints only Provimux has (`/v8/management/provimux/…`, described in
+[Provimux's README](https://github.com/ngvoicu/provimux/blob/main/.github/README.md#model-routes-and-live-list-status-for-the-console)).
+Connected to CLIProxyAPI, which answers 404 there, they are not in the sidebar and their addresses open the dashboard;
+any other error shows on the page, with a retry.
+
+### The providers.dev look
+
+The console reads "Provimux by providers.dev" in the tab title, favicon, sidebar, login page and footer, with
+providers.dev's colours and type (Geist and Geist Mono), in three themes: white, soft grey and dark. The original's
+pages, settings and requests are unchanged; Provimux's own pages come on top of them.
 
 <table>
   <tr>
@@ -33,61 +89,36 @@ dark. The original's pages, settings and requests are unchanged; Provimux's own 
     </picture></td>
     <td width="50%"><picture>
       <source media="(prefers-color-scheme: dark)" srcset="assets/system-desktop-dark.png">
-      <img alt="The Management Center Info page. The Provimux tile, Provimux by providers.dev, the line Provimux version 8.0.78-pmx.1 (based on CLIProxyAPI 8.0.78), and Built on CLIProxyAPI and the CLI Proxy API Management Center by router-for-me, MIT licensed. Cards show the management UI version, server version 8.0.78-pmx.1, build time and connection status. Quick links: Provimux on GitHub, providers.dev, Built on CLIProxyAPI, Built on CLI Proxy API Management Center, CLIProxyAPI documentation. Below, the available models by provider." src="assets/system-desktop-light.png">
+      <img alt="The Management Center Info page. The Provimux tile, Provimux by providers.dev, the line with the Provimux version and the CLIProxyAPI release it is based on, and Built on CLIProxyAPI and the CLI Proxy API Management Center by router-for-me, MIT licensed. Cards show the management UI version, the server version, build time and connection status. Quick links: Provimux on GitHub, providers.dev, Built on CLIProxyAPI, Built on CLI Proxy API Management Center, CLIProxyAPI documentation. Below, the available models by provider." src="assets/system-desktop-light.png">
     </picture></td>
   </tr>
 </table>
 
-**The Provimux version on the System page.** Connected to Provimux, the Management Center Info page shows its
-version and the CLIProxyAPI release it is based on ("Provimux version 8.0.78-pmx.1 (based on CLIProxyAPI 8.0.78)").
-Connected to CLIProxyAPI, it shows CLIProxyAPI's version, as the original does. The quick links point to Provimux,
-providers.dev, CLIProxyAPI and the original console.
+### The Provimux version and the console on the System page
 
-**No sponsors or affiliate links.** The original's sponsor page ("Quick Start"), the sponsor row under the proxy
-URL setting and the affiliate sign-up links on provider presets are hidden. A test fails when a new upstream release
-adds an affiliate link that is not hidden.
+Connected to Provimux, the Management Center Info page shows its version and the CLIProxyAPI release it is based on
+("Provimux version 8.0.79-pmx.1 (based on CLIProxyAPI 8.0.79)"). Connected to CLIProxyAPI, it shows CLIProxyAPI's
+version, as the original does. The quick links point to Provimux, providers.dev, CLIProxyAPI and the original console.
+From v1.28.3-pmx.2 it also shows which console release is installed, and its update source: where the server's updater
+fetches new releases (`management.panel-github-repository`, resolved with the updater's own rules, so a value the
+updater cannot use shows the default it falls back to) and whether it updates itself.
 
-## Provimux's own pages
+### No sponsors or affiliate links
 
-<table>
-  <tr>
-    <td width="50%">
-      <img alt="The Model routes page. Chips read 9 models, 5 subscriptions, 3 API keys, 4 cooldowns recorded. Two cards: Devin: quota pause per model, switched on, with devin-opus-5-5 paused for this model, 55 min left; and OpenRouter, built in, with the entry openrouter (2 models, 1 key). Below a search field, a provider filter and the views All, Cooldown recorded and Several routes, one card per model: anthropic/claude-opus-5.5 on an API key at openrouter.ai, 1M context, 128K output, levels low, medium, high; claude-haiku-5-5 with two Claude subscriptions at priority 10 and a Claude API key at api.anthropic.com at priority 0, joined by a rail." src="assets/model-routes-desktop-light.png">
-    </td>
-    <td width="50%">
-      <img alt="The Live model lists page. The Live lists switch is on, with Refresh lists now. Chips read 2 live, 3 catalog, 2 failing, 1 fetching. A table lists five logins: Claude ada@example.com, live list, fetched 2 hours ago, 9 served, 11 listed; Claude grace@example.com, live list kept after HTTP 529 4 minutes ago; Codex ada@example.com, catalog after HTTP 401, with the hint to sign it in again; a disabled Codex login; a Meta login whose fetch is running." src="assets/live-lists-desktop-light.png">
-    </td>
-  </tr>
-</table>
-
-**Model routes** (Gateway). For each model, every subscription login and API key that serves it, by priority (a
-higher priority is tried first; routes that share one are chosen between by the routing strategy): subscription in
-green, API key in amber, the provider, the login as Auth Files names it or the key's host, its context and output
-limits, its reasoning levels, and the cooldown Provimux recorded on it, counting down. A recorded cooldown is a
-record, not a verdict on availability. On the same page: **Devin's quota pause per model**
-(`oauth.providers.devin.model-level-cooling`), with the Devin cooldowns it is causing now, and **OpenRouter**:
-the OpenAI-compatible entries on openrouter.ai that Provimux gives cache markers, a session header and OpenRouter's
-own limits, with a link to edit them on AI Providers, where such an entry carries an "OpenRouter · Provimux" tag.
-
-**Live model lists** (Gateway). The `models.live-lists` switch, a refresh request (the page says what the server
-answered; the rows then show each login's state as of the latest status read), and for each Claude, Codex and Meta
-login: its own live list or the catalog, whether a fetch is running, when it was fetched, how many models the provider
-listed and how many the login serves, and the last failed fetch (when, its category and HTTP status).
-
-**The console on the System page.** Which console release is installed, and its update source: where the server's
-updater fetches new releases (`management.panel-github-repository`, resolved with the updater's own rules, so a value
-the updater cannot use shows the default it falls back to) and whether it updates itself.
-
-These pages use endpoints only Provimux has (`/v8/management/provimux/…`). Connected to CLIProxyAPI, which answers
-404 there, they are not in the sidebar and their addresses open the dashboard; any other error shows on the page,
-with a retry.
+The original's sponsor page ("Quick Start"), the sponsor row under the proxy URL setting and the affiliate sign-up
+links on provider presets are hidden. A test fails when a new upstream release adds an affiliate link that is not
+hidden.
 
 ## Use it
 
-Provimux will download the console by itself once it is wired to this repository; until then it serves the original
-console. To use provimux-ui now, give Provimux (or CLIProxyAPI) its `management.html`: the asset of the
-[latest release](https://github.com/ngvoicu/provimux-ui/releases/latest) of this repository, or
-[your own build](#build-it).
+**With Provimux, there is nothing to do.** Provimux downloads the latest provimux-ui release by itself, at startup and
+every 3 hours, and installs it only when it matches the release's `checksums.txt`; a config that still names the
+original console (`management.panel-github-repository`) gets provimux-ui too. Open
+`http://127.0.0.1:8317/management.html` and sign in with your management key (`management.secret-key`). To install
+Provimux, see [its README](https://github.com/ngvoicu/provimux/blob/main/.github/README.md#install).
+
+**A release of your choice, or with CLIProxyAPI.** Give the server provimux-ui's `management.html` yourself: the asset
+of a [release](https://github.com/ngvoicu/provimux-ui/releases) of this repository, or [your own build](#build-it).
 
 1. Download `management.html` and its checksum into a folder, for example `~/provimux-ui`, and check it:
 
@@ -98,10 +129,11 @@ console. To use provimux-ui now, give Provimux (or CLIProxyAPI) its `management.
    shasum -a 256 -c checksums.txt   # on Linux: sha256sum -c checksums.txt
    ```
 
-   It prints `management.html: OK`. The file carries the console's MIT license notice in a comment at its top.
+   It prints `management.html: OK`. For another release, replace `latest/download` with `download/<tag>`. The file
+   carries the console's MIT license notice in a comment at its top.
 
-2. In your config, stop the console's automatic updates. Otherwise Provimux replaces the file at startup and every
-   3 hours with the latest release of `panel-github-repository`, which is the original console:
+2. In your config, stop the console's automatic updates. Otherwise the server replaces the file at startup and every
+   3 hours with its own choice: Provimux with the latest provimux-ui, CLIProxyAPI with the original console:
 
    ```yaml
    management:
@@ -109,9 +141,9 @@ console. To use provimux-ui now, give Provimux (or CLIProxyAPI) its `management.
    ```
 
    Put it in your config's existing `management:` block if it has one. Configs from before CLIProxyAPI v8 call that
-   block `remote-management:`; Provimux reads it too, but when a config has both, set the key in `management:`.
+   block `remote-management:`; the server reads it too, but when a config has both, set the key in `management:`.
 
-3. Start Provimux with `MANAGEMENT_STATIC_PATH` set to that folder (or to the file itself):
+3. Start the server with `MANAGEMENT_STATIC_PATH` set to that folder (or to the file itself):
 
    ```bash
    MANAGEMENT_STATIC_PATH="$HOME/provimux-ui" provimux --config /path/to/your/config.yaml
@@ -122,6 +154,18 @@ console. To use provimux-ui now, give Provimux (or CLIProxyAPI) its `management.
 Without `MANAGEMENT_STATIC_PATH`, the console lives in a `static` folder next to your config file (or under
 `WRITABLE_PATH` when that is set): replacing `static/management.html` there, with automatic updates off, works too.
 The console is served only when `management.disable-control-panel` is `false`, the default.
+
+## Versions and releases
+
+A provimux-ui version names the console release it is built on: `v1.28.3-pmx.1` is the CLI Proxy API Management Center
+1.28.3 with Provimux build 1.
+
+Releases are automatic. When the original console publishes a release, a workflow moves provimux-ui onto it, runs the
+tests, the linter and the build, and when the check passes publishes `v<base>-pmx.1` on its own. Each release starts
+as a prerelease and becomes the latest release once the published `management.html` has passed its checks, including
+a headless browser run against a stub of the management API; Provimux then picks it up within 3 hours. A release that
+fails a check waits for the owner, and the reason is in an issue. See
+[.github/provimux/releases.md](provimux/releases.md) and [.github/provimux/SYNC.md](provimux/SYNC.md).
 
 ## Build it
 
@@ -137,13 +181,7 @@ The build is a single file, `dist/index.html`, with its scripts, styles and font
 `management.html` to serve it as above. `bun run dev` starts a local server for working on it, and `bun run verify`
 runs the tests, the linter and the build.
 
-Releases are built and published by a GitHub workflow from a `v<base>-pmx.<n>` tag; each starts as a prerelease
-and becomes the latest release once the published file has passed its checks, including a headless browser run
-against a stub of the management API. Each new release of the original console is rebased onto, checked and
-released automatically. See [.github/provimux/releases.md](provimux/releases.md) and
-[.github/provimux/SYNC.md](provimux/SYNC.md).
-
-## Built on
+## Built on the CLI Proxy API Management Center
 
 provimux-ui is the [CLI Proxy API Management Center](https://github.com/router-for-me/Cli-Proxy-API-Management-Center)
 by [Router-For.ME](https://github.com/router-for-me) and
