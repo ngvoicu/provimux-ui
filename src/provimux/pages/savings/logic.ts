@@ -299,6 +299,17 @@ export const coverageOf = (metrics: ProvimuxSavingsMetrics): Coverage => ({
   partial: metrics.estimate.priced_requests > 0 && metrics.estimate.unpriced_requests > 0,
 });
 
+/**
+ * The estimates are at base rates (long-context tiers not applied), as the answer says in `prices.rates`. Only
+ * `base` is known; an absent or unknown value says nothing about tiers.
+ */
+export const isBaseRates = (data: Pick<ProvimuxSavingsResponse, 'prices'>): boolean =>
+  data.prices.rates === 'base';
+
+/** A string key with `_base` when the answer says the rates are base. */
+export const ratesKey = (key: string, data: Pick<ProvimuxSavingsResponse, 'prices'>): string =>
+  isBaseRates(data) ? `${key}_base` : key;
+
 /* ---------- the copy line (04-console-page.md section 5) ---------- */
 
 /** Rounded down: whole dollars from $100, cents below. Never more than the page says. */
@@ -361,7 +372,10 @@ export function copyLine(
   const english = (value: number) => new Intl.NumberFormat('en-US').format(value);
   return {
     line: t(
-      coverage.partial ? 'provimux.savings.copy.line_partial' : 'provimux.savings.copy.line',
+      ratesKey(
+        coverage.partial ? 'provimux.savings.copy.line_partial' : 'provimux.savings.copy.line',
+        data
+      ),
       {
         amount: copyAmount(data.totals.estimate.saved_by_caching_usd),
         period: t(periodWordKey(data.range.period)),

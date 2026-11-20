@@ -276,7 +276,7 @@
     },
     "savings": {
       "title": "Savings",
-      "lede": "What prompt caching was worth at base API list prices, how many requests subscriptions and API keys served, and what the API keys really cost. Every amount marked estimate is at list prices.",
+      "lede": "What prompt caching was worth at API list prices, how many requests subscriptions and API keys served, and what the API keys really cost. Every amount marked estimate is at list prices.",
       "load_failed": "Could not load Savings",
       "period_label": "Period",
       "period": {
@@ -298,14 +298,15 @@
         "range_one": "{{day}}",
         "zone": "days of the server's zone, {{zone}}",
         "since": "recording since {{day}}",
-        "prices_openrouter": "Prices: OpenRouter's public list of {{date}}, at base rates (long-context tiers not applied)",
+        "prices_openrouter": "Prices: OpenRouter's public list of {{date}}",
         "prices_none": "Prices: no list yet",
         "prices_table": "and Provimux's own table of {{date}}",
-        "label": "What these numbers cover"
+        "label": "What these numbers cover",
+        "rates_base": "at base rates (long-context tiers not applied)"
       },
       "headline": {
         "title": "Worth of prompt caching",
-        "text": "Valued at base API list prices, net of what writing the cache cost: every input token at the input price, minus what the cached mix cost. Only the part on API keys is money saved.",
+        "text": "Valued at API list prices, net of what writing the cache cost: every input token at the input price, minus what the cached mix cost. Only the part on API keys is money saved.",
         "apikey": "on API keys",
         "apikey_text": "money that would have been paid",
         "oauth": "on subscriptions",
@@ -313,7 +314,8 @@
         "other": "on other requests",
         "negative": "Caching cost more than it was worth in this period: the cache was written and not read enough to pay for the writes.",
         "unvalued": "No amount: nothing in this period has a price, so nothing can be valued.",
-        "partial": "Only the {{priced}} of {{requests}} requests with a price are in this amount. It is not a lower bound: a request without a price can be worth less than nothing, because writing the cache costs more than plain input."
+        "partial": "Only the {{priced}} of {{requests}} requests with a price are in this amount. It is not a lower bound: a request without a price can be worth less than nothing, because writing the cache costs more than plain input.",
+        "text_base": "Valued at base API list prices, net of what writing the cache cost: every input token at the input price, minus what the cached mix cost. Only the part on API keys is money saved."
       },
       "unpriced": {
         "title": "Not in the amounts",
@@ -328,7 +330,7 @@
         "copied": "Line copied",
         "failed": "Copy failed",
         "preview_label": "The line to copy",
-        "line": "Prompt caching through Provimux was worth {{amount}} {{period}} at base API list prices.",
+        "line": "Prompt caching through Provimux was worth {{amount}} {{period}} at API list prices.",
         "period": {
           "today": "today",
           "yesterday": "yesterday",
@@ -344,7 +346,9 @@
           "negative": "Prompt caching was worth nothing in this period, so there is no line to copy.",
           "under_cent": "Its worth is under $0.01, so there is no line to copy."
         },
-        "line_partial": "Prompt caching through Provimux was worth {{amount}} {{period}} at base API list prices, for the {{priced}} of {{requests}} requests with a price."
+        "line_partial": "Prompt caching through Provimux was worth {{amount}} {{period}} at API list prices, for the {{priced}} of {{requests}} requests with a price.",
+        "line_base": "Prompt caching through Provimux was worth {{amount}} {{period}} at base API list prices.",
+        "line_partial_base": "Prompt caching through Provimux was worth {{amount}} {{period}} at base API list prices, for the {{priced}} of {{requests}} requests with a price."
       },
       "access": {
         "title": "Subscription and API key",
@@ -466,9 +470,9 @@
         "nothing_recorded_title": "Nothing recorded yet",
         "nothing_recorded": "Provimux records from the moment this version started. Totals appear with the first request; nothing from before can be shown.",
         "nothing_in_period": "No requests in this period. Data exists since {{day}}.",
-        "floating": "{{count}} requests were recorded without a price and are valued with today's list, so their amounts can still move.",
-        "floating_one": "{{count}} request was recorded without a price and is valued with today's list, so its amounts can still move.",
-        "floating_other": "{{count}} requests were recorded without a price and are valued with today's list, so their amounts can still move.",
+        "floating": "{{count}} requests are valued with today's list: their day has no recorded price yet (recorded without one, or not saved yet), so their amounts can still move.",
+        "floating_one": "{{count}} request is valued with today's list: its day has no recorded price yet (recorded without one, or not saved yet), so its amounts can still move.",
+        "floating_other": "{{count}} requests are valued with today's list: their day has no recorded price yet (recorded without one, or not saved yet), so their amounts can still move.",
         "no_price_list": "No price list yet, so nothing can be valued: Provimux downloads OpenRouter's public list when it records requests. Requests, tokens and the hit rate are shown as usual.",
         "no_price_list_local": "No price list: this Provimux runs with --local-model and does not download OpenRouter's list, so nothing can be valued. Requests, tokens and the hit rate are shown as usual.",
         "old_price_list": "The price list is from {{date}}.",
@@ -478,8 +482,9 @@
         "folded_days_other": "On {{count}} days the row limit was reached: some models and keys of those days are summed under \"other\"."
       },
       "attempts": "A request is one attempt at one upstream: a request retried on another account counts twice.",
-      "note": "Estimates are at base list prices of the day each request was recorded (long-context tiers not applied): OpenRouter's public list, and Provimux's own table for models it lacks. A reported cost is what the provider said it charged. Days are the server's.",
-      "not_valued": "not valued"
+      "note": "Estimates are at list prices of the day each request was recorded: OpenRouter's public list, and Provimux's own table for models it lacks. A reported cost is what the provider said it charged. Days are the server's.",
+      "not_valued": "not valued",
+      "note_base": "Estimates are at base list prices of the day each request was recorded (long-context tiers not applied): OpenRouter's public list, and Provimux's own table for models it lacks. A reported cost is what the provider said it charged. Days are the server's."
     }
   },
   "theme": {
