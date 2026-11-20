@@ -300,7 +300,7 @@ export function buildNativeConnectionMembers(
   return members;
 }
 
-const buildOpenAIConfig = (
+export const buildOpenAIConfig = (
   input: ProviderEntryFormInput,
   existing?: OpenAIProviderConfig | null
 ): OpenAIProviderConfig => {

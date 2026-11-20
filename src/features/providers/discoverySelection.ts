@@ -55,7 +55,11 @@ export function discoverySelectionDiff(
   return { added, removed };
 }
 
-/** Retain every alias and its metadata; discovery may remove only names in its catalog. */
+/**
+ * Retain every alias and its metadata; discovery may remove only names in its catalog.
+ * A fetched model is added by name only: an alias exists only because someone typed it,
+ * so an endpoint's own `alias` field or display name never becomes one.
+ */
 export function syncDiscoveredModels(
   current: ModelEntryInput[],
   picked: ModelInfo[],
@@ -80,9 +84,7 @@ export function syncDiscoveredModels(
       )
         next.splice(index, 1);
     }
-    next.push(
-      ...additions.map((model) => ({ name: model.name, alias: model.alias?.trim() ?? '' }))
-    );
+    next.push(...additions.map((model) => ({ name: model.name, alias: '' })));
   }
   return next.length ? next : [{ name: '', alias: '' }];
 }
