@@ -4,6 +4,14 @@ Design only. It says how provimux-ui replaces the upstream console's root `READM
 short pointer of its own, and how the sync (`SYNC.md`) still publishes every upstream release with no step by the
 owner.
 
+**Scope.** The goal is that no referral code reaches a user: not in the README GitHub shows, not in the root
+READMEs of the tree, not in a release, not in the console's pages. This design covers the root READMEs. The
+console's pages are already covered: the layer hides the sponsor page, the sponsor row and the affiliate sign-up
+links, and `tests/provimux/sponsors.test.ts` fails when an upstream release adds one that is not hidden. The
+upstream source files that hold those links (`src/features/providers/sponsor.ts`, `kimi.ts`, `fennoAI.ts`) stay
+untouched on purpose, so that syncs do not conflict on them. The release is one file, `management.html`, with
+`checksums.txt`; no README is in it.
+
 The rule is Provimux's, and its reasons are written there once:
 [`.github/provimux/design/root-readme.md` in ngvoicu/provimux](https://github.com/ngvoicu/provimux/blob/main/.github/provimux/design/root-readme.md)
 (the four ways to resolve the rebase compared, the full list of selftest cases, the reviewer's list). This file
@@ -28,9 +36,8 @@ Checked on 2026-11-20 (`main` = `49c94b56`, 33 layer commits on `v1.28.3`):
 - Nothing else reads them: not the build (`vite.config.ts`, `package.json`), not `release-check.sh`, not the
   release workflow.
 - The stack has no owner patches: the README commit is one of the layer's commits like any other.
-- Outside this rule, and left as they are: the referral links in upstream's source
-  (`src/features/providers/sponsor.ts`, `kimi.ts`, `fennoAI.ts`), which the layer hides in the page and does not
-  remove from the tree.
+- Both changes above are layer commits of their own and land **before** the README commit ("Order of the work").
+  The other order fails `bun run verify` on `main`, and with it the next sync's check and release build.
 
 ## The README commit
 
