@@ -12,6 +12,8 @@ import type { ProvimuxSavingsResponse, ProvimuxSavingsRow } from '../../src/prov
 import { ProvimuxPageGate } from '../../src/provimux/components/ProvimuxPageGate';
 import { useProvimuxPresence } from '../../src/provimux/presence';
 import { SavingsView } from '../../src/provimux/pages/savings/SavingsPage';
+import { trendGeometry } from '../../src/provimux/pages/savings/trend';
+import { Sparkline } from '../../src/features/dashboard/components/Sparkline';
 import {
   apiKeyCostOf,
   copyAmount,
@@ -21,6 +23,8 @@ import {
   floorAmount,
   isBaseRates,
   headlineOf,
+  partValue,
+  trendValues,
   hitRateOf,
   keyLabel,
   savingsStates,
@@ -152,9 +156,9 @@ describe('the headline', () => {
   test('the amount and its API-key and subscription parts, from the kind rows', () => {
     expect(headlineOf(month)).toEqual({
       total: 1429.74,
-      apikey: 40.545,
-      oauth: 1389.195,
-      other: 0,
+      apikey: { saved: 40.545, requests: 239, priced: 239 },
+      oauth: { saved: 1389.195, requests: 2006, priced: 1916 },
+      other: null,
     });
   });
 
@@ -164,7 +168,7 @@ describe('the headline', () => {
     const noKind = changed(month, (data) => {
       data.breakdowns = data.breakdowns.filter((b) => b.by.join() !== 'kind');
     });
-    expect(headlineOf(noKind)).toEqual({ total: 1429.74, apikey: null, oauth: null, other: 0 });
+    expect(headlineOf(noKind)).toEqual({ total: 1429.74, apikey: null, oauth: null, other: null });
     expect(textOf(render(noKind))).toContain('$1,429.74');
   });
 
@@ -173,8 +177,8 @@ describe('the headline', () => {
       const row = data.breakdowns[0].rows[1] as ProvimuxSavingsRow;
       data.breakdowns[0].rows.push({ ...structuredClone(row), kind: 'unknown' });
     });
-    expect(headlineOf(other).other).toBe(40.545);
-    expect(headlineOf(other).apikey).toBe(40.545);
+    expect(headlineOf(other).other?.saved).toBe(40.545);
+    expect(headlineOf(other).apikey?.saved).toBe(40.545);
   });
 
   test('what the API keys cost: reported beside the estimate, and who reported it', () => {
@@ -844,5 +848,116 @@ describe('T-116 answers', () => {
     expect(textOf(render(one))).toContain(
       "1 request is valued with today's list: its day has no recorded price yet"
     );
+  });
+});
+
+// Task T-123: review T-121, findings 3 and 4. The answers are the review's own (val/t121/wire-*.json).
+describe('review T-121', () => {
+  const split = readSavings(raw('savings-t121-split'));
+  const splitRepriced = readSavings(raw('savings-t121-split-repriced'));
+  const unpricedOnly = readSavings(raw('savings-t121-unpriced-only'));
+  /** The text of one headline part, by its data-access. */
+  const partText = (html: string, access: 'api' | 'sub' | 'other') => {
+    const start = html.indexOf(`data-access="${access}"`);
+    expect(start).toBeGreaterThan(-1);
+    const end = html.indexOf('</dd>', start);
+    return textOf(html.slice(start, end));
+  };
+
+  test('3. a part with no priced request is "not valued" with its count, never $0.00', () => {
+    expect(headlineOf(split)).toEqual({
+      total: 0.02,
+      apikey: { saved: 0, requests: 1, priced: 0 },
+      oauth: { saved: 0.02, requests: 1, priced: 1 },
+      other: null,
+    });
+    expect(partValue(headlineOf(split).apikey!)).toBe('none');
+    const html = render(split);
+    const api = partText(html, 'api');
+    expect(api).toContain('not valued');
+    expect(api).toContain('1 request, without a price');
+    expect(api).not.toContain('$0.00');
+    expect(api).not.toContain('estimate');
+    // The subscription part is fully priced: its amount, without a qualifier.
+    const sub = partText(html, 'sub');
+    expect(sub).toContain('$0.02');
+    expect(sub).not.toMatch(/with a price|not valued/);
+    // The same records once the missing price is applied: the API-key part was worth less than nothing.
+    expect(headlineOf(splitRepriced).apikey).toEqual({ saved: -0.2125, requests: 1, priced: 1 });
+    const repriced = partText(render(splitRepriced), 'api');
+    expect(repriced).toMatch(/[-−]\$0\.21/);
+    expect(repriced).not.toMatch(/not valued|with a price/);
+  });
+
+  test('3. a partly priced part says how many requests its amount covers', () => {
+    expect(headlineOf(unpricedOnly).apikey).toEqual({ saved: 0.228, requests: 5, priced: 2 });
+    const html = render(unpricedOnly);
+    const api = partText(html, 'api');
+    expect(api).toContain('$0.23');
+    expect(api).toContain('2 of 5 with a price');
+    expect(partText(html, 'sub')).not.toContain('with a price');
+    // Several unpriced requests, and a part without requests.
+    const many = changed(split, (data) => {
+      const row = data.breakdowns[0].rows.find((r) => r.kind === 'apikey')!;
+      row.requests = 3;
+      row.estimate.unpriced_requests = 3;
+    });
+    expect(partText(render(many), 'api')).toContain('3 requests, none with a price');
+    const noKeys = changed(split, (data) => {
+      const row = data.breakdowns[0].rows.find((r) => r.kind === 'apikey')!;
+      row.requests = 0;
+      row.estimate.unpriced_requests = 0;
+    });
+    const none = partText(render(noKeys), 'api');
+    expect(none).toContain('no requests');
+    expect(none).not.toContain('$0.00');
+    // An unknown kind with requests is its own part, by the same rule.
+    const other = changed(split, (data) => {
+      data.breakdowns[0].rows.push({ ...structuredClone(data.breakdowns[0].rows[0]), kind: 'x' });
+    });
+    expect(headlineOf(other).other).toEqual({ saved: 0, requests: 1, priced: 0 });
+    expect(partText(render(other), 'other')).toContain('not valued');
+  });
+
+  test('4. a day with requests and none priced is a gap in the trend, never a point at zero', () => {
+    const days = dayPoints(unpricedOnly)!.slice(-3);
+    expect(days.map((d) => d.label)).toEqual(['2026-11-19', '2026-11-20', '2026-11-21']);
+    expect(days.map(dayValue)).toEqual(['known', 'partial', 'none']);
+    // The partial day is its priced subset's amount, as in the table; the unknown day has no value.
+    expect(trendValues(days)).toEqual([0.134, 0.114, null]);
+    const geometry = trendGeometry(trendValues(days))!;
+    expect(geometry.segments).toHaveLength(1);
+    expect(geometry.dots).toEqual([]);
+    // The line ends at the Nov 20 point (x = 50), not at the baseline (100,32) as in the review.
+    expect(geometry.segments[0].line).toMatch(/ 50\.00 [\d.]+$/);
+    expect(geometry.segments[0].line).not.toContain('100.00');
+
+    const html = render(unpricedOnly);
+    const svg =
+      html.match(/<svg[^>]*aria-label="Worth of caching per day[\s\S]*?<\/svg>/)?.[0] ?? '';
+    expect(svg).toContain('data-gaps="true"');
+    expect(svg).toContain('a day with no priced request is left out of the line');
+    expect(svg).not.toMatch(/100\.00 32\.00/);
+    // The daily table says the same of that day.
+    const rows = html.match(/<tr[^>]*>(?:(?!<\/tr>)[\s\S])*<\/tr>/g) ?? [];
+    expect(textOf(rows.find((row) => row.includes('Nov 21<')) ?? '')).toContain('not valued');
+    expect(textOf(rows.find((row) => row.includes('Nov 20<')) ?? '')).toContain('1 of 3 priced');
+  });
+
+  test('4. gaps keep every day in its place; a lone valued day is a dot; no gap draws as before', () => {
+    const geometry = trendGeometry([1, null, 2, 1, null, 0.5])!;
+    expect(geometry.segments).toHaveLength(1);
+    expect(geometry.segments[0].line.startsWith('M40.00 ')).toBe(true);
+    expect(geometry.segments[0].line).toMatch(/ 60\.00 [\d.]+$/);
+    expect(geometry.dots.map((dot) => dot.x)).toEqual([0, 100]);
+    expect(trendGeometry([null, null])).toBeNull();
+    // Without a gap: the same line as the dashboard sparkline.
+    const values = [0.134, 0.114, 0.2];
+    const sparkline = renderToStaticMarkup(
+      createElement(Sparkline, { points: values, ariaLabel: 'x' })
+    );
+    const line = trendGeometry(values)!.segments[0].line;
+    expect(sparkline).toContain(`d="${line}"`);
+    expect(render(month)).not.toContain('data-gaps');
   });
 });
