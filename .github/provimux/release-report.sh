@@ -28,11 +28,20 @@ gh api "repos/$PMX_REPO/actions/runs/$run/jobs?per_page=100" \
 release_run_errors "$run" >"$tmp/errors.txt"
 grep -q 'cancelled' "$tmp/jobs.txt" &&
   echo "a cancelled job (a promotion waiting in the queue, a timeout, or by hand) leaves the release as it was: a prerelease" >>"$tmp/errors.txt"
+# The promote job edited the release and then could not read it back (its own annotation
+# says "edited, but ... the state is unknown"): the release may well be the latest by now,
+# so the issue says the state is unknown, as the run does, never "not the latest".
+unknown=''
+grep -q '^promote: edited, but .*state is unknown' "$tmp/errors.txt" && unknown=1
 title="sync: v$base — release incomplete"
 marker="<!-- provimux-ui-release $tag run=$run $(cat "$tmp/jobs.txt" "$tmp/errors.txt" | git hash-object --stdin) -->"
 {
   echo "$marker"
-  echo "**The release run of \`$tag\` did not complete**, so the release is not (or not yet) the latest. This run reports itself:"
+  if [[ -n "$unknown" ]]; then
+    echo "**The release run of \`$tag\` did not complete**: its promotion edited the release but could not read it back, so the release's state is unknown (it may or may not be the latest). Check it by hand before acting: \`gh release view $tag -R $PMX_REPO --json isPrerelease\` and \`gh api repos/$PMX_REPO/releases/latest --jq .tag_name\`. This run reports itself:"
+  else
+    echo "**The release run of \`$tag\` did not complete**, so the release is not (or not yet) the latest. This run reports itself:"
+  fi
   echo
   echo "Jobs that failed or were cancelled:"
   fence <"$tmp/jobs.txt"
@@ -48,7 +57,11 @@ if [[ -z "$n" ]]; then
   gh issue create -R "$PMX_REPO" --title "$title" --body-file "$tmp/body.md"
 elif [[ "$(gh api "repos/$PMX_REPO/issues/$n" --jq '.body' | head -n 1)" != "$marker" ]]; then
   gh issue edit "$n" -R "$PMX_REPO" --title "$title" --body-file "$tmp/body.md" >/dev/null
-  gh issue comment "$n" -R "$PMX_REPO" --body "Now: **release incomplete**: the release run of \`$tag\` did not complete (the description shows it). ${RUN_URL:-}" >/dev/null
+  if [[ -n "$unknown" ]]; then
+    gh issue comment "$n" -R "$PMX_REPO" --body "Now: **release incomplete, state unknown**: the release run of \`$tag\` edited the release but could not read it back (the description shows it). ${RUN_URL:-}" >/dev/null
+  else
+    gh issue comment "$n" -R "$PMX_REPO" --body "Now: **release incomplete**: the release run of \`$tag\` did not complete (the description shows it). ${RUN_URL:-}" >/dev/null
+  fi
   echo "Updated #$n: $title"
 else
   echo "#$n already says this"
