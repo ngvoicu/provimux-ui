@@ -27,7 +27,9 @@ import {
   apiKeyCostOf,
   byAccess,
   copyLine,
+  coverageOf,
   dayPoints,
+  dayValue,
   findBreakdown,
   formatCompact,
   formatCount,
@@ -387,6 +389,7 @@ function Headline({ data, states }: { data: ProvimuxSavingsResponse; states: Sav
   const headline = headlineOf(data);
   const unpriced = states.includes('unpriced');
   const valued = data.totals.estimate.priced_requests > 0;
+  const coverage = coverageOf(data.totals);
   const days = dayPoints(data);
   // From the first recorded day: the days before it are not zeros, they were not recorded.
   const since = data.recording.since ?? '';
@@ -408,6 +411,14 @@ function Headline({ data, states }: { data: ProvimuxSavingsResponse; states: Sav
           <p className={styles.heroUnvalued}>{t('provimux.savings.headline.unvalued')}</p>
         )}
         <p className={shared.featureText}>{t('provimux.savings.headline.text')}</p>
+        {valued && coverage.partial ? (
+          <p className={styles.partial} data-partial="true">
+            {t('provimux.savings.headline.partial', {
+              priced: formatCount(coverage.priced, i18n.language),
+              requests: formatCount(coverage.requests, i18n.language),
+            })}
+          </p>
+        ) : null}
         {valued && headline.apikey !== null && headline.oauth !== null ? (
           <dl className={styles.parts}>
             <div className={styles.part} data-access="api">
@@ -479,8 +490,7 @@ function UnpricedNote({ data }: { data: ProvimuxSavingsResponse }) {
           requests: formatCount(requests, i18n.language),
           tokens: formatCompact(tokens, i18n.language),
           models: models.map((model) => model.model).join(', ') || '—',
-        })}{' '}
-        {t('provimux.savings.headline.lower_bound')}
+        })}
       </p>
       {models.length > 0 ? (
         <ul className={styles.unpricedList}>
@@ -607,7 +617,7 @@ function AccessCard({ data }: { data: ProvimuxSavingsResponse }) {
 }
 
 function SubscriptionCard({ data }: { data: ProvimuxSavingsResponse }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const access = byAccess(data);
   if (!access) return null;
   return (
@@ -623,6 +633,14 @@ function SubscriptionCard({ data }: { data: ProvimuxSavingsResponse }) {
       ) : (
         <p className={shared.featureText}>{t('provimux.savings.subscription.none')}</p>
       )}
+      {coverageOf(access.oauth).partial ? (
+        <p className={styles.partial} data-partial="true">
+          {t('provimux.savings.subscription.partial', {
+            priced: formatCount(access.oauth.estimate.priced_requests, i18n.language),
+            requests: formatCount(access.oauth.requests, i18n.language),
+          })}
+        </p>
+      ) : null}
       <p className={shared.featureNote}>{t('provimux.savings.subscription.text')}</p>
     </Card>
   );
@@ -663,27 +681,35 @@ function ApiKeyCard({ data }: { data: ProvimuxSavingsResponse }) {
           )}
           <dl className={styles.pairs}>
             <div>
-              <dt>{t('provimux.savings.apikeys.estimate')}</dt>
+              <dt>
+                {cost.pricedRequests < cost.requests
+                  ? t('provimux.savings.apikeys.estimate_partial', {
+                      priced: formatCount(cost.pricedRequests, i18n.language),
+                      requests: formatCount(cost.requests, i18n.language),
+                    })
+                  : t('provimux.savings.apikeys.estimate')}
+              </dt>
               <dd>
-                <Money
-                  amount={cost.estimateUsd}
-                  estimate
-                  valued={(byAccess(data)?.apikey.estimate.priced_requests ?? 0) > 0}
-                />
+                <Money amount={cost.estimateUsd} estimate valued={cost.pricedRequests > 0} />
               </dd>
             </div>
             {cost.unreported && cost.unreported.requests > 0 && cost.reportedRequests > 0 ? (
               <div>
                 <dt>
-                  {t('provimux.savings.apikeys.unreported', {
-                    count: cost.unreported.requests,
-                  })}
+                  {cost.unreported.pricedRequests < cost.unreported.requests
+                    ? t('provimux.savings.apikeys.unreported_partial', {
+                        count: cost.unreported.requests,
+                        priced: formatCount(cost.unreported.pricedRequests, i18n.language),
+                      })
+                    : t('provimux.savings.apikeys.unreported', {
+                        count: cost.unreported.requests,
+                      })}
                 </dt>
                 <dd>
                   <Money
                     amount={cost.unreported.estimateUsd}
                     estimate
-                    valued={data.totals.estimate.priced_requests > 0}
+                    valued={cost.unreported.pricedRequests > 0}
                   />
                 </dd>
               </div>
@@ -781,6 +807,18 @@ function KeysCard({ data }: { data: ProvimuxSavingsResponse }) {
                       amount={row.estimate.saved_by_caching_usd}
                       valued={row.estimate.priced_requests > 0}
                     />
+                    {coverageOf(row).partial ? (
+                      <span
+                        className={styles.partialTag}
+                        title={t('provimux.savings.days.partial_title')}
+                      >
+                        {' '}
+                        {t('provimux.savings.days.partial', {
+                          priced: formatCount(row.estimate.priced_requests, i18n.language),
+                          requests: formatCount(row.requests, i18n.language),
+                        })}
+                      </span>
+                    ) : null}
                   </td>
                   <td data-label={t('provimux.savings.keys.col_cost')}>
                     <Money
@@ -984,7 +1022,18 @@ function DaysDetails({ data }: { data: ProvimuxSavingsResponse }) {
                       style={{ width: `${max > 0 ? (Math.abs(point.saved) / max) * 100 : 0}%` }}
                       aria-hidden="true"
                     />
-                    <Money amount={point.saved} />
+                    <Money amount={point.saved} valued={dayValue(point) !== 'none'} />
+                    {dayValue(point) === 'partial' ? (
+                      <span
+                        className={styles.partialTag}
+                        title={t('provimux.savings.days.partial_title')}
+                      >
+                        {t('provimux.savings.days.partial', {
+                          priced: formatCount(point.priced, lang),
+                          requests: formatCount(point.requests, lang),
+                        })}
+                      </span>
+                    ) : null}
                   </div>
                 </td>
                 <td data-label={t('provimux.savings.days.col_requests')}>
