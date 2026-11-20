@@ -194,12 +194,28 @@ if [ -n "${PMX_TARGET:-}" ]; then
 fi
 
 # --- 5. The root README commit ------------------------------------------------------
+# Every git read here is checked: a read that fails stops the guard (never a pass).
+fatal() { echo "::error::$*"; exit 1; }
 in_readme_set() { local p; for p in "${readme_paths[@]}"; do [ "$1" = "$p" ] && return 0; done; return 1; }
-# root_entries C: the root entries of C's tree, "<mode> <type> <object>\t<name>", NUL-ended.
-root_entries() { git ls-tree -z "$1^{tree}"; }
+rr_tmp=$(mktemp -d "${TMPDIR:-/tmp}/pmx-guard.XXXXXX") || fatal "cannot make a temporary directory"
+trap 'rm -rf "${rr_tmp:?}"' EXIT
+# root_records C FILE: the root entries of C's tree, "<mode> <type> <object>\t<name>", NUL-ended.
+root_records() { git ls-tree -z "$1^{tree}" >"$2" || fatal "git ls-tree $1 failed"; }
+# entry_in FILE NAME: "<mode> <type> <object>" of the root entry NAME in FILE, or nothing.
+entry_in() {
+  local rec
+  while IFS= read -r -d '' rec; do
+    if [ "${rec#*$'\t'}" = "$2" ]; then printf '%s\n' "${rec%%$'\t'*}"; return 0; fi
+  done <"$1"
+}
+# outside FILE: the records of FILE whose name is not in the set, NUL-ended.
+outside() { local rec; while IFS= read -r -d '' rec; do in_readme_set "${rec#*$'\t'}" || printf '%s\0' "$rec"; done <"$1"; }
 readme_commits=''
-for c in $(git rev-list --reverse --topo-order "$base_commit..HEAD"); do
-  v=$(git log -1 --format='%(trailers:key=Provimux-Readme,valueonly)' "$c" | sed 's/[[:space:]]*$//')
+layer_commits=$(git rev-list --reverse --topo-order "$base_commit..HEAD") || fatal "git rev-list $base_commit..HEAD failed"
+for c in $layer_commits; do
+  v=$(git log -1 --format='%(trailers:key=Provimux-Readme,valueonly)' "$c") || fatal "git log $c failed"
+  # shellcheck disable=SC2001 # trailing blanks of every line
+  v=$(sed 's/[[:space:]]*$//' <<<"$v")
   if grep -qx 'root' <<<"$v"; then readme_commits="$readme_commits $c"; fi
 done
 n_readme=$(wc -w <<<"$readme_commits" | tr -d ' ')
@@ -210,20 +226,35 @@ elif [ "$n_readme" -eq 0 ] && [ "$require_readme" -eq 1 ]; then
 elif [ "$n_readme" -eq 1 ]; then
   r=${readme_commits# }
   rs="$(short "$r") (\"$(subject "$r")\")"
-  lv=$(git log -1 --format='%(trailers:key=Provimux-Layer,valueonly)' "$r" | sed 's/[[:space:]]*$//')
+  lv=$(git log -1 --format='%(trailers:key=Provimux-Layer,valueonly)' "$r") || fatal "git log $r failed"
+  # shellcheck disable=SC2001 # trailing blanks of every line
+  lv=$(sed 's/[[:space:]]*$//' <<<"$lv")
   grep -qx 'branding' <<<"$lv" || err "The README commit $rs has no 'Provimux-Layer: branding' trailer."
-  if [ "$(git rev-list --parents -n 1 "$r" | wc -w | tr -d ' ')" -ne 2 ]; then
+  parents=$(git rev-list --parents -n 1 "$r") || fatal "git rev-list $r failed"
+  root_records "$r" "$rr_tmp/r"
+  if [ "$(wc -w <<<"$parents" | tr -d ' ')" -ne 2 ]; then
     err "The README commit $rs has not exactly one parent."
   else
-    while IFS= read -r -d '' f; do
-      in_readme_set "$f" || err "The README commit $rs changes ${f//$'\n'/?}; it may change only: ${readme_paths[*]}."
-    done < <(git diff-tree -r --no-renames -z --name-only "$r^" "$r")
+    # Whole root records outside the set (name, mode, type, object): a changed file, an
+    # added empty directory or a submodule anywhere below the root shows here.
+    root_records "$r^" "$rr_tmp/p"
+    outside "$rr_tmp/p" >"$rr_tmp/po"
+    outside "$rr_tmp/r" >"$rr_tmp/ro"
+    if ! cmp -s "$rr_tmp/po" "$rr_tmp/ro"; then
+      names=$(comm -3 <(tr '\n\0' '?\n' <"$rr_tmp/po" | LC_ALL=C sort) <(tr '\n\0' '?\n' <"$rr_tmp/ro" | LC_ALL=C sort) |
+        sed 's/^[[:space:]]*//; s/^[^	]*	//' | LC_ALL=C sort -u | paste -sd ' ' -)
+      err "The README commit $rs changes the root entries $names; it may change only: ${readme_paths[*]}."
+    fi
+    for p in "${readme_paths[@]}"; do
+      e=$(entry_in "$rr_tmp/p" "$p")
+      case "$e" in
+        '' | "100644 blob "* | "100755 blob "* | "120000 blob "*) ;;
+        *) err "The README commit $rs replaces $p, which is '$e' in its parent, not a file." ;;
+      esac
+    done
   fi
   for p in "${readme_paths[@]}"; do
-    e=''
-    while IFS= read -r -d '' rec; do
-      if [ "${rec#*$'\t'}" = "$p" ]; then e=${rec%%$'\t'*}; fi
-    done < <(root_entries "$r")
+    e=$(entry_in "$rr_tmp/r" "$p")
     if [ "$p" = README.md ]; then
       case "$e" in "100644 blob "*) ;; *) err "The README commit $rs leaves README.md as '${e:-absent}', not a regular file (100644 blob)." ;; esac
     elif [ -n "$e" ]; then
@@ -232,6 +263,7 @@ elif [ "$n_readme" -eq 1 ]; then
   done
   # At HEAD: exactly one root README, the 100644 blob README.md (a README upstream adds
   # or a later commit brings back is named here).
+  root_records HEAD "$rr_tmp/h"
   seen=0
   while IFS= read -r -d '' rec; do
     name=${rec#*$'\t'} meta=${rec%%$'\t'*}
@@ -242,7 +274,7 @@ elif [ "$n_readme" -eq 1 ]; then
     else
       err "HEAD has the root entry ${name//$'\n'/?} ($meta): the only root README is README.md, the pointer (a 100644 blob). A root README upstream added or moved needs the owner: SYNC.md, \"Upstream added or moved a root README\"."
     fi
-  done < <(LC_ALL=C root_entries HEAD)
+  done <"$rr_tmp/h"
   [ "$seen" -eq 1 ] || err "HEAD has no root README.md (a 100644 blob): the README commit's pointer is missing."
   [ "$fail" -ne 0 ] || echo "README commit: $rs; the root README is README.md only."
 fi

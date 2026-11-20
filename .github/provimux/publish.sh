@@ -309,7 +309,7 @@ g merge-base --is-ancestor "$upstream_commit" "$candidate" || die "the candidate
 # sides, the commits below and above it, and the README commit by its normal form. No
 # --accept-* flag covers a README commit that is not in normal form.
 readme_pair="$(stack_range_diff "$old_base_commit" "$old_main" "$upstream_commit" "$candidate" "$work/range-diff.txt" git --git-dir="$repo" 2>"$work/readme.err")" ||
-  die "the root README rule: $(tr '\n' ' ' <"$work/readme.err")(see $work/range-diff.txt; no --accept-* flag covers it, SYNC.md \"The root README commit\")"
+  die "the stack comparison (the root README rule, or git): $(tr '\n' ' ' <"$work/readme.err")(see $work/range-diff.txt; no --accept-* flag covers it, SYNC.md \"The root README commit\")"
 [[ "$readme_pair" == "$(jq -r 'if .readme == null then "" else "\(.readme.old) \(.readme.new)" end' "$res")" ]] ||
   die "result.json's README commits ($(jq -c '.readme' "$res")) differ from this range-diff's (${readme_pair:-none})"
 range_diff_lists "$work/range-diff.txt" "$work" git --git-dir="$repo"

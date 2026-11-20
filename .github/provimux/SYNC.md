@@ -53,29 +53,36 @@ Every job checks out the run's own commit (`github.sha`, the run's `head_sha`) a
 4. **Rebase.** `git rebase --committer-date-is-author-date <tag commit>` in a temporary worktree, never `--onto`, so
    the same inputs give the same candidate. The check resolves one stop itself, at the README commit, only when all of
    these hold: the old `main` has exactly one README commit `R` and the stop is at it (`REBASE_HEAD` = `R`); it is the
-   first stop; `R` has one parent and changes only root READMEs (the set: `README.md`, `README_CN.md`); at least one
-   path is unmerged and every unmerged path is in the set; every path the index holds differently from `HEAD` is in the
-   set (names NUL-delimited, whole). Then each path of the set gets `R`'s entry (`git checkout R -- <path>`) or none
-   (`git rm`), and `git rebase --continue` runs with the rebase's own `-c` options. Any other stop, and a second stop,
-   fail the check as before; `rebase.json` records the README commit and the paths that conflicted.
+   first stop; `R` has one parent and changes only root READMEs (the set: `README.md`, `README_CN.md`; compared as
+   whole root tree records, so an added empty directory counts), and no path of the set is a directory in `R`'s parent
+   or at the stop; at least one path is unmerged and every unmerged path is in the set; every path the index holds
+   differently from `HEAD` is in the set (names NUL-delimited, whole). Then each path of the set gets `R`'s entry
+   (`git checkout R -- <path>`) or none (`git rm`), and `git rebase --continue` runs with the rebase's own `-c`
+   options. Any other stop, and a second stop, fail the check as before; `rebase.json` records the README commit and
+   the paths that conflicted.
 5. **range-diff** of `<old base>..<old main>` against `<new base>..<candidate>` (`stack_range_diff` in `common.sh`,
-   the only place either script runs `git range-diff`). With a README commit on both sides it is the range-diff of
-   the commits below the README commits and of those above them, with the line `README  <R> -> <R'>  <subject>`
-   between; the README commit is in no list and is checked instead by its **normal form**: `R'` is `R` re-applied
-   (both one parent; the same author line and message; the same entries for the set; `R'` changes no other path; the
-   candidate's tip has the old `main`'s entries for the set). A failure is a reason (the check fails), and no flag
-   accepts it. `result.json`'s `readme` is `null` or `{old, new, reapplied}`. Every layer commit the rebase
-   **dropped** (`<`) or **changed** (`!`) needs the owner's decision; nothing is accepted because "only the code
-   around it moved" (review T-73: upstream swapping two items made an unchanged layer patch hide the wrong one). A pair
-   range-diff calls **equal** (`=`) counts as changed too when one of its binary files differs: a patch shows a
-   binary file only as "Binary files differ", so the full blob ids are compared, with paths NUL-delimited as git stores
-   them (a non-ASCII name such as `café.png` included) (`range_diff_lists`, `binary_changes`).
+   the only place either script runs `git range-diff`). With a README commit on both sides it is the range-diff of the
+   commits below the README commits and of those above them, with the line `README  <R> -> <R'>  <subject>` between;
+   the README commit is in no list and is checked instead by its **normal form**: `R'` is `R` re-applied (both one
+   parent; the same author line and message; the same entries for the set; `R'`'s root tree records outside the set,
+   name, mode, type and object, are its parent's, and no path of the set is a directory in its parent; the candidate's
+   tip has the old `main`'s entries for the set). A failure is a reason (the check fails), and no flag accepts it. A
+   git command that fails anywhere in this comparison (a segment's range-diff, a listing, a tree read) makes the check
+   `error`: one failed segment is never hidden by another. `result.json`'s `readme` is `null` or `{old, new,
+   reapplied}`. Every layer commit the rebase **dropped** (`<`) or **changed** (`!`) needs the owner's decision;
+   nothing is accepted because "only the code around it moved" (review T-73: upstream swapping two items made an
+   unchanged layer patch hide the wrong one). A pair range-diff calls **equal** (`=`) counts as changed too when one
+   of its binary files differs: a patch shows a binary file only as "Binary files differ", so the full blob ids are
+   compared, with paths NUL-delimited as git stores them (a non-ASCII name such as `café.png` included)
+   (`range_diff_lists`, `binary_changes`).
 6. **Workflow files.** Every path under `.github/workflows/` new in the tag is listed, and `publish.sh` refuses such
    a release (see "New upstream workflow files").
-7. **Guard** on the candidate with `PMX_EXPECT_BASE=<tag>` and `PMX_EXPECT_BASE_COMMIT=<commit>`. Its rule 5 checks the
-   README commit: at most one, with `Provimux-Layer: branding`, one parent, only paths of the set, `README.md` a
-   regular file and `README_CN.md` absent; and then at the candidate exactly one root entry whose name begins with
-   `readme` (any case), the regular file `README.md`. A root README upstream adds (`README_JA.md`) fails here, named.
+7. **Guard** on the candidate with `PMX_EXPECT_BASE=<tag>` and `PMX_EXPECT_BASE_COMMIT=<commit>`. Its rule 5 checks
+   the README commit (every git read checked: a failed read fails the guard): at most one, with `Provimux-Layer:
+   branding`, one parent, its root tree records outside the set equal to its parent's, no directory of its parent at a
+   path of the set, `README.md` a regular file and `README_CN.md` absent; and then at the candidate exactly one root
+   entry whose name begins with `readme` (any case), the regular file `README.md`. A root README upstream adds
+   (`README_JA.md`) fails here, named.
 
 **Jobs `test (candidate)` and `test (tag)`**, one runner each: before any code of the tree runs, `check.sh
 fetch-prepare` fetches the prepare job's artifact by the id and digest that job output; `check.sh tree` makes a
@@ -158,15 +165,15 @@ verifies, plans and pushes, so no run id, attempt or artifact id crosses a job b
    artifact id. Skips (green) when the check selected no release, when the status is not `pass`, or when
    `v<base>-pmx.*` exists.
 4. **Plan** (`publish.sh <tag> --ci --plan ...`, no token): everything in "Publishing by hand" up to the push, for
-   exactly that run, attempt and artifact, with no `--accept-*` (a dropped or changed layer commit, or a new
-   workflow file, is refused). It leaves `plan.env` and the verified bare repository.
+   exactly that run, attempt and artifact, with no `--accept-*` (a dropped or changed layer commit, or a new workflow
+   file, is refused). It leaves `plan.env` and the verified bare repository.
 5. **Push values** (inline, no token): reads `plan.env` (exactly 10 lines, each checked against its pattern and the
    verified values) and writes the push's repository, lease and refs as step outputs.
 6. **`PROVIMUX_TOKEN` is set**: if not, red with that message; nothing is pushed.
-7. **Push**, the only step with the token: one `git push --atomic --porcelain
-   --force-with-lease=refs/heads/main:<the verified main>` of `main`, `v<base>` (when the repository lacks it) and
-   `v<base>-pmx.1` from the plan's bare repository, hooks off, no global or system git config, the token read by a
-   credential helper from git's environment.
+7. **Push**, the only step with the token: one `git push --atomic --porcelain --force-with-lease=refs/heads/main:<the
+   verified main>` of `main`, `v<base>` (when the repository lacks it) and `v<base>-pmx.1` from the plan's bare
+   repository, hooks off, no global or system git config, the token read by a credential helper from git's
+   environment.
 8. **Wait** (`publish.sh --ci --wait`, no token): waits for the whole `provimux-ui-release` run of `v<base>-pmx.1` at
    the candidate (build, prerelease, smoke, promote) and the complete release, then closes the issue.
 
@@ -337,10 +344,10 @@ cd - && git worktree remove ../pui-publish
 4. **Decisions.** Dropped and changed layer commits are refused unless each is named (`--accept-dropped <sha,...>`,
    `--accept-changed <sha,...>`, the old `main`'s commits, 7+ hex digits). New workflow files are refused outright,
    and so is a README commit out of normal form: no flag accepts it.
-5. **Plan, confirmation, re-checks, one atomic push**: `main` with `--force-with-lease=refs/heads/main:<old main>`
-   (a literal SHA), `v<base>` at upstream's commit (when the repository lacks it), `v<base>-pmx.1` at the candidate.
-   Right after the push it sets the release authorization (owner's credentials; "Release authorization").
-   GitHub first, then the NAS mirror: `git push origin main v<base>-pmx.1` afterwards.
+5. **Plan, confirmation, re-checks, one atomic push**: `main` with `--force-with-lease=refs/heads/main:<old main>` (a
+   literal SHA), `v<base>` at upstream's commit (when the repository lacks it), `v<base>-pmx.1` at the candidate.
+   Right after the push it sets the release authorization (owner's credentials; "Release authorization"). GitHub
+   first, then the NAS mirror: `git push origin main v<base>-pmx.1` afterwards.
 
 **The NAS mirror lags.** Neither the automatic publish nor `publish.sh` pushes to the NAS mirror (`origin`,
 `ssh://git@zeenas:2222/ngvoicu/provimux-ui.git`): after an automatic release its `main` and tags stay behind GitHub

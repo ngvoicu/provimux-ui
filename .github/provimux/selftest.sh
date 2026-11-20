@@ -85,6 +85,15 @@ here="$(cd "$(dirname "$0")" && pwd)"
 tmp="$(mktemp -d "${TMPDIR:-/tmp}/provimux-selftest.XXXXXX")"
 trap 'rm -rf "${tmp:?}"' EXIT
 pass=0 failed=0
+# The guard with each value of require_readme, whatever guard.sh ships: the fixtures of a
+# stack without a README commit run guard0 (they pass only while the README commit is not
+# required), guard1 is the guard once it is (SYNC.md, "The root README commit").
+guard0="$tmp/guard-require0.sh" guard1="$tmp/guard-require1.sh"
+sed 's/^require_readme=[01]$/require_readme=0/' "$here/guard.sh" >"$guard0"
+sed 's/^require_readme=[01]$/require_readme=1/' "$here/guard.sh" >"$guard1"
+for g in "$guard0" "$guard1"; do
+  [[ "$(grep -c '^require_readme=[01]$' "$g")" == 1 ]] || { echo "selftest: guard.sh has not exactly one line require_readme=0|1" >&2; exit 1; }
+done
 ok() { echo "ok    $*"; pass=$((pass + 1)); }
 bad() { echo "FAIL  $*"; failed=$((failed + 1)); }
 # expect NAME WANT GOT
@@ -120,10 +129,12 @@ git clone -q "$up" "$pmx"
   echo p >brand.txt && git add -A && git commit -q -m 'brand' -m 'Provimux-Layer: branding'
   echo l >layer.txt && git add -A && git commit -q -m 'layer' -m 'Provimux-Layer: branding'
 )
-guard() { (cd "$pmx" && PMX_UPSTREAM="$up" "$@" bash "$here/guard.sh") >"$tmp/guard.out" 2>&1 && echo pass || echo fail; }
+guard() { (cd "$pmx" && PMX_UPSTREAM="$up" "$@" bash "$guard0") >"$tmp/guard.out" 2>&1 && echo pass || echo fail; }
 
 echo "# guard.sh"
 expect "base tag here and upstream: passes" pass "$(guard env)"
+expect "  ... this stack has no README commit: the guard with require_readme=1 fails it" fail \
+  "$( (cd "$pmx" && PMX_UPSTREAM="$up" bash "$guard1") >/dev/null 2>&1 && echo pass || echo fail)"
 contains "  ... on base v1.1.0" "$tmp/guard.out" "Base: v1.1.0"
 git -C "$pmx" tag -d v1.1.0 >/dev/null
 expect "base tag only upstream (no local tag): passes" pass "$(guard env)"
@@ -135,7 +146,7 @@ bare="$tmp/guard-bare.git"
 git init -q --bare "$bare"
 (cd "$pmx/.git/objects" && pwd) >"$bare/objects/info/alternates"
 git --git-dir="$bare" update-ref --no-deref HEAD "$(git -C "$pmx" rev-parse HEAD)"
-if (cd "$tmp" && GIT_DIR="$bare" PMX_UPSTREAM="$up" PMX_EXPECT_BASE=v1.1.0 PMX_EXPECT_BASE_COMMIT="$v110" bash "$here/guard.sh") >"$tmp/guard.out" 2>&1; then
+if (cd "$tmp" && GIT_DIR="$bare" PMX_UPSTREAM="$up" PMX_EXPECT_BASE=v1.1.0 PMX_EXPECT_BASE_COMMIT="$v110" bash "$guard0") >"$tmp/guard.out" 2>&1; then
   ok "guard on git objects only (bare repository, HEAD = candidate): passes"
 else bad "guard on git objects only (bare repository, HEAD = candidate): passes ($(tail -n 1 "$tmp/guard.out"))"; fi
 git -C "$pmx" tag v1.1.0 "$v110"
@@ -1175,7 +1186,7 @@ expect "  ... readme_normal alone: 0" 0 "$(cd "$rp" && . "$here/common.sh" && re
 build lic v1.3.0 'pick L1' r_license 'pick L2' 'pick L3'
 expect "R' also changes LICENSE: fails" 1 "$(srd L3 lic | cut -d' ' -f1)"
 contains "  ... condition 4 named, LICENSE" "$tmp/srd.err" "condition 4: the README commit"
-contains "  ... names LICENSE" "$tmp/srd.err" "changes LICENSE"
+contains "  ... names LICENSE" "$tmp/srd.err" "outside the root READMEs: LICENSE"
 build keepcn v1.3.0 'pick L1' r_keep_cn 'pick L2' 'pick L3'
 expect "R' leaves README_CN.md in place: fails" 1 "$(srd L3 keepcn | cut -d' ' -f1)"
 contains "  ... condition 3, README_CN.md" "$tmp/srd.err" "condition 3: README_CN.md"
@@ -1246,17 +1257,89 @@ git -C "$rp" range-diff --no-color --no-notes "$old_base..$(sha_of plain-old)" "
 if cmp -s "$tmp/srd.txt" "$tmp/plain-direct.txt" && [[ -s "$tmp/srd.txt" ]]; then ok "no README commit: stack_range_diff writes git range-diff's output byte for byte"
 else bad "no README commit: stack_range_diff writes git range-diff's output byte for byte"; fi
 expect "  ... and prints nothing" "0 " "$(srd plain-old plain)"
+# rguard REV [GUARD]: the guard on REV in $rp (pass | fail), its output in $tmp/rguard.out.
+rguard() {
+  git -C "$rp" checkout -q --detach "$1"
+  (cd "$rp" && PMX_UPSTREAM="$rup" bash "${2:-$here/guard.sh}") >"$tmp/rguard.out" 2>&1 && echo pass || echo fail
+}
+# Review T-111, finding 1: every git failure is fatal. flaky-git is git, except that the
+# FLAKY_N-th call of "git FLAKY_CMD" (or every one, FLAKY_N=all) fails with status 128.
+real_git="$(command -v git)"
+mkdir -p "$tmp/flaky"
+cat >"$tmp/flaky/git" <<'EOF'
+#!/bin/bash
+cmd=''
+for a in "$@"; do case "$a" in -*) ;; *) cmd=$a; break ;; esac; done  # the subcommand (after --git-dir=...)
+if [ -n "$cmd" ] && [ "$cmd" = "${FLAKY_CMD:-}" ]; then
+  n=$(( $(cat "$FLAKY_COUNT" 2>/dev/null || echo 0) + 1 )); echo "$n" >"$FLAKY_COUNT"
+  if [ "$FLAKY_N" = all ] || [ "$n" = "$FLAKY_N" ]; then echo "fatal: flaky git $cmd (call $n)" >&2; exit 128; fi
+fi
+exec "$REAL_GIT" "$@"
+EOF
+chmod +x "$tmp/flaky/git"
+# fsrd CMD N OLD_MAIN CANDIDATE [OLD_BASE]: stack_range_diff through flaky-git: "<status> <stdout>".
+fsrd() {
+  local o st
+  rm -f "$tmp/flaky.count"
+  # shellcheck source=common.sh
+  o="$(cd "$rp" && . "$here/common.sh" && REAL_GIT="$real_git" FLAKY_CMD=$1 FLAKY_N=$2 FLAKY_COUNT="$tmp/flaky.count" \
+    stack_range_diff "${5:-$old_base}" "$(sha_of "$3")" "$nb" "$(sha_of "$4")" "$tmp/srd.txt" "$tmp/flaky/git" 2>"$tmp/srd.err")" && st=0 || st=$?
+  echo "$st $o"
+}
+expect "the lower segment's git range-diff fails: status 2, no README pair (not hidden by the upper one)" "2 " "$(fsrd range-diff 1 L3 good)"
+contains "  ... says which comparison failed" "$tmp/srd.err" "git range-diff $old_base..$rR^"
+expect "the upper segment's git range-diff fails: status 2, no pair" "2 " "$(fsrd range-diff 2 L3 good)"
+expect "no README commit, git range-diff fails: status 2 (git's failure kept)" "2 " "$(fsrd range-diff 1 plain-old plain)"
+expect "listing the old main's commits fails: status 2, not 'no README commit'" "2 " "$(fsrd rev-list 1 L3 good)"
+expect "counting a segment fails: status 2" "2 " "$(fsrd rev-list 8 L3 good)"
+expect "every git ls-tree fails, with another README.md in R': status 2, never a pass" "2 " "$(fsrd ls-tree all L3 otherptr)"
+expect "  ... readme_normal alone: 2" 2 \
+  "$(cd "$rp" && . "$here/common.sh" && REAL_GIT="$real_git" FLAKY_CMD=ls-tree FLAKY_N=all FLAKY_COUNT="$tmp/flaky.count" \
+     readme_normal "$rR" "$(sha_of otherptr~1)" "$old_main" "$(sha_of otherptr)" "$tmp/flaky/git" 2>/dev/null && echo 0 || echo $?)"
+# Review T-111, finding 2: whole root records. R'' is R' (of "tip") with one more root
+# entry, an empty tree (no file: a recursive diff of names shows nothing); Rd's parent has a
+# directory where README_CN.md is.
+rp_author() { git -C "$rp" log -1 --format="$1" R; }
+git -C "$rp" cat-file commit R | sed '1,/^$/d' >"$tmp/r-msg"
+empty_tree="$(git -C "$rp" hash-object -t tree -w /dev/null)"
+xtree="$( { git -C "$rp" ls-tree "$(sha_of tip)"; printf '040000 tree %s\tdocs-empty\n' "$empty_tree"; } | git -C "$rp" mktree)"
+rx="$(cd "$rp" && GIT_AUTHOR_NAME="$(rp_author %an)" GIT_AUTHOR_EMAIL="$(rp_author %ae)" GIT_AUTHOR_DATE="$(rp_author %ad --date=raw)" \
+  git commit-tree "$xtree" -p "$(sha_of tip~1)" -F "$tmp/r-msg")"
+git -C "$rp" tag -f extra-tree "$rx" >/dev/null
+expect "  ... a recursive diff of names sees only the READMEs (nothing of the empty tree)" "README.md|README_CN.md" \
+  "$(git -C "$rp" diff-tree -r --no-renames --name-only "$rx^" "$rx" | paste -sd '|' -)"
+expect "R' with an extra empty tree at the root: readme_normal fails, condition 4" "1 condition 4" \
+  "$(cd "$rp" && . "$here/common.sh" && readme_normal "$(sha_of tip-old~0)" "$rx" "$(sha_of tip-old)" "$rx" git 2>"$tmp/rn.err" && echo 0 || echo "$? $(cut -c1-11 "$tmp/rn.err")")"
+contains "  ... names docs-empty" "$tmp/rn.err" "outside the root READMEs: docs-empty"
+expect "  ... stack_range_diff: fails" 1 "$(srd tip-old extra-tree | cut -d' ' -f1)"
+expect "  ... the guard: fails" fail "$(rguard extra-tree)"
+contains "  ... naming docs-empty" "$tmp/rguard.out" "changes the root entries docs-empty"
+(
+  cd "$rp"
+  git checkout -q --detach tip~1
+  git rm -q README_CN.md && mkdir README_CN.md && echo zh >README_CN.md/index.md && git add -A &&
+    git commit -q -m 'a directory where README_CN.md was' -m 'Provimux-Layer: branding' && git tag dirparent
+  pointer one >README.md && git rm -q -r README_CN.md && git add -A &&
+    GIT_AUTHOR_DATE="$(rp_author %ad --date=raw)" git commit -q -F "$tmp/r-msg" && git tag dirreadme
+)
+expect "README_CN.md a directory in R''s parent: readme_normal fails, condition 4" "1 condition 4" \
+  "$(cd "$rp" && . "$here/common.sh" && readme_normal "$(sha_of tip-old)" "$(sha_of dirreadme)" "$(sha_of tip-old)" "$(sha_of dirreadme)" git 2>"$tmp/rn.err" && echo 0 || echo "$? $(cut -c1-11 "$tmp/rn.err")")"
+expect "  ... the guard: fails, naming the directory" fail "$(rguard dirreadme)"
+contains "  ... says so" "$tmp/rguard.out" "replaces README_CN.md, which is '040000 tree"
+rguard_fail_lstree() { # the guard on the stack L3 with every git ls-tree failing
+  git -C "$rp" checkout -q --detach L3
+  (cd "$rp" && PATH="$tmp/flaky:$PATH" REAL_GIT="$real_git" FLAKY_CMD=ls-tree FLAKY_N=all FLAKY_COUNT="$tmp/flaky.count" \
+    PMX_UPSTREAM="$rup" bash "$here/guard.sh") >"$tmp/rguard.out" 2>&1 && echo pass || echo fail
+}
+expect "the guard with every git ls-tree failing: fails (never a pass)" fail "$(rguard_fail_lstree)"
+contains "  ... says git failed" "$tmp/rguard.out" "git ls-tree"
+
 # Names are whole: README.md.bak, docs/README.md, a name with a newline are not paths of the set.
 # shellcheck source=common.sh
 expect "readme_path: whole names only" "README.md README_CN.md" \
   "$(. "$here/common.sh"; for n in README.md README.md.bak docs/README.md README_CN.md $'README.md\nREADME_CN.md' readme.md ' README.md'; do readme_path "$n" && printf '%s ' "$n"; done | sed 's/ $//')"
 
 echo "# root README commit: guard.sh rule 5"
-# rguard REV [GUARD]: the guard on REV in $rp (pass | fail), its output in $tmp/rguard.out.
-rguard() {
-  git -C "$rp" checkout -q --detach "$1"
-  (cd "$rp" && PMX_UPSTREAM="$rup" bash "${2:-$here/guard.sh}") >"$tmp/rguard.out" 2>&1 && echo pass || echo fail
-}
 expect "the stack with its README commit: passes" pass "$(rguard L3)"
 contains "  ... names the README commit" "$tmp/rguard.out" "README commit: $(git -C "$rp" rev-parse --short R)"
 expect "two README commits: fails" fail "$(rguard tworeadme)"
@@ -1266,7 +1349,7 @@ contains "  ... says so" "$tmp/rguard.out" "2 commits in v1.3.0"
 expect "a README commit without the layer trailer: fails" fail "$(rguard nolayer)"
 contains "  ... says so" "$tmp/rguard.out" "has no 'Provimux-Layer: branding' trailer"
 expect "a README commit that touches another path: fails" fail "$(rguard lic)"
-contains "  ... names it" "$tmp/rguard.out" "changes LICENSE"
+contains "  ... names it" "$tmp/rguard.out" "changes the root entries LICENSE"
 expect "a README commit that keeps README_CN.md: fails" fail "$(rguard keepcn)"
 contains "  ... says so" "$tmp/rguard.out" "leaves README_CN.md in place"
 add_root() { # add_root NAME TAG [symlink]: a layer commit on L3 adding the root entry NAME (in the index: the
@@ -1290,12 +1373,12 @@ contains "  ... says so" "$tmp/rguard.out" "leaves README.md as '120000"
   git commit -q -m 'README and README.md.bak' -m 'Provimux-Layer: branding
 Provimux-Readme: root' && git tag bak)
 expect "a README commit that adds README.md.bak (not a path of the set): fails" fail "$(rguard bak)"
-contains "  ... names README.md.bak" "$tmp/rguard.out" "changes README.md.bak"
-expect "no README commit, require_readme=0: passes (rule 5 checks nothing)" pass "$(rguard plain)"
-sed 's/^require_readme=0$/require_readme=1/' "$here/guard.sh" >"$tmp/guard-require.sh"
-expect "  ... with require_readme=1: fails" fail "$(rguard plain "$tmp/guard-require.sh")"
+contains "  ... names README.md.bak" "$tmp/rguard.out" "changes the root entries README.md.bak"
+expect "no README commit, require_readme=0: passes (rule 5 checks nothing)" pass "$(rguard plain "$guard0")"
+expect "  ... with require_readme=1: fails" fail "$(rguard plain "$guard1")"
 contains "  ... says the README commit is missing" "$tmp/rguard.out" "the README commit, which replaces the root READMEs, is missing"
-expect "  ... with require_readme=1 and the README commit: passes" pass "$(rguard L3 "$tmp/guard-require.sh")"
+expect "  ... with require_readme=1 and the README commit: passes" pass "$(rguard L3 "$guard1")"
+expect "  ... with require_readme=0 and the README commit: passes" pass "$(rguard L3 "$guard0")"
 rbare="$tmp/rr-bare.git"
 git init -q --bare "$rbare"
 (cd "$rp/.git/objects" && pwd) >"$rbare/objects/info/alternates"
@@ -1347,6 +1430,16 @@ pub_artifact "$tmp/pass.json" "$tmp/prep/candidate.bundle"
 expect "the README case: plan written" "exit 0" "$(pub 1)"
 expect "  ... plan.env has the candidate" "CANDIDATE=$cand" "$(grep '^CANDIDATE=' "$tmp/plan-1/plan.env" 2>/dev/null)"
 contains "  ... the plan names the README commits" "$tmp/pub.out" "root READMEs    $rR -> $(jq -r .readme.new "$tmp/pass.json") (normal form)"
+# Review T-111, finding 1, in publish.sh: the first git range-diff (the commits below the
+# README commit) fails; the upper segment and the README line are still there.
+rm -f "$tmp/flaky.count"
+expect "the lower segment's git range-diff fails in publish.sh: refused" "exit 1" \
+  "$(cd "$rp" && env -u PMX_PUSH_TOKEN -u PROVIMUX_TOKEN PATH="$tmp/flaky:$stub/bin:$PATH" REAL_GIT="$real_git" FLAKY_CMD=range-diff FLAKY_N=1 \
+     FLAKY_COUNT="$tmp/flaky.count" STUB_API="$api" PMX_REPO=test/provimux-ui PMX_UPSTREAM_REPO=test/up PMX_UPSTREAM_URL="$rup" \
+     bash "$here/publish.sh" v1.1.0 --ci --plan "$tmp/plan-flaky" --run 4242 --attempt 1 --artifact 7701 --expect-main "$old_main" --remote origin \
+     >"$tmp/pub.out" 2>&1 && echo "exit 0" || echo "exit $?")"
+if [[ -e "$tmp/plan-flaky/plan.env" ]]; then bad "  ... no plan is written"; else ok "  ... no plan is written"; fi
+contains "  ... says git range-diff failed" "$tmp/pub.out" "git range-diff"
 # A bundle whose R' also changes LICENSE, with a result.json that says pass for it.
 (cd "$rp" && git checkout -q --detach "$cand~2" && echo 'MIT, changed' >LICENSE && git add LICENSE && git commit -q --amend -C HEAD &&
   pick_q "$cand~1" "$cand" && git update-ref refs/pmx-check/bad HEAD && git bundle create -q "$tmp/bad.bundle" refs/pmx-check/bad "^$(sha_of v1.1.0)")
@@ -1354,7 +1447,7 @@ bad_c="$(git -C "$rp" rev-parse refs/pmx-check/bad)"
 jq --arg c "$bad_c" --arg n "$(git -C "$rp" rev-parse refs/pmx-check/bad~2)" '.candidate = $c | .readme.new = $n' "$tmp/pass.json" >"$tmp/pass-bad.json"
 pub_artifact "$tmp/pass-bad.json" "$tmp/bad.bundle"
 expect "a bundle whose R' also changes LICENSE, result.json pass: refused" "exit 1" "$(pub 2)"
-contains "  ... by the README rule, condition 4" "$tmp/pub.out" "the root README rule: condition 4"
+contains "  ... by the README rule, condition 4" "$tmp/pub.out" "or git): condition 4: the README commit"
 lacks "  ... no plan" "$tmp/pub.out" "Plan written"
 jq --arg x "$bad_c" '.readme.new = $x' "$tmp/pass.json" >"$tmp/pass-other.json"
 pub_artifact "$tmp/pass-other.json" "$tmp/prep/candidate.bundle"

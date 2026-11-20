@@ -323,89 +323,177 @@ readme_path() {
   return 1
 }
 
+# Every function below returns 0 when it holds, 1 when the README rule is broken (the reason
+# on stderr) and 2 when git failed (stderr): a read git could not make never counts as a
+# pass. Callers run them in "if"/"||" context, where set -e does not apply, so each git
+# call's status is tested where it is made.
+
+# pmx_tmp: a new temporary file (NUL-delimited git output cannot live in a variable).
+pmx_tmp() { mktemp "${TMPDIR:-/tmp}/pmx-readme.XXXXXX"; }
+
 # readme_commits RANGE GIT...: the commits of RANGE (A..B) whose trailer Provimux-Readme
 # has the value "root", full SHAs, oldest first, one per line.
 readme_commits() {
-  local rng=$1 c v
+  local rng=$1 list c v
   shift
-  for c in $("$@" rev-list --reverse --topo-order "$rng"); do
-    v="$("$@" log -1 --format='%(trailers:key=Provimux-Readme,valueonly)' "$c" | sed 's/[[:space:]]*$//')"
+  list="$("$@" rev-list --reverse --topo-order "$rng")" || { echo "git rev-list $rng failed" >&2; return 2; }
+  for c in $list; do
+    v="$("$@" log -1 --format='%(trailers:key=Provimux-Readme,valueonly)' "$c")" ||
+      { echo "git log $c failed" >&2; return 2; }
+    # shellcheck disable=SC2001 # trailing blanks of every line
+    v="$(sed 's/[[:space:]]*$//' <<<"$v")"
     if grep -qx 'root' <<<"$v"; then echo "$c"; fi
   done
+}
+
+# root_records COMMIT FILE GIT...: the root entries of COMMIT's tree into FILE, as git
+# ls-tree -z writes them ("<mode> <type> <object>\t<name>", NUL-ended, git's order).
+root_records() {
+  local c=$1 f=$2
+  shift 2
+  "$@" ls-tree -z "$c^{tree}" >"$f" || { echo "git ls-tree $c failed" >&2; return 2; }
 }
 
 # root_entry COMMIT NAME GIT...: "<mode> <type> <object>" of the root entry NAME (whole,
 # NUL-delimited) of COMMIT's tree, or nothing when there is none.
 root_entry() {
-  local c=$1 name=$2 rec
+  local c=$1 name=$2 f rec st=0
   shift 2
-  while IFS= read -r -d '' rec; do
-    if [[ "${rec#*$'\t'}" == "$name" ]]; then printf '%s\n' "${rec%%$'\t'*}"; return 0; fi
-  done < <("$@" ls-tree -z "$c^{tree}")
+  f="$(pmx_tmp)" || return 2
+  if root_records "$c" "$f" "$@"; then
+    while IFS= read -r -d '' rec; do
+      if [[ "${rec#*$'\t'}" == "$name" ]]; then printf '%s\n' "${rec%%$'\t'*}"; break; fi
+    done <"$f"
+  else
+    st=2
+  fi
+  rm -f "$f"
+  return $st
 }
 
-# changed_paths COMMIT GIT...: the paths COMMIT changes against its first parent, NUL-ended,
-# no rename detection.
-changed_paths() {
-  local c=$1
+# outside_same A B GIT...: status 0 when the root entries of A and B outside the set are
+# the same records (name, mode, type, object: a changed, added or removed file, directory,
+# empty tree, symlink or submodule anywhere outside the set differs at the root); 1 and
+# their names on stderr when not.
+outside_same() {
+  local a=$1 b=$2 fa fb oa ob rec st=0 diffs
+  shift 2
+  fa="$(pmx_tmp)" && fb="$(pmx_tmp)" && oa="$(pmx_tmp)" && ob="$(pmx_tmp)" || return 2
+  if root_records "$a" "$fa" "$@" && root_records "$b" "$fb" "$@"; then
+    while IFS= read -r -d '' rec; do readme_path "${rec#*$'\t'}" || printf '%s\0' "$rec"; done <"$fa" >"$oa"
+    while IFS= read -r -d '' rec; do readme_path "${rec#*$'\t'}" || printf '%s\0' "$rec"; done <"$fb" >"$ob"
+    if ! cmp -s "$oa" "$ob"; then
+      diffs="$(comm -3 <(tr '\n\0' '?\n' <"$oa" | LC_ALL=C sort) <(tr '\n\0' '?\n' <"$ob" | LC_ALL=C sort) |
+        sed 's/^[[:space:]]*//; s/^[^	]*	//' | LC_ALL=C sort -u | paste -sd ' ' -)"
+      echo "${diffs:-the root entries outside the set}" >&2
+      st=1
+    fi
+  else
+    st=2
+  fi
+  rm -f "$fa" "$fb" "$oa" "$ob"
+  return $st
+}
+
+# set_not_tree COMMIT GIT...: status 0 when no path of the set is a directory or a
+# submodule at COMMIT's root (replacing one would drop what is under it); 1 and the path
+# on stderr when one is.
+set_not_tree() {
+  local c=$1 p e
   shift
-  "$@" diff-tree -r --no-renames -z --name-only "$c^" "$c"
+  for p in "${PMX_README_PATHS[@]}"; do
+    e="$(root_entry "$c" "$p" "$@")" || return 2
+    case "$e" in
+      '' | 100644\ blob\ * | 100755\ blob\ * | 120000\ blob\ *) ;;
+      *) echo "$p is '$e' at ${c:0:12}, not a file" >&2; return 1 ;;
+    esac
+  done
 }
 
 # readme_normal OLD NEW OLD_TIP NEW_TIP GIT...: status 0 when NEW is OLD re-applied (the
-# normal form, five conditions on git objects); status 1 and the first failed condition on
-# stderr.
+# normal form, five conditions on git objects); 1 and the first failed condition on
+# stderr; 2 when git failed.
 readme_normal() {
-  local o=$1 n=$2 ot=$3 nt=$4 c p name
-  shift 4
+  local t st
+  t="$(mktemp -d "${TMPDIR:-/tmp}/pmx-readme.XXXXXX")" || return 2
+  readme_normal_in "$t" "$@"
+  st=$?
+  rm -rf "${t:?}"
+  return $st
+}
+# shellcheck disable=SC2015 # "A && B || return": either failing returns
+readme_normal_in() {
+  local t=$1 o=$2 n=$3 ot=$4 nt=$5 c pl p eo en why st
+  shift 5
   for c in "$o" "$n"; do
-    [[ "$("$@" rev-list --parents -n 1 "$c" | wc -w | tr -d ' ')" == 2 ]] ||
+    pl="$("$@" rev-list --parents -n 1 "$c")" || { echo "git rev-list $c failed" >&2; return 2; }
+    [[ "$(wc -w <<<"$pl" | tr -d ' ')" == 2 ]] ||
       { echo "condition 1: the README commit ${c:0:12} has not exactly one parent" >&2; return 1; }
   done
-  [[ "$("$@" cat-file commit "$o" | sed -n '/^$/q; /^author /p' | git hash-object --stdin)" == \
-     "$("$@" cat-file commit "$n" | sed -n '/^$/q; /^author /p' | git hash-object --stdin)" ]] ||
+  "$@" cat-file commit "$o" >"$t/o" && "$@" cat-file commit "$n" >"$t/n" ||
+    { echo "git cat-file of the README commits failed" >&2; return 2; }
+  sed -n '/^$/q; /^author /p' "$t/o" >"$t/oa"; sed -n '/^$/q; /^author /p' "$t/n" >"$t/na"
+  sed '1,/^$/d' "$t/o" >"$t/om"; sed '1,/^$/d' "$t/n" >"$t/nm"
+  [[ -s "$t/oa" ]] && cmp -s "$t/oa" "$t/na" ||
     { echo "condition 2: the README commit ${n:0:12} has another author than ${o:0:12}" >&2; return 1; }
-  [[ "$("$@" cat-file commit "$o" | sed '1,/^$/d' | git hash-object --stdin)" == \
-     "$("$@" cat-file commit "$n" | sed '1,/^$/d' | git hash-object --stdin)" ]] ||
+  cmp -s "$t/om" "$t/nm" ||
     { echo "condition 2: the README commit ${n:0:12} has another message than ${o:0:12}" >&2; return 1; }
   for p in "${PMX_README_PATHS[@]}"; do
-    [[ "$(root_entry "$o" "$p" "$@")" == "$(root_entry "$n" "$p" "$@")" ]] ||
+    eo="$(root_entry "$o" "$p" "$@")" && en="$(root_entry "$n" "$p" "$@")" || return 2
+    [[ "$eo" == "$en" ]] ||
       { echo "condition 3: $p in the README commit ${n:0:12} is not what ${o:0:12} has" >&2; return 1; }
   done
-  while IFS= read -r -d '' name; do
-    readme_path "$name" ||
-      { echo "condition 4: the README commit ${n:0:12} changes ${name//$'\n'/?}, which is not a root README" >&2; return 1; }
-  done < <(changed_paths "$n" "$@")
+  why="$(outside_same "$n^" "$n" "$@" 2>&1)"
+  st=$?
+  [[ $st -ne 2 ]] || { echo "$why" >&2; return 2; }
+  [[ $st -eq 0 ]] ||
+    { echo "condition 4: the README commit ${n:0:12} changes a root entry outside the root READMEs: $why" >&2; return 1; }
+  why="$(set_not_tree "$n^" "$@" 2>&1)"
+  st=$?
+  [[ $st -ne 2 ]] || { echo "$why" >&2; return 2; }
+  [[ $st -eq 0 ]] ||
+    { echo "condition 4: the README commit ${n:0:12} replaces a directory: $why" >&2; return 1; }
   for p in "${PMX_README_PATHS[@]}"; do
-    [[ "$(root_entry "$ot" "$p" "$@")" == "$(root_entry "$nt" "$p" "$@")" ]] ||
+    eo="$(root_entry "$ot" "$p" "$@")" && en="$(root_entry "$nt" "$p" "$@")" || return 2
+    [[ "$eo" == "$en" ]] ||
       { echo "condition 5: $p at the candidate ${nt:0:12} is not what the old main ${ot:0:12} has" >&2; return 1; }
   done
+}
+
+# rev_count RANGE GIT...: the number of commits of RANGE.
+rev_count() {
+  local r=$1 n
+  shift
+  n="$("$@" rev-list --count "$r")" && [[ "$n" =~ ^[0-9]+$ ]] || { echo "git rev-list --count $r failed" >&2; return 2; }
+  echo "$n"
 }
 
 # one_sided OP RANGE GIT...: every commit of RANGE as a git range-diff header line, OP "<"
 # (the old side) or ">" (the new side), full SHAs, so range_diff_lists reads them as
 # dropped or added. git range-diff itself refuses an empty range.
 one_sided() {
-  local op=$1 rng=$2 c i=0 dash=----------------------------------------
+  local op=$1 rng=$2 list c s i=0 dash=----------------------------------------
   shift 2
-  for c in $("$@" rev-list --reverse --topo-order "$rng"); do
+  list="$("$@" rev-list --reverse --topo-order "$rng")" || { echo "git rev-list $rng failed" >&2; return 2; }
+  for c in $list; do
     i=$((i + 1))
+    s="$("$@" log -1 --format=%s "$c")" || { echo "git log $c failed" >&2; return 2; }
     if [[ "$op" == '<' ]]; then
-      printf '%s:  %s < -:  %s %s\n' "$i" "$c" "$dash" "$("$@" log -1 --format=%s "$c")"
+      printf '%s:  %s < -:  %s %s\n' "$i" "$c" "$dash" "$s"
     else
-      printf -- '-:  %s > %s:  %s %s\n' "$dash" "$i" "$c" "$("$@" log -1 --format=%s "$c")"
+      printf -- '-:  %s > %s:  %s %s\n' "$dash" "$i" "$c" "$s"
     fi
   done
 }
 
 # segment_range_diff OLD-RANGE NEW-RANGE GIT...: git range-diff of the two ranges; when one
-# is empty, the other's commits one-sided; when both are, nothing.
+# is empty, the other's commits one-sided; when both are, nothing. Status 2 when git failed.
 segment_range_diff() {
   local a=$1 b=$2 na nb
   shift 2
-  na="$("$@" rev-list --count "$a")" nb="$("$@" rev-list --count "$b")"
+  na="$(rev_count "$a" "$@")" && nb="$(rev_count "$b" "$@")" || return 2
   if [[ "$na" != 0 && "$nb" != 0 ]]; then
-    "$@" range-diff --no-color --no-notes "$a" "$b"
+    "$@" range-diff --no-color --no-notes "$a" "$b" || { echo "git range-diff $a $b failed" >&2; return 2; }
   elif [[ "$na" != 0 ]]; then
     one_sided '<' "$a" "$@"
   elif [[ "$nb" != 0 ]]; then
@@ -424,13 +512,14 @@ segment_range_diff() {
 #     "README  <R> -> <R'>  <subject>", the range-diff of the commits above them; and R'
 #     must be R re-applied (readme_normal): otherwise status 1 (OUT still written);
 #   more than one on either side, a merge commit, or parts that do not add up: status 1.
+# Status 2 when any git command failed (a failed segment is never hidden by another).
 # The README line is no range-diff header, so the README commit is in no list.
+# shellcheck disable=SC2015 # "A && B || return": either failing returns
 stack_range_diff() {
-  local ob=$1 om=$2 nb=$3 cand=$4 out=$5 ro rn no nn
+  local ob=$1 om=$2 nb=$3 cand=$4 out=$5 ro rn no nn m1 m2 c st
+  local n_ob_r n_r_om n_ob_om n_nb_r n_r_c n_nb_c
   shift 5
-  if ! ro="$(readme_commits "$ob..$om" "$@")" || ! rn="$(readme_commits "$nb..$cand" "$@")"; then
-    echo "cannot list the README commits" >&2; return 1
-  fi
+  ro="$(readme_commits "$ob..$om" "$@")" && rn="$(readme_commits "$nb..$cand" "$@")" || return 2
   no="$(grep -c . <<<"$ro" || true)" nn="$(grep -c . <<<"$rn" || true)"
   if [[ "$no" -gt 1 || "$nn" -gt 1 ]]; then
     "$@" range-diff --no-color --no-notes "$ob..$om" "$nb..$cand" >"$out" || true
@@ -438,28 +527,39 @@ stack_range_diff() {
     return 1
   fi
   if [[ "$no" == 0 || "$nn" == 0 ]]; then
-    "$@" range-diff --no-color --no-notes "$ob..$om" "$nb..$cand" >"$out"
-    return
+    "$@" range-diff --no-color --no-notes "$ob..$om" "$nb..$cand" >"$out" ||
+      { echo "git range-diff $ob..$om $nb..$cand failed" >&2; return 2; }
+    return 0
   fi
-  if [[ -n "$("$@" rev-list --merges "$ob..$om")" || -n "$("$@" rev-list --merges "$nb..$cand")" ]]; then
+  # Each range on its own: git rev-list of two ranges together combines their exclusions.
+  m1="$("$@" rev-list --merges "$ob..$om")" && m2="$("$@" rev-list --merges "$nb..$cand")" ||
+    { echo "git rev-list --merges failed" >&2; return 2; }
+  if [[ -n "$m1$m2" ]]; then
     "$@" range-diff --no-color --no-notes "$ob..$om" "$nb..$cand" >"$out" || true
     echo "a merge commit in the stack: the README rule needs linear ranges" >&2
     return 1
   fi
-  if [[ "$("$@" rev-list --parents -n 1 "$ro" | wc -w | tr -d ' ')" != 2 ||
-        "$("$@" rev-list --parents -n 1 "$rn" | wc -w | tr -d ' ')" != 2 ||
-        $(( $("$@" rev-list --count "$ob..$ro^") + 1 + $("$@" rev-list --count "$ro..$om") )) != "$("$@" rev-list --count "$ob..$om")" ||
-        $(( $("$@" rev-list --count "$nb..$rn^") + 1 + $("$@" rev-list --count "$rn..$cand") )) != "$("$@" rev-list --count "$nb..$cand")" ]]; then
+  for c in "$ro" "$rn"; do
+    m1="$("$@" rev-list --parents -n 1 "$c")" || { echo "git rev-list $c failed" >&2; return 2; }
+    [[ "$(wc -w <<<"$m1" | tr -d ' ')" == 2 ]] ||
+      { echo "condition 1: the README commit ${c:0:12} has not exactly one parent" >&2; return 1; }
+  done
+  n_ob_r="$(rev_count "$ob..$ro^" "$@")" && n_r_om="$(rev_count "$ro..$om" "$@")" && n_ob_om="$(rev_count "$ob..$om" "$@")" &&
+    n_nb_r="$(rev_count "$nb..$rn^" "$@")" && n_r_c="$(rev_count "$rn..$cand" "$@")" && n_nb_c="$(rev_count "$nb..$cand" "$@")" ||
+    return 2
+  if [[ $((n_ob_r + 1 + n_r_om)) != "$n_ob_om" || $((n_nb_r + 1 + n_r_c)) != "$n_nb_c" ]]; then
     "$@" range-diff --no-color --no-notes "$ob..$om" "$nb..$cand" >"$out" || true
     echo "the commits below and above the README commit do not add up to the stack" >&2
     return 1
   fi
-  {
-    segment_range_diff "$ob..$ro^" "$nb..$rn^" "$@"
-    printf 'README  %s -> %s  %s\n' "$ro" "$rn" "$("$@" log -1 --format=%s "$rn")"
-    segment_range_diff "$ro..$om" "$rn..$cand" "$@"
-  } >"$out" || { echo "git range-diff failed" >&2; return 1; }
-  readme_normal "$ro" "$rn" "$om" "$cand" "$@" || return 1
+  : >"$out"
+  segment_range_diff "$ob..$ro^" "$nb..$rn^" "$@" >>"$out" || return 2
+  c="$("$@" log -1 --format=%s "$rn")" || { echo "git log $rn failed" >&2; return 2; }
+  printf 'README  %s -> %s  %s\n' "$ro" "$rn" "$c" >>"$out"
+  segment_range_diff "$ro..$om" "$rn..$cand" "$@" >>"$out" || return 2
+  readme_normal "$ro" "$rn" "$om" "$cand" "$@"
+  st=$?
+  [[ $st -eq 0 ]] || return $st
   echo "$ro $rn"
 }
 
