@@ -35,6 +35,8 @@ import {
   dayValue,
   findBreakdown,
   formatCompact,
+  formatDate,
+  formatDay,
   formatCount,
   formatMoney,
   formatPerMtok,
@@ -240,35 +242,6 @@ const hostOfProvider = (provider: string): string | undefined =>
   provider === 'openrouter' ? 'openrouter.ai' : undefined;
 
 /* ---------- what the numbers cover: always visible ---------- */
-
-function formatDay(day: string, language: string, withYear = true): string {
-  const [y, m, d] = day.split('-').map(Number);
-  if (!y || !m || !d) return day;
-  try {
-    return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString(language, {
-      timeZone: 'UTC',
-      day: 'numeric',
-      month: 'short',
-      ...(withYear ? { year: 'numeric' } : {}),
-    });
-  } catch {
-    return day;
-  }
-}
-
-function formatDate(ms: number, language: string): string {
-  try {
-    return new Date(ms).toLocaleString(language, {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  } catch {
-    return new Date(ms).toISOString();
-  }
-}
 
 function Basis({ data }: { data: ProvimuxSavingsResponse }) {
   const { t, i18n } = useTranslation();

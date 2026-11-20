@@ -21,6 +21,10 @@ import {
   dayPoints,
   dayValue,
   floorAmount,
+  formatCompact,
+  formatDate,
+  formatDay,
+  formatRate,
   isBaseRates,
   headlineOf,
   partValue,
@@ -46,6 +50,13 @@ const changed = (
   return copy;
 };
 const en = () => i18n.getFixedT('en');
+/*
+ * Dates, times, compact numbers and percentages as the page writes them, with the page's own formatters: their
+ * text depends on the runtime's ICU data (CI's Bun on Linux writes "Nov 20, 2026, 07:02 AM" where macOS writes
+ * "Nov 20, 2026 at 07:02 AM") and on the runner's zone, so a test never hard-codes it. T-131.
+ */
+const day = (value: string, withYear = true) => formatDay(value, 'en', withYear);
+const moment = (iso: string) => formatDate(Date.parse(iso), 'en');
 /** The month with every request priced (the unpriced swe-2 requests counted as priced). */
 const fullyPriced = (base: ProvimuxSavingsResponse) =>
   changed(base, (data) => {
@@ -285,7 +296,7 @@ describe('states', () => {
       text((data) => {
         data.totals = structuredClone(empty.totals);
       })
-    ).toContain('No requests in this period. Data exists since Nov 18, 2026.');
+    ).toContain(`No requests in this period. Data exists since ${day('2026-11-18')}.`);
     expect(text((data) => (data.totals.estimate.floating_requests = 4))).toContain(
       "4 requests are valued with today's list: their day has no recorded price yet (recorded without one, or not saved yet), so their amounts can still move."
     );
@@ -299,7 +310,7 @@ describe('states', () => {
       })
     ).toContain('runs with --local-model');
     expect(text((data) => (data.prices.openrouter.fetched_at = '2026-11-17T08:00:00Z'))).toContain(
-      'The price list is from Nov 17, 2026'
+      `The price list is from ${moment('2026-11-17T08:00:00Z')}`
     );
     // The month is partly priced (2,155 of 2,245): a negative amount is no verdict on the period (T-124, 3).
     expect(text((data) => (data.totals.estimate.saved_by_caching_usd = -3.2))).toContain(
@@ -454,14 +465,18 @@ describe('the words that keep it honest', () => {
   });
 
   test('the price list and its date are there', () => {
-    expect(text).toContain("Prices: OpenRouter's public list of Nov 20, 2026");
+    expect(text).toContain(
+      `Prices: OpenRouter's public list of ${moment(month.prices.openrouter.fetched_at!)}`
+    );
     expect(text).toContain('Europe/Bucharest');
-    expect(text).toContain('Nov 1, 2026 – Nov 20, 2026');
-    expect(text).toContain('recording since Nov 18, 2026');
+    expect(text).toContain(`${day('2026-11-01')} – ${day('2026-11-20')}`);
+    expect(text).toContain(`recording since ${day('2026-11-18')}`);
   });
 
   test('the unpriced model swe-2 is named near the headline', () => {
-    expect(text).toContain('90 requests (877.5K tokens) are of models without a price: swe-2');
+    expect(text).toContain(
+      `90 requests (${formatCompact(877_500, 'en')} tokens) are of models without a price: swe-2`
+    );
     expect(text).not.toMatch(/at least/i);
   });
 
@@ -687,7 +702,7 @@ describe('nothing priced', () => {
     expect(text).toContain('not valued');
     expect(text).toContain('No price list yet.');
     // Requests and the hit rate as usual.
-    expect(text).toContain('93.5%');
+    expect(text).toContain(formatRate(0.9352, 'en'));
     expect(text).toContain('2,006');
   });
 });
@@ -777,10 +792,10 @@ describe('review T-112', () => {
     expect(dayValue(days[0])).toBe('known');
     const html = render(withDays);
     const rows = html.match(/<tr[^>]*>(?:(?!<\/tr>)[\s\S])*<\/tr>/g) ?? [];
-    const row20 = textOf(rows.find((row) => row.includes('Nov 20<')) ?? '');
+    const row20 = textOf(rows.find((row) => row.includes(`${day('2026-11-20', false)}<`)) ?? '');
     expect(row20).toContain('not valued');
     expect(row20).not.toContain('$0.00');
-    const row19 = textOf(rows.find((row) => row.includes('Nov 19<')) ?? '');
+    const row19 = textOf(rows.find((row) => row.includes(`${day('2026-11-19', false)}<`)) ?? '');
     expect(row19).toContain('2 of 4 priced');
     // A month of such days keeps the counts.
     const year = changed(withDays, (data) => {
@@ -807,7 +822,7 @@ describe('T-116 answers', () => {
     expect(isBaseRates(month)).toBe(true);
     const base = textOf(render(month));
     expect(base).toContain(
-      "Prices: OpenRouter's public list of Nov 20, 2026 at 07:02 AM, at base rates (long-context tiers not applied)"
+      `Prices: OpenRouter's public list of ${moment(month.prices.openrouter.fetched_at!)}, at base rates (long-context tiers not applied)`
     );
     expect(base).toContain('Valued at base API list prices');
     expect(base).toContain('Estimates are at base list prices');
@@ -949,8 +964,12 @@ describe('review T-121', () => {
     expect(svg).not.toMatch(/100\.00 32\.00/);
     // The daily table says the same of that day.
     const rows = html.match(/<tr[^>]*>(?:(?!<\/tr>)[\s\S])*<\/tr>/g) ?? [];
-    expect(textOf(rows.find((row) => row.includes('Nov 21<')) ?? '')).toContain('not valued');
-    expect(textOf(rows.find((row) => row.includes('Nov 20<')) ?? '')).toContain('1 of 3 priced');
+    expect(
+      textOf(rows.find((row) => row.includes(`${day('2026-11-21', false)}<`)) ?? '')
+    ).toContain('not valued');
+    expect(
+      textOf(rows.find((row) => row.includes(`${day('2026-11-20', false)}<`)) ?? '')
+    ).toContain('1 of 3 priced');
   });
 
   test('4. gaps keep every day in its place; a lone valued day is a dot; no gap draws as before', () => {
