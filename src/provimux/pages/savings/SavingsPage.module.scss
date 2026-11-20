@@ -192,6 +192,24 @@
   height: 96px;
 }
 
+.partial {
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--warning-border);
+  border-radius: 8px;
+  background: var(--warning-bg);
+  color: var(--warning-text);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.partialTag {
+  flex: none;
+  font-size: 11.5px;
+  color: var(--warning-text);
+  white-space: nowrap;
+}
+
 .heroWarn {
   margin: 0;
   font-size: 13px;

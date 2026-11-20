@@ -149,10 +149,12 @@ export interface ApiKeyCost {
   reportedUsd: number;
   /** API-key requests whose answer carried a cost. */
   reportedRequests: number;
-  /** The estimate for all API-key requests, at list prices. */
+  /** The estimate of the API-key requests that have a price, at list prices. */
   estimateUsd: number;
+  /** API-key requests with a price: the estimate covers these only. */
+  pricedRequests: number;
   /** The estimate for the API-key requests on hosts that reported no cost at all; null without that breakdown. */
-  unreported: { requests: number; estimateUsd: number } | null;
+  unreported: { requests: number; pricedRequests: number; estimateUsd: number } | null;
 }
 
 /** Item 4: what the API keys really cost, and the estimate for what no provider reported. */
@@ -168,6 +170,7 @@ export function apiKeyCostOf(data: ProvimuxSavingsResponse): ApiKeyCost | null {
     );
     unreported = {
       requests: rows.reduce((sum, row) => sum + row.requests, 0),
+      pricedRequests: rows.reduce((sum, row) => sum + row.estimate.priced_requests, 0),
       estimateUsd: rows.reduce((sum, row) => sum + row.estimate.cost_usd, 0),
     };
   }
@@ -176,6 +179,7 @@ export function apiKeyCostOf(data: ProvimuxSavingsResponse): ApiKeyCost | null {
     reportedUsd: apikey.reported_cost.usd,
     reportedRequests: apikey.reported_cost.requests,
     estimateUsd: apikey.estimate.cost_usd,
+    pricedRequests: apikey.estimate.priced_requests,
     unreported,
   };
 }
@@ -277,6 +281,24 @@ export function zoneLabel(data: Pick<ProvimuxSavingsResponse, 'timezone' | 'utc_
 export const recordedSinceInRange = (data: ProvimuxSavingsResponse): boolean =>
   data.recording.since !== null && data.recording.since > data.range.from;
 
+/**
+ * How much of the period the amounts cover. With any request unpriced, an amount is the sum over the priced
+ * requests only: not a lower bound, since an unpriced request can be worth less than nothing (a cache write costs
+ * more than plain input). Review T-112, finding 3.
+ */
+export interface Coverage {
+  priced: number;
+  requests: number;
+  /** Some requests have a price and some do not. */
+  partial: boolean;
+}
+
+export const coverageOf = (metrics: ProvimuxSavingsMetrics): Coverage => ({
+  priced: metrics.estimate.priced_requests,
+  requests: metrics.requests,
+  partial: metrics.estimate.priced_requests > 0 && metrics.estimate.unpriced_requests > 0,
+});
+
 /* ---------- the copy line (04-console-page.md section 5) ---------- */
 
 /** Rounded down: whole dollars from $100, cents below. Never more than the page says. */
@@ -335,12 +357,19 @@ export function copyLine(
 ): { line: string; block: null } | { line: null; block: CopyBlock } {
   const block = copyBlock(data);
   if (block) return { line: null, block };
+  const coverage = coverageOf(data.totals);
+  const english = (value: number) => new Intl.NumberFormat('en-US').format(value);
   return {
-    line: t('provimux.savings.copy.line', {
-      amount: copyAmount(data.totals.estimate.saved_by_caching_usd),
-      period: t(periodWordKey(data.range.period)),
-      interpolation: { escapeValue: false },
-    }),
+    line: t(
+      coverage.partial ? 'provimux.savings.copy.line_partial' : 'provimux.savings.copy.line',
+      {
+        amount: copyAmount(data.totals.estimate.saved_by_caching_usd),
+        period: t(periodWordKey(data.range.period)),
+        priced: english(coverage.priced),
+        requests: english(coverage.requests),
+        interpolation: { escapeValue: false },
+      }
+    ),
     block: null,
   };
 }
@@ -351,8 +380,18 @@ export interface DayPoint {
   /** YYYY-MM-DD, or YYYY-MM when the range is long and days are summed by month. */
   label: string;
   requests: number;
+  /** Requests with a price; `saved` covers these only. */
+  priced: number;
   saved: number;
 }
+
+/** A day's value is known when every request has a price, partial when some do, unknown when none do. */
+export const dayValue = (point: DayPoint): 'known' | 'partial' | 'none' =>
+  point.requests === 0 || point.priced === point.requests
+    ? 'known'
+    : point.priced === 0
+      ? 'none'
+      : 'partial';
 
 const dayToMs = (value: string): number => {
   const [y, m, d] = value.split('-').map(Number);
@@ -383,6 +422,7 @@ export function dayPoints(data: ProvimuxSavingsResponse): DayPoint[] | null {
     days.push({
       label,
       requests: row?.requests ?? 0,
+      priced: row ? row.estimate.priced_requests : 0,
       saved: row?.estimate.saved_by_caching_usd ?? 0,
     });
   }
@@ -393,6 +433,7 @@ export function dayPoints(data: ProvimuxSavingsResponse): DayPoint[] | null {
     const last = months[months.length - 1];
     if (last && last.label === label) {
       last.requests += point.requests;
+      last.priced += point.priced;
       last.saved += point.saved;
     } else {
       months.push({ ...point, label });
