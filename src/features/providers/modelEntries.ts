@@ -7,7 +7,10 @@ export function removeModelAt(current: ModelEntryInput[], index: number): ModelE
   return next.length ? next : [{ name: '', alias: '' }];
 }
 
-/** Discovery deduplicates new names, never existing rows with distinct aliases or metadata. */
+/**
+ * Discovery deduplicates new names, never existing rows with distinct aliases or metadata.
+ * New names carry no alias: an endpoint's alias field never becomes one.
+ */
 export function mergeDiscoveredModels(
   current: ModelEntryInput[],
   incoming: ModelInfo[]
@@ -21,7 +24,7 @@ export function mergeDiscoveredModels(
     const name = model.name.trim();
     if (!name || seen.has(name)) continue;
     seen.add(name);
-    next.push({ name, alias: model.alias?.trim() ?? '' });
+    next.push({ name, alias: '' });
   }
   return next.length ? next : [{ name: '', alias: '' }];
 }

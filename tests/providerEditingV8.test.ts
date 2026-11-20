@@ -111,7 +111,8 @@ describe('provider model discovery merge', () => {
       { name: ' fresh ', alias: ' new ' },
       { name: 'fresh' },
     ]);
-    expect(merged).toEqual([a, b, { name: 'fresh', alias: 'new' }]);
+    // An endpoint alias never becomes the new row's alias.
+    expect(merged).toEqual([a, b, { name: 'fresh', alias: '' }]);
     expect(merged[0]).toBe(a);
     expect(merged[1]).toBe(b);
     expect(current).toEqual([a, b]);

@@ -203,7 +203,7 @@ export const buildProviderKeyConfig = (
   return next;
 };
 
-const buildOpenAIConfig = (
+export const buildOpenAIConfig = (
   input: ProviderEntryFormInput,
   existing?: OpenAIProviderConfig | null
 ): OpenAIProviderConfig => {
