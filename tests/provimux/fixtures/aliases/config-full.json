@@ -180,7 +180,9 @@
         {
           "name": "gpt-5.5",
           "alias": "g55",
-          "openapi": true
+          "display-name": "GPT 5.5 (login)",
+          "openapi": true,
+          "x-unknown": "keep-me"
         }
       ],
       "CODEX": [{ "name": "gpt-5.4", "alias": "g54", "fork": true }]

@@ -322,7 +322,13 @@ describe('R-1 rows', () => {
     ]);
     const codex = loginEntries.find((entry) => entry.channel === 'codex')!;
     expect(codex.storedList).toEqual([
-      { name: 'gpt-5.5', alias: 'g55', openapi: true },
+      {
+        name: 'gpt-5.5',
+        alias: 'g55',
+        'display-name': 'GPT 5.5 (login)',
+        openapi: true,
+        'x-unknown': 'keep-me',
+      },
       { name: 'gpt-5.4', alias: 'g54', fork: true },
     ]);
   });
