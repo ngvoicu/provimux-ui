@@ -28,6 +28,8 @@ import {
   byAccess,
   copyLine,
   coverageOf,
+  isBaseRates,
+  ratesKey,
   dayPoints,
   dayValue,
   findBreakdown,
@@ -222,7 +224,7 @@ export function SavingsView({ data }: { data: ProvimuxSavingsResponse }) {
       <p className={shared.note}>
         <IconInfo size={14} />
         <span>
-          {t('provimux.savings.attempts')} {t('provimux.savings.note')}
+          {t('provimux.savings.attempts')} {t(ratesKey('provimux.savings.note', data))}
         </span>
       </p>
     </>
@@ -286,7 +288,8 @@ function Basis({ data }: { data: ProvimuxSavingsResponse }) {
       ) : null}
       <span>
         {fetched !== null
-          ? t('provimux.savings.basis.prices_openrouter', { date: formatDate(fetched, lang) })
+          ? t('provimux.savings.basis.prices_openrouter', { date: formatDate(fetched, lang) }) +
+            (isBaseRates(data) ? `, ${t('provimux.savings.basis.rates_base')}` : '')
           : t('provimux.savings.basis.prices_none')}
         {usesProvimuxTable(data) && data.prices.provimux.updated
           ? ` ${t('provimux.savings.basis.prices_table', {
@@ -410,7 +413,7 @@ function Headline({ data, states }: { data: ProvimuxSavingsResponse; states: Sav
         ) : (
           <p className={styles.heroUnvalued}>{t('provimux.savings.headline.unvalued')}</p>
         )}
-        <p className={shared.featureText}>{t('provimux.savings.headline.text')}</p>
+        <p className={shared.featureText}>{t(ratesKey('provimux.savings.headline.text', data))}</p>
         {valued && coverage.partial ? (
           <p className={styles.partial} data-partial="true">
             {t('provimux.savings.headline.partial', {

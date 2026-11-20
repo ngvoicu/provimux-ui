@@ -19,6 +19,7 @@ import {
   dayPoints,
   dayValue,
   floorAmount,
+  isBaseRates,
   headlineOf,
   hitRateOf,
   keyLabel,
@@ -282,7 +283,7 @@ describe('states', () => {
       })
     ).toContain('No requests in this period. Data exists since Nov 18, 2026.');
     expect(text((data) => (data.totals.estimate.floating_requests = 4))).toContain(
-      "valued with today's list, so their amounts can still move"
+      "4 requests are valued with today's list: their day has no recorded price yet (recorded without one, or not saved yet), so their amounts can still move."
     );
     expect(text((data) => (data.prices.openrouter.fetched_at = null))).toContain(
       'No price list yet, so nothing can be valued'
@@ -782,5 +783,66 @@ describe('review T-112', () => {
     expect(copyLine(fullyPriced(month), en()).line).toContain('at base API list prices.');
     // Still one sentence.
     expect((copyLine(month, en()).line ?? '').match(/\./g)?.length).toBe(1);
+  });
+});
+
+// Task T-120: the backend's T-116 answers (provimux main 5adbfccc).
+describe('T-116 answers', () => {
+  test('1. "base rates" comes from prices.rates; absent or unknown says nothing about tiers', () => {
+    expect(month.prices.rates).toBe('base');
+    expect(empty.prices.rates).toBe('base');
+    expect(isBaseRates(month)).toBe(true);
+    const base = textOf(render(month));
+    expect(base).toContain(
+      "Prices: OpenRouter's public list of Nov 20, 2026 at 07:02 AM, at base rates (long-context tiers not applied)"
+    );
+    expect(base).toContain('Valued at base API list prices');
+    expect(base).toContain('Estimates are at base list prices');
+    expect(copyLine(fullyPriced(month), en()).line).toBe(
+      'Prompt caching through Provimux was worth $1,429 this month at base API list prices.'
+    );
+
+    for (const rates of [undefined, 'tiered']) {
+      const answer = structuredClone(raw('savings-month')) as { prices: Record<string, unknown> };
+      if (rates === undefined) delete answer.prices.rates;
+      else answer.prices.rates = rates;
+      const read = readSavings(answer);
+      expect(read.prices.rates).toBe(rates ?? null);
+      expect(isBaseRates(read)).toBe(false);
+      const text = textOf(render(read));
+      expect(text).not.toMatch(/\bbase\b|long-context|tiers/i);
+      expect(text).toContain('Valued at API list prices');
+      expect(copyLine(fullyPriced(read), en()).line).toBe(
+        'Prompt caching through Provimux was worth $1,429 this month at API list prices.'
+      );
+      expect(copyLine(read, en()).line).toBe(
+        'Prompt caching through Provimux was worth $1,429 this month at API list prices, for the 2,155 of 2,245 requests with a price.'
+      );
+    }
+  });
+
+  test('2. rows only in memory: basis current and floating, shown as amounts that can still move', () => {
+    const memory = changed(month, (data) => {
+      data.totals.estimate.floating_requests = 26;
+      data.models[4].price!.basis = 'current';
+      data.models[0].price!.basis = 'mixed';
+    });
+    expect(savingsStates(memory)).toContain('floating');
+    const text = textOf(render(memory));
+    expect(text).toContain(
+      "26 requests are valued with today's list: their day has no recorded price yet (recorded without one, or not saved yet), so their amounts can still move."
+    );
+    // The per-model table says which prices are today's, never "prices of the day".
+    expect(text).toMatch(
+      /anthropic\/claude-haiku-5\.5 OpenRouter · matched by name · today's prices/
+    );
+    expect(text).toMatch(
+      /anthropic\/claude-opus-5\.5 OpenRouter · matched by name · partly today's prices/
+    );
+    expect(text).not.toMatch(/claude-haiku-5\.5 OpenRouter · matched by name · prices of the day/);
+    const one = changed(memory, (data) => (data.totals.estimate.floating_requests = 1));
+    expect(textOf(render(one))).toContain(
+      "1 request is valued with today's list: its day has no recorded price yet"
+    );
   });
 });

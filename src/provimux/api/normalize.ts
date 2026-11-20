@@ -308,6 +308,7 @@ export const readSavings = (value: unknown): ProvimuxSavingsResponse => {
     },
     prices: {
       currency: str(prices.currency) ?? 'USD',
+      rates: str(prices.rates),
       openrouter: {
         url: str(openrouter.url) ?? '',
         fetched_at: time(openrouter.fetched_at),
