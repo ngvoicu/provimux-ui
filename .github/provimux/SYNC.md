@@ -6,7 +6,7 @@ the Provimux layer (commits with the trailer `Provimux-Layer: branding`). When t
 with no step by the owner. It is Provimux's sync (`ngvoicu/provimux`, `.github/provimux/SYNC.md`) in the same shape,
 adapted to a console that is one HTML file. One commit of the layer, **the README commit**, replaces upstream's root
 `README.md` and `README_CN.md` with a pointer of its own, and the sync re-applies it on every release ("The root README
-commit"). Until that commit is on `main` the rule checks nothing and every script behaves as before.
+commit"). The README commit is on `main` and required: the guard fails a stack without it (`require_readme=1`).
 
 **Check, publish and promote automatically; the owner only for what needs a decision.** A workflow checks each new
 release and reports in an issue. When the check passes, a second workflow, started only by that check run's
@@ -78,11 +78,11 @@ Every job checks out the run's own commit (`github.sha`, the run's `head_sha`) a
 6. **Workflow files.** Every path under `.github/workflows/` new in the tag is listed, and `publish.sh` refuses such
    a release (see "New upstream workflow files").
 7. **Guard** on the candidate with `PMX_EXPECT_BASE=<tag>` and `PMX_EXPECT_BASE_COMMIT=<commit>`. Its rule 5 checks
-   the README commit (every git read checked: a failed read fails the guard): at most one, with `Provimux-Layer:
-   branding`, one parent, its root tree records outside the set equal to its parent's, no directory of its parent at a
-   path of the set, `README.md` a regular file and `README_CN.md` absent; and then at the candidate exactly one root
-   entry whose name begins with `readme` (any case), the regular file `README.md`. A root README upstream adds
-   (`README_JA.md`) fails here, named.
+   the README commit (every git read checked: a failed read fails the guard): exactly one (none fails:
+   `require_readme=1`), with `Provimux-Layer: branding`, one parent, its root tree records outside the set equal to
+   its parent's, no directory of its parent at a path of the set, `README.md` a regular file and `README_CN.md`
+   absent; and then at the candidate exactly one root entry whose name begins with `readme` (any case), the regular
+   file `README.md`. A root README upstream adds (`README_JA.md`) fails here, named.
 
 **Jobs `test (candidate)` and `test (tag)`**, one runner each: before any code of the tree runs, `check.sh
 fetch-prepare` fetches the prepare job's artifact by the id and digest that job output; `check.sh tree` makes a
