@@ -66,10 +66,10 @@ describe('discovery synchronization', () => {
         [{ name: ' b ', alias: ' Bee ' }, { name: 'b' }, { name: 'outside' }],
         catalog
       )
-    ).toEqual([{ name: 'b', alias: 'Bee' }]);
+    ).toEqual([{ name: 'b', alias: '' }]);
   });
 
-  test('imports only explicit aliases, not upstream display names or descriptions', () => {
+  test('imports no alias at all: not explicit endpoint aliases, display names or descriptions', () => {
     const models = normalizeModelList({
       data: [
         { id: 'snake', display_name: 'Snake label', description: 'Description' },
@@ -88,7 +88,7 @@ describe('discovery synchronization', () => {
     expect(syncDiscoveredModels([], models, models)).toEqual([
       { name: 'snake', alias: '' },
       { name: 'camel', alias: '' },
-      { name: 'explicit', alias: 'my-alias' },
+      { name: 'explicit', alias: '' },
       { name: 'described', alias: '' },
     ]);
   });
