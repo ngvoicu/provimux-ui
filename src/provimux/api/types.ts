@@ -231,6 +231,9 @@ export interface ProvimuxSavingsResponse {
   };
   prices: {
     currency: 'USD' | (string & {});
+    /** Which rates the estimates use: `base` = each model's base list rate, long-context tiers not applied
+     * (T-116). null when the server does not say: the page then says nothing about tiers. */
+    rates: 'base' | (string & {}) | null;
     openrouter: { url: string; fetched_at: Timestamp | null; models: number; remote: boolean };
     provimux: { updated: ProvimuxDay | null; models: number };
   };

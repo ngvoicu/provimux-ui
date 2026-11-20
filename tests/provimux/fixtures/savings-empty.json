@@ -16,6 +16,7 @@
   },
   "prices": {
     "currency": "USD",
+    "rates": "base",
     "openrouter": {
       "url": "https://openrouter.ai/api/v1/models",
       "fetched_at": null,
