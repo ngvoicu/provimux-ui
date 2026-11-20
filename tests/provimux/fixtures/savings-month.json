@@ -1,0 +1,545 @@
+{
+  "observed_at": "2026-11-20T09:14:07.512Z",
+  "timezone": "Europe/Bucharest",
+  "utc_offset_seconds": 7200,
+  "today": "2026-11-20",
+  "range": {
+    "period": "month",
+    "from": "2026-11-01",
+    "to": "2026-11-20"
+  },
+  "recording": {
+    "since": "2026-11-18",
+    "persistent": true,
+    "saved_at": "2026-11-20T09:14:01.004Z",
+    "folded_days": 0
+  },
+  "prices": {
+    "currency": "USD",
+    "openrouter": {
+      "url": "https://openrouter.ai/api/v1/models",
+      "fetched_at": "2026-11-20T07:02:44.130Z",
+      "models": 454,
+      "remote": true
+    },
+    "provimux": {
+      "updated": "2026-11-20",
+      "models": 0
+    }
+  },
+  "totals": {
+    "requests": 2245,
+    "failures": 12,
+    "tokens": {
+      "input": {
+        "uncached": 16177500,
+        "cache_read": 470700000,
+        "cache_write": 16425000,
+        "cache_write_5m": 2700000,
+        "cache_write_1h": 13725000,
+        "total": 503302500
+      },
+      "output": {
+        "total": 12870000,
+        "reasoning": 3420000
+      },
+      "unclassified": 0
+    },
+    "cache_hit_rate": 0.9352,
+    "estimate": {
+      "cost_usd": 429.1155,
+      "cost_without_cache_usd": 1858.8555,
+      "saved_by_caching_usd": 1429.74,
+      "priced_requests": 2155,
+      "unpriced_requests": 90,
+      "unpriced_tokens": 877500,
+      "floating_requests": 0
+    },
+    "reported_cost": {
+      "usd": 22.145526,
+      "byok_upstream_usd": 0.0,
+      "requests": 208
+    }
+  },
+  "breakdowns": [
+    {
+      "by": [
+        "kind"
+      ],
+      "rows": [
+        {
+          "kind": "oauth",
+          "requests": 2006,
+          "failures": 9,
+          "tokens": {
+            "input": {
+              "uncached": 13972500,
+              "cache_read": 448650000,
+              "cache_write": 13725000,
+              "cache_write_5m": 0,
+              "cache_write_1h": 13725000,
+              "total": 476347500
+            },
+            "output": {
+              "total": 11902500,
+              "reasoning": 3420000
+            },
+            "unclassified": 0
+          },
+          "cache_hit_rate": 0.9419,
+          "estimate": {
+            "cost_usd": 406.845,
+            "cost_without_cache_usd": 1796.04,
+            "saved_by_caching_usd": 1389.195,
+            "priced_requests": 1916,
+            "unpriced_requests": 90,
+            "unpriced_tokens": 877500,
+            "floating_requests": 0
+          },
+          "reported_cost": {
+            "usd": 0.0,
+            "byok_upstream_usd": 0.0,
+            "requests": 0
+          }
+        },
+        {
+          "kind": "apikey",
+          "requests": 239,
+          "failures": 3,
+          "tokens": {
+            "input": {
+              "uncached": 2205000,
+              "cache_read": 22050000,
+              "cache_write": 2700000,
+              "cache_write_5m": 2700000,
+              "cache_write_1h": 0,
+              "total": 26955000
+            },
+            "output": {
+              "total": 967500,
+              "reasoning": 0
+            },
+            "unclassified": 0
+          },
+          "cache_hit_rate": 0.818,
+          "estimate": {
+            "cost_usd": 22.2705,
+            "cost_without_cache_usd": 62.8155,
+            "saved_by_caching_usd": 40.545,
+            "priced_requests": 239,
+            "unpriced_requests": 0,
+            "unpriced_tokens": 0,
+            "floating_requests": 0
+          },
+          "reported_cost": {
+            "usd": 22.145526,
+            "byok_upstream_usd": 0.0,
+            "requests": 208
+          }
+        }
+      ],
+      "truncated": false
+    },
+    {
+      "by": [
+        "key"
+      ],
+      "rows": [
+        {
+          "key": {
+            "id": "3f9a1c2b7d4e5f60",
+            "tail": "x9Qz",
+            "name": null
+          },
+          "requests": 2006,
+          "failures": 9,
+          "tokens": {
+            "input": {
+              "uncached": 13972500,
+              "cache_read": 448650000,
+              "cache_write": 13725000,
+              "cache_write_5m": 0,
+              "cache_write_1h": 13725000,
+              "total": 476347500
+            },
+            "output": {
+              "total": 11902500,
+              "reasoning": 3420000
+            },
+            "unclassified": 0
+          },
+          "cache_hit_rate": 0.9419,
+          "estimate": {
+            "cost_usd": 406.845,
+            "cost_without_cache_usd": 1796.04,
+            "saved_by_caching_usd": 1389.195,
+            "priced_requests": 1916,
+            "unpriced_requests": 90,
+            "unpriced_tokens": 877500,
+            "floating_requests": 0
+          },
+          "reported_cost": {
+            "usd": 0.0,
+            "byok_upstream_usd": 0.0,
+            "requests": 0
+          }
+        },
+        {
+          "key": {
+            "id": "8c41d0e2a7b35f19",
+            "tail": null,
+            "name": null
+          },
+          "requests": 213,
+          "failures": 3,
+          "tokens": {
+            "input": {
+              "uncached": 2025000,
+              "cache_read": 22050000,
+              "cache_write": 2700000,
+              "cache_write_5m": 2700000,
+              "cache_write_1h": 0,
+              "total": 26775000
+            },
+            "output": {
+              "total": 922500,
+              "reasoning": 0
+            },
+            "unclassified": 0
+          },
+          "cache_hit_rate": 0.8235,
+          "estimate": {
+            "cost_usd": 22.23,
+            "cost_without_cache_usd": 62.775,
+            "saved_by_caching_usd": 40.545,
+            "priced_requests": 213,
+            "unpriced_requests": 0,
+            "unpriced_tokens": 0,
+            "floating_requests": 0
+          },
+          "reported_cost": {
+            "usd": 22.145526,
+            "byok_upstream_usd": 0.0,
+            "requests": 208
+          }
+        },
+        {
+          "key": {
+            "id": "",
+            "tail": null,
+            "name": null
+          },
+          "requests": 26,
+          "failures": 0,
+          "tokens": {
+            "input": {
+              "uncached": 180000,
+              "cache_read": 0,
+              "cache_write": 0,
+              "cache_write_5m": 0,
+              "cache_write_1h": 0,
+              "total": 180000
+            },
+            "output": {
+              "total": 45000,
+              "reasoning": 0
+            },
+            "unclassified": 0
+          },
+          "cache_hit_rate": 0.0,
+          "estimate": {
+            "cost_usd": 0.0405,
+            "cost_without_cache_usd": 0.0405,
+            "saved_by_caching_usd": 0.0,
+            "priced_requests": 26,
+            "unpriced_requests": 0,
+            "unpriced_tokens": 0,
+            "floating_requests": 0
+          },
+          "reported_cost": {
+            "usd": 0.0,
+            "byok_upstream_usd": 0.0,
+            "requests": 0
+          }
+        }
+      ],
+      "truncated": false
+    },
+    {
+      "by": [
+        "kind",
+        "provider",
+        "host"
+      ],
+      "rows": [
+        {
+          "kind": "oauth",
+          "provider": "claude",
+          "host": "",
+          "requests": 1376,
+          "failures": 8,
+          "tokens": {
+            "input": {
+              "uncached": 1597500,
+              "cache_read": 311400000,
+              "cache_write": 13725000,
+              "cache_write_5m": 0,
+              "cache_write_1h": 13725000,
+              "total": 326722500
+            },
+            "output": {
+              "total": 7425000,
+              "reasoning": 1575000
+            },
+            "unclassified": 0
+          },
+          "cache_hit_rate": 0.9531,
+          "estimate": {
+            "cost_usd": 326.97,
+            "cost_without_cache_usd": 1455.39,
+            "saved_by_caching_usd": 1128.42,
+            "priced_requests": 1376,
+            "unpriced_requests": 0,
+            "unpriced_tokens": 0,
+            "floating_requests": 0
+          },
+          "reported_cost": {
+            "usd": 0.0,
+            "byok_upstream_usd": 0.0,
+            "requests": 0
+          }
+        },
+        {
+          "kind": "oauth",
+          "provider": "codex",
+          "host": "",
+          "requests": 540,
+          "failures": 1,
+          "tokens": {
+            "input": {
+              "uncached": 11700000,
+              "cache_read": 137250000,
+              "cache_write": 0,
+              "cache_write_5m": 0,
+              "cache_write_1h": 0,
+              "total": 148950000
+            },
+            "output": {
+              "total": 4275000,
+              "reasoning": 1845000
+            },
+            "unclassified": 0
+          },
+          "cache_hit_rate": 0.9215,
+          "estimate": {
+            "cost_usd": 79.875,
+            "cost_without_cache_usd": 340.65,
+            "saved_by_caching_usd": 260.775,
+            "priced_requests": 540,
+            "unpriced_requests": 0,
+            "unpriced_tokens": 0,
+            "floating_requests": 0
+          },
+          "reported_cost": {
+            "usd": 0.0,
+            "byok_upstream_usd": 0.0,
+            "requests": 0
+          }
+        },
+        {
+          "kind": "apikey",
+          "provider": "openrouter",
+          "host": "openrouter.ai",
+          "requests": 213,
+          "failures": 3,
+          "tokens": {
+            "input": {
+              "uncached": 2025000,
+              "cache_read": 22050000,
+              "cache_write": 2700000,
+              "cache_write_5m": 2700000,
+              "cache_write_1h": 0,
+              "total": 26775000
+            },
+            "output": {
+              "total": 922500,
+              "reasoning": 0
+            },
+            "unclassified": 0
+          },
+          "cache_hit_rate": 0.8235,
+          "estimate": {
+            "cost_usd": 22.23,
+            "cost_without_cache_usd": 62.775,
+            "saved_by_caching_usd": 40.545,
+            "priced_requests": 213,
+            "unpriced_requests": 0,
+            "unpriced_tokens": 0,
+            "floating_requests": 0
+          },
+          "reported_cost": {
+            "usd": 22.145526,
+            "byok_upstream_usd": 0.0,
+            "requests": 208
+          }
+        },
+        {
+          "kind": "oauth",
+          "provider": "devin",
+          "host": "",
+          "requests": 90,
+          "failures": 0,
+          "tokens": {
+            "input": {
+              "uncached": 675000,
+              "cache_read": 0,
+              "cache_write": 0,
+              "cache_write_5m": 0,
+              "cache_write_1h": 0,
+              "total": 675000
+            },
+            "output": {
+              "total": 202500,
+              "reasoning": 0
+            },
+            "unclassified": 0
+          },
+          "cache_hit_rate": 0.0,
+          "estimate": {
+            "cost_usd": 0.0,
+            "cost_without_cache_usd": 0.0,
+            "saved_by_caching_usd": 0.0,
+            "priced_requests": 0,
+            "unpriced_requests": 90,
+            "unpriced_tokens": 877500,
+            "floating_requests": 0
+          },
+          "reported_cost": {
+            "usd": 0.0,
+            "byok_upstream_usd": 0.0,
+            "requests": 0
+          }
+        },
+        {
+          "kind": "apikey",
+          "provider": "claude",
+          "host": "",
+          "requests": 26,
+          "failures": 0,
+          "tokens": {
+            "input": {
+              "uncached": 180000,
+              "cache_read": 0,
+              "cache_write": 0,
+              "cache_write_5m": 0,
+              "cache_write_1h": 0,
+              "total": 180000
+            },
+            "output": {
+              "total": 45000,
+              "reasoning": 0
+            },
+            "unclassified": 0
+          },
+          "cache_hit_rate": 0.0,
+          "estimate": {
+            "cost_usd": 0.0405,
+            "cost_without_cache_usd": 0.0405,
+            "saved_by_caching_usd": 0.0,
+            "priced_requests": 26,
+            "unpriced_requests": 0,
+            "unpriced_tokens": 0,
+            "floating_requests": 0
+          },
+          "reported_cost": {
+            "usd": 0.0,
+            "byok_upstream_usd": 0.0,
+            "requests": 0
+          }
+        }
+      ],
+      "truncated": false
+    }
+  ],
+  "models": [
+    {
+      "provider": "claude",
+      "model": "claude-opus-5-5",
+      "requests": 1376,
+      "tokens": 334147500,
+      "price": {
+        "source": "openrouter",
+        "id": "anthropic/claude-opus-5.5",
+        "match": "normalized",
+        "basis": "recorded",
+        "input_per_mtok": 4.0,
+        "output_per_mtok": 20.0,
+        "cache_read_per_mtok": 0.2,
+        "cache_write_per_mtok": 5.0,
+        "cache_write_1h_per_mtok": 8.0
+      }
+    },
+    {
+      "provider": "codex",
+      "model": "gpt-6.2-sol",
+      "requests": 540,
+      "tokens": 153225000,
+      "price": {
+        "source": "openrouter",
+        "id": "openai/gpt-6.2-sol",
+        "match": "normalized",
+        "basis": "recorded",
+        "input_per_mtok": 2.0,
+        "output_per_mtok": 10.0,
+        "cache_read_per_mtok": 0.1,
+        "cache_write_per_mtok": 2.5,
+        "cache_write_1h_per_mtok": null
+      }
+    },
+    {
+      "provider": "openrouter",
+      "model": "anthropic/claude-sonnet-5.5",
+      "requests": 213,
+      "tokens": 27697500,
+      "price": {
+        "source": "openrouter",
+        "id": "anthropic/claude-sonnet-5.5",
+        "match": "exact",
+        "basis": "recorded",
+        "input_per_mtok": 2.0,
+        "output_per_mtok": 10.0,
+        "cache_read_per_mtok": 0.1,
+        "cache_write_per_mtok": 2.5,
+        "cache_write_1h_per_mtok": 4.0
+      }
+    },
+    {
+      "provider": "devin",
+      "model": "swe-2",
+      "requests": 90,
+      "tokens": 877500,
+      "price": null
+    },
+    {
+      "provider": "claude",
+      "model": "claude-haiku-5-5",
+      "requests": 26,
+      "tokens": 225000,
+      "price": {
+        "source": "openrouter",
+        "id": "anthropic/claude-haiku-5.5",
+        "match": "normalized",
+        "basis": "recorded",
+        "input_per_mtok": 0.1,
+        "output_per_mtok": 0.5,
+        "cache_read_per_mtok": 0.01,
+        "cache_write_per_mtok": 0.125,
+        "cache_write_1h_per_mtok": 0.2
+      }
+    }
+  ],
+  "models_truncated": false,
+  "reported_cost_hosts": [
+    "openrouter.ai"
+  ]
+}

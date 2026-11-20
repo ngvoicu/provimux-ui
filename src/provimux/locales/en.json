@@ -49,11 +49,13 @@
     "footer_built_on": "Built on CLIProxyAPI",
     "nav": {
       "model_routes": "Model routes",
-      "live_lists": "Live model lists"
+      "live_lists": "Live model lists",
+      "savings": "Savings"
     },
     "nav_meta": {
       "model_routes": "Which subscription or API key serves each model",
-      "live_lists": "Each login's own model list, live or from the catalog"
+      "live_lists": "Each login's own model list, live or from the catalog",
+      "savings": "What prompt caching saved, and what each account kind served"
     },
     "providers": {
       "sponsor_empty": "No keys match the search or filters. To add a key for this service, choose Codex or OpenAI Compatible in the provider list and click \"New\" there, with the service's base URL."
@@ -271,6 +273,209 @@
       "auto_off": "Not updated automatically (disable-auto-update-panel is on)",
       "source_failed": "Where the server downloads the console from: unknown ({{message}})",
       "reason_unusable_as_default": "the updater cannot use the configured address, so it uses the server's default"
+    },
+    "savings": {
+      "title": "Savings",
+      "lede": "What prompt caching saved, how many requests subscriptions and API keys served, and what the API keys really cost. Every amount marked estimate is at list prices.",
+      "load_failed": "Could not load Savings",
+      "period_label": "Period",
+      "period": {
+        "today": "Today",
+        "yesterday": "Yesterday",
+        "7d": "7 days",
+        "30d": "30 days",
+        "month": "This month",
+        "last_month": "Last month",
+        "year": "This year",
+        "all": "All time"
+      },
+      "estimate": "estimate",
+      "reported": "reported",
+      "under_cent": "under {{amount}}",
+      "under_cent_negative": "a loss under {{amount}}",
+      "basis": {
+        "range": "{{from}} – {{to}}",
+        "range_one": "{{day}}",
+        "zone": "days of the server's zone, {{zone}}",
+        "since": "recording since {{day}}",
+        "prices_openrouter": "Prices: OpenRouter's public list of {{date}}",
+        "prices_none": "Prices: no list yet",
+        "prices_table": "and Provimux's own table of {{date}}",
+        "label": "What these numbers cover"
+      },
+      "headline": {
+        "title": "Saved by caching",
+        "text": "At list prices, net of what writing the cache cost: every input token at the input price, minus what the cached mix cost.",
+        "apikey": "on API keys",
+        "apikey_text": "money that would have been paid",
+        "oauth": "on subscriptions",
+        "oauth_text": "on a subscription caching saves quota, not dollars: this is its value at list price",
+        "other": "on other requests",
+        "lower_bound": "At least this: requests of models without a price are not in it.",
+        "negative": "Caching cost more than it saved in this period: the cache was written and not read enough to pay for the writes.",
+        "unvalued": "No amount: nothing in this period has a price, so nothing can be valued."
+      },
+      "unpriced": {
+        "title": "Not in the amounts",
+        "text": "{{requests}} requests ({{tokens}} tokens) are of models without a price: {{models}}. They are counted everywhere else.",
+        "text_one": "{{requests}} request ({{tokens}} tokens) is of a model without a price: {{models}}. It is counted everywhere else.",
+        "text_other": "{{requests}} requests ({{tokens}} tokens) are of models without a price: {{models}}. They are counted everywhere else.",
+        "reason": "Neither OpenRouter's list nor Provimux's table has a price for it.",
+        "reason_no_list": "No price list yet."
+      },
+      "copy": {
+        "button": "Copy the line",
+        "copied": "Line copied",
+        "failed": "Copy failed",
+        "preview_label": "The line to copy",
+        "line": "Provimux saved me {{amount}} {{period}} with prompt caching (estimate at {{prices}}).",
+        "prices_openrouter": "OpenRouter list prices",
+        "prices_list": "list prices",
+        "period": {
+          "today": "today",
+          "yesterday": "yesterday",
+          "7d": "in the last 7 days",
+          "30d": "in the last 30 days",
+          "month": "this month",
+          "last_month": "last month",
+          "year": "this year",
+          "all": "so far"
+        },
+        "block": {
+          "nothing_priced": "Nothing in this period has a price, so there is no amount to copy.",
+          "negative": "Caching saved nothing in this period, so there is no line to copy.",
+          "under_cent": "The saving is under $0.01, so there is no line to copy."
+        }
+      },
+      "access": {
+        "title": "Subscription and API key",
+        "text": "Requests each kind served. Counts of what happened: which one is tried first is the priority you set on each login and key.",
+        "other": "Other",
+        "requests": "{{count}} requests",
+        "requests_one": "{{count}} request",
+        "requests_other": "{{count}} requests",
+        "share_label": "Share of requests served by subscriptions"
+      },
+      "subscription": {
+        "title": "Subscription requests at API prices",
+        "text": "What the subscription requests would have cost on an API key, at list prices. Not what the subscription saved: Provimux does not know what the subscription costs.",
+        "none": "No subscription requests in this period."
+      },
+      "apikeys": {
+        "title": "What the API keys cost",
+        "reported": "Reported by {{hosts}} for {{reported}} of {{requests}} API-key requests: a charge the provider reported, not an estimate.",
+        "reported_none": "No provider reported a cost for the {{requests}} API-key requests.",
+        "estimate": "Estimate for all API-key requests",
+        "unreported": "Estimate for the {{count}} requests on hosts that reported no cost",
+        "none": "No API-key requests in this period."
+      },
+      "hit_rate": {
+        "title": "Cache hit rate",
+        "text": "Input tokens read from the cache, out of all input tokens.",
+        "none": "No input yet",
+        "meter_label": "Cache hit rate"
+      },
+      "keys": {
+        "title": "Per client key",
+        "text": "The key your tools send to Provimux, shown by its last 4 characters; Provimux never stores more of it.",
+        "col_key": "Client key",
+        "col_requests": "Requests",
+        "col_saved": "Saved by caching",
+        "col_cost": "Cost",
+        "tail": "…{{tail}}",
+        "id": "id {{id}}…",
+        "id_title": "A key under 16 characters: shown by the first 4 characters of its id, not of the key",
+        "none": "no key",
+        "other": "other keys",
+        "empty": "No requests in this period.",
+        "truncated": "Only the {{count}} keys with the most requests are listed."
+      },
+      "models": {
+        "title": "Per model: the prices used",
+        "summary": "{{count}} models, and how each is priced",
+        "summary_one": "{{count}} model, and how it is priced",
+        "summary_other": "{{count}} models, and how each is priced",
+        "col_model": "Model",
+        "col_requests": "Requests",
+        "col_tokens": "Tokens",
+        "col_price": "Valued at",
+        "col_rates": "Per million tokens: input, output, cache read, cache write, 1 h cache write",
+        "unpriced": "no price",
+        "folded": "summed at the row limit",
+        "source": {
+          "openrouter": "OpenRouter",
+          "provimux": "Provimux table",
+          "other": "other source ({{source}})"
+        },
+        "match": {
+          "exact": "exact id",
+          "variant": "variant",
+          "normalized": "matched by name",
+          "table": "Provimux table",
+          "other": "match {{match}}"
+        },
+        "basis": {
+          "recorded": "prices of the day",
+          "current": "today's prices",
+          "mixed": "partly today's prices",
+          "other": "basis {{basis}}"
+        },
+        "rate_none": "—",
+        "truncated": "Only the 500 models with the most tokens are listed."
+      },
+      "days": {
+        "title": "Per day",
+        "summary": "When it was earned: the saving and the requests of each day",
+        "summary_months": "When it was earned: the saving and the requests of each month",
+        "col_day": "Day",
+        "col_month": "Month",
+        "col_saved": "Saved (estimate)",
+        "col_requests": "Requests",
+        "chart_label": "Saving per day, {{from}} to {{to}}",
+        "missing": "The answer has no per-day breakdown."
+      },
+      "hosts": {
+        "title": "Per provider and host",
+        "summary": "OpenRouter apart from each provider's own API",
+        "col_kind": "Kind",
+        "col_provider": "Provider",
+        "col_host": "Host",
+        "host_own": "provider's own",
+        "col_requests": "Requests",
+        "col_estimate": "Cost (estimate)",
+        "col_reported": "Reported cost"
+      },
+      "tokens": {
+        "title": "Token counts",
+        "summary": "The tokens behind the hit rate",
+        "uncached": "Input, not cached",
+        "cache_read": "Input read from the cache",
+        "cache_write": "Input written to the cache",
+        "cache_write_5m": "of which 5 minute writes",
+        "cache_write_1h": "of which 1 hour writes",
+        "output": "Output",
+        "reasoning": "of which reasoning",
+        "unclassified": "Reported without a bucket (never priced)",
+        "exact": "{{value}} tokens"
+      },
+      "state": {
+        "nothing_recorded_title": "Nothing recorded yet",
+        "nothing_recorded": "Provimux records from the moment this version started. Totals appear with the first request; nothing from before can be shown.",
+        "nothing_in_period": "No requests in this period. Data exists since {{day}}.",
+        "floating": "{{count}} requests were recorded without a price and are valued with today's list, so their amounts can still move.",
+        "floating_one": "{{count}} request was recorded without a price and is valued with today's list, so its amounts can still move.",
+        "floating_other": "{{count}} requests were recorded without a price and are valued with today's list, so their amounts can still move.",
+        "no_price_list": "No price list yet, so nothing can be valued: Provimux downloads OpenRouter's public list when it records requests. Requests, tokens and the hit rate are shown as usual.",
+        "no_price_list_local": "No price list: this Provimux runs with --local-model and does not download OpenRouter's list, so nothing can be valued. Requests, tokens and the hit rate are shown as usual.",
+        "old_price_list": "The price list is from {{date}}.",
+        "not_persistent": "Not being saved: these totals are in memory only and end with the next restart. The local store is off (server.kv-store.disabled), or a write to it failed.",
+        "folded_days": "On {{count}} days the row limit was reached: some models and keys of those days are summed under \"other\".",
+        "folded_days_one": "On {{count}} day the row limit was reached: some models and keys of that day are summed under \"other\".",
+        "folded_days_other": "On {{count}} days the row limit was reached: some models and keys of those days are summed under \"other\"."
+      },
+      "attempts": "A request is one attempt at one upstream: a request retried on another account counts twice.",
+      "note": "Estimates are at list prices of the day each request was recorded: OpenRouter's public list, and Provimux's own table for models it lacks. A reported cost is what the provider said it charged. Days are the server's.",
+      "not_valued": "not valued"
     }
   },
   "theme": {

@@ -70,6 +70,17 @@ describe('override bundle', () => {
   });
 });
 
+describe('Savings strings', () => {
+  test("are Provimux's own, and every language gets them (English until translated)", async () => {
+    expect(get(upstreamEn, 'provimux.savings')).toBeUndefined();
+    for (const language of languages) {
+      await i18n.changeLanguage(language);
+      expect(i18n.t('provimux.nav.savings')).toBe('Savings');
+      expect(i18n.t('provimux.savings.headline.title')).toBe('Saved by caching');
+    }
+  });
+});
+
 describe('upstream brand strings', () => {
   // English strings that name CLI Proxy API, CPA or the Management Center as the product. Each is either
   // overridden, or kept on purpose because it names the technology, not the product the user runs.

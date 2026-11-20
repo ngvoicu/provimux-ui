@@ -1,6 +1,11 @@
 import { apiClient } from '@/services/api/client';
-import { readLiveLists, readModelRoutes } from './normalize';
-import type { ProvimuxLiveListsResponse, ProvimuxModelRoutesResponse } from './types';
+import { readLiveLists, readModelRoutes, readSavings } from './normalize';
+import type {
+  ProvimuxLiveListsResponse,
+  ProvimuxModelRoutesResponse,
+  ProvimuxSavingsPeriod,
+  ProvimuxSavingsResponse,
+} from './types';
 
 /**
  * Provimux's management calls, through upstream's `apiClient` (prefix /v8/management, the key, 401 → logout,
@@ -13,6 +18,7 @@ type Client = Pick<typeof apiClient, 'get' | 'post' | 'put'>;
 export const PROVIMUX_PATHS = {
   modelRoutes: '/provimux/model-routes',
   liveLists: '/provimux/live-lists',
+  savings: '/provimux/savings',
   /** Upstream's refresh: the catalogs and, with live lists on, every login's list (in the background). */
   modelsRefresh: '/models/refresh',
   /** Config paths mirror the v8 YAML tree. */
@@ -44,6 +50,16 @@ export function serverCatalogFailure(error: unknown): string | null {
 /** `?model=a&model=b`: the contract's repeatable parameter (axios would write `model[]=`). */
 const modelQuery = (models: readonly string[]) =>
   models.map((model) => `model=${encodeURIComponent(model)}`).join('&');
+
+/** The breakdowns the Savings page shows, each its own repeated `group` (never `group[]`). */
+export const SAVINGS_GROUPS = ['kind', 'key', 'day', 'kind,provider,host'] as const;
+
+/** `?period=month&group=kind&group=key&group=day&group=kind,provider,host`, one call for the whole page. */
+export const savingsQuery = (period: ProvimuxSavingsPeriod): string =>
+  [
+    `period=${encodeURIComponent(period)}`,
+    ...SAVINGS_GROUPS.map((group) => `group=${encodeURIComponent(group).replace(/%2C/g, ',')}`),
+  ].join('&');
 
 /**
  * A config value by its v8 path, or `undefined` when the file does not set it: GET /config/<path> reads the saved
@@ -82,6 +98,21 @@ export const provimuxApi = {
   /** Per Claude, Codex and Meta login, its live model list. Small: one row per login; it is its own probe. */
   async liveLists(client: Client = apiClient): Promise<ProvimuxLiveListsResponse> {
     return readLiveLists(await client.get<unknown>(PROVIMUX_PATHS.liveLists));
+  },
+
+  /** Savings for a period, with every breakdown the page shows. "Today" is the server's day. */
+  async savings(
+    client: Client = apiClient,
+    period: ProvimuxSavingsPeriod = 'month'
+  ): Promise<ProvimuxSavingsResponse> {
+    return readSavings(
+      await client.get<unknown>(`${PROVIMUX_PATHS.savings}?${savingsQuery(period)}`)
+    );
+  },
+
+  /** The presence check: today's totals only, small. Rejects with the client's error (404 on stock CLIProxyAPI). */
+  async probeSavings(client: Client = apiClient): Promise<void> {
+    await client.get<unknown>(`${PROVIMUX_PATHS.savings}?period=today`);
   },
 
   /**

@@ -14,6 +14,28 @@ const apiError = (status: number | undefined, message = `HTTP ${status}`) =>
   Object.assign(new Error(message), { name: 'ApiError', status });
 
 describe('API clients', () => {
+  test('savings: one call for the page, `group` repeated (never group[]), the period as given', async () => {
+    const get = spyOn(apiClient, 'get').mockResolvedValue(fixture('savings-month'));
+    try {
+      const answer = await provimuxApi.savings(apiClient, 'last_month');
+      expect(get).toHaveBeenLastCalledWith(
+        '/provimux/savings?period=last_month&group=kind&group=key&group=day&group=kind,provider,host'
+      );
+      expect(get.mock.calls.at(-1)?.[0]).not.toContain('group[]');
+      expect(answer.totals.estimate.saved_by_caching_usd).toBe(1429.74);
+
+      await provimuxApi.savings(apiClient, '7d');
+      expect(String(get.mock.calls.at(-1)?.[0])).toStartWith('/provimux/savings?period=7d&');
+
+      // The presence probe: totals only, small.
+      await provimuxApi.probeSavings();
+      expect(get).toHaveBeenLastCalledWith('/provimux/savings?period=today');
+      expect(PROVIMUX_PATHS.savings).toBe('/provimux/savings');
+    } finally {
+      get.mockRestore();
+    }
+  });
+
   test('model routes: the whole list, a narrowed one, and the cheap probe', async () => {
     const get = spyOn(apiClient, 'get').mockResolvedValue(fixture('model-routes'));
     try {
