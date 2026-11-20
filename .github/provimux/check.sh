@@ -252,40 +252,54 @@ rebase_failed() {
 # Then each path of the set gets R's entry (git checkout R -- path) or none (git rm), no
 # path may stay unmerged and the work tree must match the index. Sets readme_conflicts.
 readme_stop() {
-  local r stopped rec name unmerged='' n
-  r="$(readme_commits "$old_base_commit..$old_main" git)"
+  local r stopped rec name unmerged='' n f st
+  r="$(readme_commits "$old_base_commit..$old_main" git)" || return 1
   n="$(grep -c . <<<"$r" || true)"
   [[ "$n" == 1 ]] || return 1
-  stopped="$(cd "$wt" && git rev-parse -q --verify REBASE_HEAD || true)"
+  stopped="$(cd "$wt" && git rev-parse -q --verify REBASE_HEAD)" || return 1
   [[ "$stopped" == "$r" ]] || return 1
-  [[ "$(git rev-list --parents -n 1 "$r" | wc -w | tr -d ' ')" == 2 ]] || return 1
-  while IFS= read -r -d '' name; do readme_path "$name" || return 1; done < <(changed_paths "$r" git)
+  n="$(git rev-list --parents -n 1 "$r")" || return 1
+  [[ "$(wc -w <<<"$n" | tr -d ' ')" == 2 ]] || return 1
+  # R changes no root entry outside the set (whole records: a directory or an empty tree
+  # counts), and no path of the set is a directory in R's parent or in the stop's HEAD.
+  outside_same "$r^" "$r" git >>"$out/logs/rebase.log" 2>&1 || return 1
+  set_not_tree "$r^" git >>"$out/logs/rebase.log" 2>&1 || return 1
+  (cd "$wt" && set_not_tree HEAD git) >>"$out/logs/rebase.log" 2>&1 || return 1
+  f="$(pmx_tmp)" || return 1
   # ls-files -u -z: "<mode> <object> <stage>\t<path>", NUL-ended, one record per stage.
+  (cd "$wt" && git ls-files -u -z) >"$f" || { rm -f "$f"; return 1; }
+  st=0
   while IFS= read -r -d '' rec; do
     name="${rec#*$'\t'}"
-    readme_path "$name" || { log "the rebase stopped at the README commit with a conflict outside the root READMEs: ${name//$'\n'/?}"; return 1; }
+    readme_path "$name" || { log "the rebase stopped at the README commit with a conflict outside the root READMEs: ${name//$'\n'/?}"; st=1; break; }
     case " $unmerged " in *" $name "*) ;; *) unmerged="${unmerged:+$unmerged }$name" ;; esac
-  done < <(cd "$wt" && git ls-files -u -z)
-  [[ -n "$unmerged" ]] || return 1
+  done <"$f"
+  [[ $st -eq 0 && -n "$unmerged" ]] || { rm -f "$f"; return 1; }
+  (cd "$wt" && git diff-index --cached --no-renames -z --name-only HEAD) >"$f" || { rm -f "$f"; return 1; }
   while IFS= read -r -d '' name; do
-    readme_path "$name" || { log "the rebase stopped at the README commit with ${name//$'\n'/?} staged, not a root README"; return 1; }
-  done < <(cd "$wt" && git diff-index --cached --no-renames -z --name-only HEAD)
+    readme_path "$name" || { log "the rebase stopped at the README commit with ${name//$'\n'/?} staged, not a root README"; st=1; break; }
+  done <"$f"
+  rm -f "$f"
+  [[ $st -eq 0 ]] || return 1
+  # (set -e does not apply in a "||" list: every step is tested.)
   (
-    cd "$wt"
+    cd "$wt" || exit 1
     for name in "${PMX_README_PATHS[@]}"; do
-      if [[ -n "$(root_entry "$r" "$name" git)" ]]; then
-        git checkout -q "$r" -- ":(top,literal)$name"
+      e="$(root_entry "$r" "$name" git)" || exit 1
+      if [[ -n "$e" ]]; then
+        git checkout -q "$r" -- ":(top,literal)$name" || exit 1
       else
-        git rm -q -f --ignore-unmatch -- ":(top,literal)$name"
+        git rm -q -f --ignore-unmatch -- ":(top,literal)$name" || exit 1
       fi
     done
-    [[ -z "$(git ls-files -u -z)" ]] && git diff --quiet --no-ext-diff --no-textconv
+    u="$(git ls-files -u)" || exit 1
+    [[ -z "$u" ]] && git diff --quiet --no-ext-diff --no-textconv
   ) >>"$out/logs/rebase.log" 2>&1 || return 1
   readme_old=$r readme_conflicts=$unmerged
 }
 
 do_prepare() {
-  local pair=''
+  local pair='' st
   load_state || { status=error; reason "the select step's state is not valid"; return; }
   [[ "$status" == check ]] || { log "nothing to prepare (status $status)"; return; }
   status=running
@@ -331,8 +345,12 @@ do_prepare() {
   # on both sides, the commits below and above it, and the README commit by its normal
   # form (stack_range_diff in common.sh).
   step=range-diff
-  if ! pair="$(stack_range_diff "$old_base_commit" "$old_main" "$upstream_commit" "$candidate" "$out/logs/range-diff.txt" git 2>"$out/readme.err")"; then
-    reason "the root README rule: $(tr '\n' ' ' <"$out/readme.err")"
+  pair="$(stack_range_diff "$old_base_commit" "$old_main" "$upstream_commit" "$candidate" "$out/logs/range-diff.txt" git 2>"$out/readme.err")" &&
+    st=0 || st=$?
+  if [[ $st -eq 2 ]]; then
+    status=error; reason "git failed comparing the stack: $(tr '\n' ' ' <"$out/readme.err")"; return
+  elif [[ $st -ne 0 ]]; then
+    pair=''; reason "the root README rule: $(tr '\n' ' ' <"$out/readme.err")"
   fi
   if [[ -n "$pair" ]]; then
     jq -n --arg o "${pair% *}" --arg n "${pair#* }" --arg p "$readme_conflicts" \
