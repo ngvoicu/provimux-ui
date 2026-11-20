@@ -313,6 +313,7 @@
         "oauth_text": "saves quota, not dollars; value at list price",
         "other": "on other requests",
         "negative": "Caching cost more than it was worth in this period: the cache was written and not read enough to pay for the writes.",
+        "negative_partial": "For the {{priced}} of {{requests}} requests with a price, caching cost more than it was worth: their cache was written and not read enough to pay for the writes. This says nothing about the period as a whole: the requests without a price can change the sign.",
         "unvalued": "No amount: nothing in this period has a price, so nothing can be valued.",
         "part_none": "{{requests}} requests, none with a price",
         "part_none_one": "{{requests}} request, without a price",
@@ -350,6 +351,10 @@
           "nothing_priced": "Nothing in this period has a price, so there is no amount to copy.",
           "negative": "Prompt caching was worth nothing in this period, so there is no line to copy.",
           "under_cent": "Its worth is under $0.01, so there is no line to copy."
+        },
+        "block_partial": {
+          "negative": "For the {{priced}} of {{requests}} requests with a price, caching was worth less than nothing, so there is no line to copy. Without the other requests' prices, there is no result for the period.",
+          "under_cent": "For the {{priced}} of {{requests}} requests with a price, its worth is under $0.01, so there is no line to copy. Without the other requests' prices, there is no result for the period."
         },
         "line_partial": "Prompt caching through Provimux was worth {{amount}} {{period}} at API list prices, for the {{priced}} of {{requests}} requests with a price.",
         "line_base": "Prompt caching through Provimux was worth {{amount}} {{period}} at base API list prices.",

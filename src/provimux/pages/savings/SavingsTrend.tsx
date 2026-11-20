@@ -30,6 +30,20 @@ export function SavingsTrend({ values, color, ariaLabel, className }: SavingsTre
           <stop offset="100%" stopColor={stroke} stopOpacity="0.01" />
         </linearGradient>
       </defs>
+      {geometry.signed ? (
+        // $0: a value under it is a day caching cost more than it was worth.
+        <line
+          data-zero=""
+          x1={0}
+          x2={VIEW_WIDTH}
+          y1={geometry.zeroY}
+          y2={geometry.zeroY}
+          stroke="var(--border-color)"
+          strokeWidth={1}
+          strokeDasharray="3 3"
+          vectorEffect="non-scaling-stroke"
+        />
+      ) : null}
       {geometry.segments.map((segment, index) => (
         <g key={index} data-segment="">
           {!geometry.isFlat && <path d={segment.area} fill={`url(#${gradientId})`} stroke="none" />}

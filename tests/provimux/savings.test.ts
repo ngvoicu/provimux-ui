@@ -301,9 +301,17 @@ describe('states', () => {
     expect(text((data) => (data.prices.openrouter.fetched_at = '2026-11-17T08:00:00Z'))).toContain(
       'The price list is from Nov 17, 2026'
     );
+    // The month is partly priced (2,155 of 2,245): a negative amount is no verdict on the period (T-124, 3).
     expect(text((data) => (data.totals.estimate.saved_by_caching_usd = -3.2))).toContain(
-      'Caching cost more than it was worth'
+      'For the 2,155 of 2,245 requests with a price, caching cost more than it was worth'
     );
+    expect(
+      text((data) => {
+        data.totals.estimate.priced_requests = data.totals.requests;
+        data.totals.estimate.unpriced_requests = 0;
+        data.totals.estimate.saved_by_caching_usd = -3.2;
+      })
+    ).toContain('Caching cost more than it was worth in this period');
     expect(text((data) => (data.recording.persistent = false))).toContain(
       'in memory only and end with the next restart'
     );
@@ -626,6 +634,7 @@ describe('strings', () => {
         'all',
       ],
       'provimux.savings.copy.block': ['nothing_priced', 'negative', 'under_cent'],
+      'provimux.savings.copy.block_partial': ['negative', 'under_cent'],
       'provimux.savings.models.source': ['openrouter', 'provimux', 'other'],
       'provimux.savings.models.match': ['exact', 'variant', 'normalized', 'table', 'other'],
       'provimux.savings.models.basis': ['recorded', 'current', 'mixed', 'other'],
@@ -959,5 +968,113 @@ describe('review T-121', () => {
     const line = trendGeometry(values)!.segments[0].line;
     expect(sparkline).toContain(`d="${line}"`);
     expect(render(month)).not.toContain('data-gaps');
+  });
+});
+
+// Task T-126: review T-124, findings 3 and 4. The answers are the review's own (val/t124/wire-*.json).
+describe('review T-124', () => {
+  const negativePartial = readSavings(raw('savings-t124-negative-partial'));
+  const negativeComplete = readSavings(raw('savings-t124-negative-complete'));
+  const negativeMonth = readSavings(raw('savings-t124-negative-month'));
+  const mixedMonth = readSavings(raw('savings-t124-mixed-month'));
+  /** Every y of a path (the second number of each pair). */
+  const ysOf = (d: string) =>
+    [...d.matchAll(/(-?[\d.]+) (-?[\d.]+)/g)].map((match) => Number(match[2]));
+  const recordedValues = (data: ProvimuxSavingsResponse) =>
+    trendValues(dayPoints(data)!.filter((d) => d.label >= data.recording.since!));
+
+  test('3. a negative amount on some priced requests is no verdict on the period', () => {
+    expect(negativePartial.totals.estimate).toMatchObject({
+      saved_by_caching_usd: -0.2125,
+      priced_requests: 1,
+      unpriced_requests: 3,
+    });
+    expect(savingsStates(negativePartial)).toContain('negative_saving');
+    const text = textOf(render(negativePartial));
+    expect(text).toContain(
+      'For the 1 of 4 requests with a price, caching cost more than it was worth'
+    );
+    expect(text).toContain('This says nothing about the period as a whole');
+    expect(text).not.toContain('Caching cost more than it was worth in this period');
+    // The copy stays disabled, and its reason covers the priced requests only.
+    expect(copyLine(negativePartial, en())).toEqual({ line: null, block: 'negative' });
+    expect(text).toContain(
+      "For the 1 of 4 requests with a price, caching was worth less than nothing, so there is no line to copy. Without the other requests' prices, there is no result for the period."
+    );
+    expect(text).not.toContain('worth nothing in this period');
+    // The same four requests once all are priced: worth +$0.1295.
+    expect(copyLine(negativeComplete, en()).line).toBe(
+      'Prompt caching through Provimux was worth $0.12 today at base API list prices.'
+    );
+    expect(textOf(render(negativeComplete))).not.toMatch(/cost more than it was worth/);
+    // Fully priced and negative: then it is the period's result.
+    const full = textOf(render(negativeMonth));
+    expect(full).toContain('Caching cost more than it was worth in this period');
+    expect(full).toContain(
+      'Prompt caching was worth nothing in this period, so there is no line to copy.'
+    );
+    // A partial amount under a cent says the same.
+    const tiny = changed(negativePartial, (data) => {
+      data.totals.estimate.saved_by_caching_usd = 0.004;
+    });
+    expect(copyLine(tiny, en()).block).toBe('under_cent');
+    expect(textOf(render(tiny))).toContain(
+      'For the 1 of 4 requests with a price, its worth is under $0.01, so there is no line to copy.'
+    );
+  });
+
+  test('4. negative days are drawn below a zero line, inside the box', () => {
+    // Two fully priced negative days: not one flat line at the bottom.
+    expect(recordedValues(negativeMonth)).toEqual([-0.2125, -0.425]);
+    const negative = trendGeometry(recordedValues(negativeMonth))!;
+    expect(negative.signed).toBe(true);
+    expect(negative.isFlat).toBe(false);
+    expect(negative.zeroY).toBe(3);
+    const [first, last] = [
+      ysOf(negative.segments[0].line)[0],
+      ysOf(negative.segments[0].line).at(-1)!,
+    ];
+    expect(first).toBeCloseTo(16, 1);
+    expect(last).toBeCloseTo(29, 1);
+    // Mixed signs: the positive day above zero, the negative days below it, nothing past the box.
+    expect(recordedValues(mixedMonth)).toEqual([0.134, -0.0985, -0.0985]);
+    const mixed = trendGeometry(recordedValues(mixedMonth))!;
+    const ys = ysOf(mixed.segments[0].line);
+    expect(ys[0]).toBeCloseTo(3, 5);
+    expect(ys.at(-1)!).toBeCloseTo(29, 5);
+    expect(ys[0]).toBeLessThan(mixed.zeroY);
+    expect(ys.at(-1)!).toBeGreaterThan(mixed.zeroY);
+    for (const geometry of [negative, mixed]) {
+      for (const segment of geometry.segments) {
+        for (const y of [...ysOf(segment.line), ...ysOf(segment.area)]) {
+          expect(y).toBeGreaterThanOrEqual(3);
+          expect(y).toBeLessThanOrEqual(29);
+        }
+      }
+    }
+    // The area is filled to the zero line, not to the bottom.
+    expect(mixed.segments[0].area.endsWith(` ${mixed.zeroY.toFixed(2)} Z`)).toBe(true);
+    // The page draws the zero line.
+    const svg =
+      render(mixedMonth).match(
+        /<svg[^>]*aria-label="Worth of caching per day[\s\S]*?<\/svg>/
+      )?.[0] ?? '';
+    expect(svg).toContain('data-zero=""');
+    expect(svg).not.toMatch(/ 53\.\d+/);
+  });
+
+  test('4. gaps stay gaps on a signed scale; an all-positive series draws as before', () => {
+    const geometry = trendGeometry([0.2, -0.1, null, -0.3, 0.1])!;
+    expect(geometry.segments).toHaveLength(2);
+    expect(geometry.segments[0].line.startsWith('M0.00 ')).toBe(true);
+    expect(geometry.segments[0].line).toMatch(/ 25\.00 [\d.]+$/);
+    expect(geometry.segments[1].line.startsWith('M75.00 ')).toBe(true);
+    expect(geometry.dots).toEqual([]);
+    const positive = trendGeometry([0.134, 0.114, 0.2])!;
+    expect(positive.signed).toBe(false);
+    expect(positive.zeroY).toBe(32);
+    expect(render(month)).not.toContain('data-zero');
+    // All zero: flat at the bottom, as the dashboard draws it.
+    expect(trendGeometry([0, 0])).toMatchObject({ isFlat: true, signed: false, zeroY: 32 });
   });
 });
