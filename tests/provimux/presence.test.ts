@@ -175,7 +175,7 @@ describe('sidebar', () => {
   const paths = (list: ReturnType<typeof groups>) =>
     list.map((group) => group.items.map((item) => (item as { path: string }).path));
 
-  test('pages go after Routing, where their endpoint answers or fails', () => {
+  test('pages go after Routing, Aliases first, the others where their endpoint answers or fails', () => {
     const result = provimuxNav(groups(), {
       modelRoutes: entry('ready'),
       liveLists: entry('error'),
@@ -186,6 +186,7 @@ describe('sidebar', () => {
       [
         '/ai-providers',
         '/routing',
+        '/provimux/aliases',
         '/provimux/model-routes',
         '/provimux/live-lists',
         '/provimux/savings',
@@ -193,26 +194,46 @@ describe('sidebar', () => {
       ],
       ['/system'],
     ]);
-    const item = result[1].items[2] as { labelKey: string; metaKey: string };
+    const item = result[1].items[3] as { labelKey: string; metaKey: string };
     expect(item.labelKey).toBe('provimux.nav.model_routes');
     expect(item.metaKey).toBe('provimux.nav_meta.model_routes');
+    const aliases = result[1].items[2] as { labelKey: string; metaKey: string };
+    expect(aliases.labelKey).toBe('provimux.nav.aliases');
+    expect(aliases.metaKey).toBe('provimux.nav_meta.aliases');
   });
 
-  test('absent (404) or not yet probed: no item; Quick Start stays hidden', () => {
+  test('absent (404) or not yet probed: no item but Aliases, which needs no endpoint; Quick Start stays hidden', () => {
     for (const status of ['unsupported', 'unknown', 'probing'] as const) {
       const result = provimuxNav(groups(), {
         modelRoutes: entry(status),
         liveLists: entry(status),
         savings: entry(status),
       });
-      expect(paths(result)).toEqual([['/'], ['/ai-providers', '/routing', '/later'], ['/system']]);
+      expect(paths(result)).toEqual([
+        ['/'],
+        ['/ai-providers', '/routing', '/provimux/aliases', '/later'],
+        ['/system'],
+      ]);
     }
     const one = provimuxNav(groups(), {
       modelRoutes: entry('unsupported'),
       liveLists: entry('ready'),
       savings: entry('unsupported'),
     });
-    expect(paths(one)[1]).toEqual(['/ai-providers', '/routing', '/provimux/live-lists', '/later']);
+    expect(paths(one)[1]).toEqual([
+      '/ai-providers',
+      '/routing',
+      '/provimux/aliases',
+      '/provimux/live-lists',
+      '/later',
+    ]);
+    // An older presence record that knows no endpoint at all still lists Aliases (F-5).
+    expect(paths(provimuxNav(groups(), {}))[1]).toEqual([
+      '/ai-providers',
+      '/routing',
+      '/provimux/aliases',
+      '/later',
+    ]);
   });
 
   test('every page has a route, and the routes table carries them', () => {

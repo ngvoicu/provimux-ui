@@ -79,7 +79,11 @@ describe('seams', () => {
       modelRoutes: { status: 'unsupported', message: null },
       liveLists: { status: 'unsupported', message: null },
     });
-    expect(viaNav[0].items).toEqual([{ path: '/' }]);
+    // Quick Start is gone; Aliases, listed on every proxy, lands in the only group there is.
+    expect(viaNav[0].items.map((item) => (item as { path: string }).path)).toEqual([
+      '/',
+      '/provimux/aliases',
+    ]);
   });
 
   test('the Quick Start route goes to AI Providers', () => {
