@@ -1,6 +1,5 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, test } from 'bun:test';
 import {
-  clone,
   family,
   fixture,
   httpError,
@@ -21,8 +20,7 @@ import {
   removeRow,
   startDraft,
 } from '@/provimux/pages/aliases/draft';
-import { rebase } from '@/provimux/pages/aliases/rebase';
-import { locate, planCommit, sameChannel } from '@/provimux/pages/aliases/plan';
+import { planCommit } from '@/provimux/pages/aliases/plan';
 import type { AliasDraft } from '@/provimux/pages/aliases/types';
 import type {
   ModelAlias,
@@ -31,7 +29,8 @@ import type {
   ProviderKeyConfig,
 } from '@/types';
 
-/* ALP-03 W4: tests R-2, R-3, A-1, B-1, C-1, C-2 and the write side of O-2 and O-6. */
+/* ALP-03 W4, W7: tests R-2, R-3, A-1, B-1 and the write side of O-2 and O-6. The save itself (C-*, W-*):
+ * aliases-save.test.ts. */
 
 afterEach(restoreClient);
 
@@ -55,7 +54,11 @@ describe('R-2 nothing lost, store A', () => {
     s.log.length = 0;
     const draft = startDraft(state);
     expect(planCommit(draft)).toEqual([]);
-    expect(await aliasesApi.commit(draft)).toEqual({ done: [], failed: [] });
+    expect(await aliasesApi.commit(draft)).toEqual({
+      confirmed: [],
+      unconfirmed: [],
+      failure: null,
+    });
     expect(s.log).toEqual([]);
   });
 
@@ -65,7 +68,11 @@ describe('R-2 nothing lost, store A', () => {
     const draft = changeRow(startDraft(await aliasesApi.load()), 'claude/0/0#2', {
       alias: 'haiku',
     });
-    expect(await aliasesApi.commit(draft)).toEqual({ done: ['claude/0/0'], failed: [] });
+    expect(await aliasesApi.commit(draft)).toEqual({
+      confirmed: ['claude/0/0'],
+      unconfirmed: [],
+      failure: null,
+    });
     expect(s.puts).toHaveLength(1);
     expect(s.puts[0].path).toBe('/config/api-keys/claude');
     const body = s.puts[0].body as Doc[];
@@ -100,7 +107,7 @@ describe('R-2 nothing lost, store A', () => {
     let draft = startDraft(await aliasesApi.load());
     draft = changeRow(draft, 'vertex/0/0#2', { alias: '' });
     draft = changeRow(draft, 'gemini/0/0#0', { alias: 'gemini-2.5-pro' });
-    expect((await aliasesApi.commit(draft)).done).toEqual(['gemini/0/0', 'vertex/0/0']);
+    expect((await aliasesApi.commit(draft)).confirmed).toEqual(['gemini/0/0', 'vertex/0/0']);
     const vertexModels = (family(s.stored(), 'vertex')[0].keys as Doc[])[0].models;
     expect(vertexModels).toEqual([
       { name: 'gemini-x' },
@@ -120,7 +127,11 @@ describe('R-3 nothing lost, store B', () => {
     const draft = changeRow(startDraft(await aliasesApi.load()), 'login/codex#1', {
       alias: 'g54-b',
     });
-    expect(await aliasesApi.commit(draft)).toEqual({ done: ['login/codex'], failed: [] });
+    expect(await aliasesApi.commit(draft)).toEqual({
+      confirmed: ['login/codex'],
+      unconfirmed: [],
+      failure: null,
+    });
     expect(s.puts.map((p) => p.path)).toEqual(['/config/oauth/model-alias']);
     const body = s.puts[0].body as Record<string, unknown[]>;
     const before = loginMap(doc);
@@ -178,7 +189,11 @@ describe('R-3 nothing lost, store B', () => {
       alias: 'gp',
       displayName: 'GP',
     });
-    expect(await aliasesApi.commit(draft)).toEqual({ done: ['login/gemini-cli'], failed: [] });
+    expect(await aliasesApi.commit(draft)).toEqual({
+      confirmed: ['login/gemini-cli'],
+      unconfirmed: [],
+      failure: null,
+    });
     expect(s.puts[0].body).toEqual({
       'gemini-cli': [{ name: 'gemini-2.5-pro', alias: 'gp', fork: true, 'display-name': 'GP' }],
     });
@@ -361,7 +376,11 @@ describe('A-1 equality with the old editor, store A', () => {
         let draft = startDraft(await aliasesApi.load());
         for (const entryId of changedEntries(name)) draft = op.page(draft, entryId);
         const outcome = await aliasesApi.commit(draft);
-        expect(outcome).toEqual({ done: changedEntries(name), failed: [] });
+        expect(outcome).toEqual({
+          confirmed: changedEntries(name),
+          unconfirmed: [],
+          failure: null,
+        });
         const pageFinal = family(page.stored(), name);
 
         // The same stored family, auth-index and test-model aside.
@@ -519,7 +538,7 @@ describe('B-1 equality with the old editor, store B', () => {
     }
     const page = server(loginDoc());
     const outcome = await aliasesApi.commit(op.page(startDraft(await aliasesApi.load())));
-    expect(outcome.failed).toEqual([]);
+    expect(outcome.failure).toBeNull();
 
     const oldMap = loginMap(old.stored());
     const pageMap = loginMap(page.stored());
@@ -564,8 +583,9 @@ describe('B-1 equality with the old editor, store B', () => {
     });
     page.log.length = 0;
     expect(await aliasesApi.commit(draft)).toEqual({
-      done: [],
-      failed: [{ entryId: 'login/claude', reason: 'invalid', message: BLOCKED_MESSAGE }],
+      confirmed: [],
+      unconfirmed: ['login/claude'],
+      failure: { reason: 'blocked', message: BLOCKED_MESSAGE },
     });
     expect(page.log).toEqual([]);
 
@@ -581,280 +601,6 @@ describe('B-1 equality with the old editor, store B', () => {
       { name: 'claude-opus-5-5', alias: 'opus-l', fork: true, 'force-mapping': false },
       { name: 'claude-sonnet-5', alias: 'claude-sonnet-5' },
     ]);
-  });
-});
-
-// --- C-1, C-2 ------------------------------------------------------------------------------
-
-describe('C-1 commit', () => {
-  const edits = (draft: AliasDraft) => {
-    let next = changeRow(draft, 'gemini/0/0#0', { alias: 'gp' });
-    next = changeRow(next, 'claude/0/0#2', { alias: 'haiku' });
-    next = changeRow(next, 'claude/1/0#0', { alias: 'opus-own' });
-    return changeRow(next, 'login/codex#0', { alias: 'g55-b' });
-  };
-
-  test('units in order, one after the other; a family’s entries in one put', async () => {
-    const s = server(fixture('config-full.json'));
-    const draft = edits(startDraft(await aliasesApi.load()));
-    expect(planCommit(draft)).toEqual([
-      { store: 'api-key', family: 'gemini', entryIds: ['gemini/0/0'] },
-      { store: 'api-key', family: 'claude', entryIds: ['claude/0/0', 'claude/1/0'] },
-      { store: 'login', entryIds: ['login/codex'] },
-    ]);
-    s.log.length = 0;
-    expect(await aliasesApi.commit(draft)).toEqual({
-      done: ['gemini/0/0', 'claude/0/0', 'claude/1/0', 'login/codex'],
-      failed: [],
-    });
-    expect(s.log).toEqual([
-      'read /config',
-      'put /config/api-keys/gemini start',
-      'put /config/api-keys/gemini end',
-      'read /config',
-      'put /config/api-keys/claude start',
-      'put /config/api-keys/claude end',
-      'read /config',
-      'put /config/oauth/model-alias start',
-      'put /config/oauth/model-alias end',
-    ]);
-  });
-
-  test('a failing unit is reported, the next still runs; rebase carries the edits of entries not written', async () => {
-    const s = server(fixture('config-full.json'));
-    const draft = edits(startDraft(await aliasesApi.load()));
-    s.failPut = (put) => {
-      if (put.path.endsWith('/claude')) throw httpError(500, 'server exploded');
-    };
-    const outcome = await aliasesApi.commit(draft);
-    expect(outcome).toEqual({
-      done: ['gemini/0/0', 'login/codex'],
-      failed: [
-        { entryId: 'claude/0/0', reason: 'error', message: 'server exploded' },
-        { entryId: 'claude/1/0', reason: 'error', message: 'server exploded' },
-      ],
-    });
-    const fresh = await aliasesApi.load();
-    const rebased = rebase(draft, fresh, outcome.done);
-    expect(rebased.carried).toEqual({ 'claude/0/0': 'claude/0/0', 'claude/1/0': 'claude/1/0' });
-    expect(rebased.lost).toEqual([]);
-    const next = rebased.draft;
-    const alias = (id: string) => next.rows.find((r) => r.id === id)!.alias;
-    expect(alias('claude/0/0#2')).toBe('haiku');
-    expect(alias('claude/1/0#0')).toBe('opus-own');
-    expect(alias('gemini/0/0#0')).toBe('gp');
-    expect(next.base.rows.find((r) => r.id === 'gemini/0/0#0')!.alias).toBe('gp');
-    expect(planCommit(next).map((u) => u.entryIds)).toEqual([['claude/0/0', 'claude/1/0']]);
-  });
-
-  test('a 400 or 422 is invalid, with the server’s message', async () => {
-    const s = server(fixture('config-full.json'));
-    s.failPut = () => {
-      throw httpError(422, 'invalid_config: bad row', 'invalid_config');
-    };
-    const draft = changeRow(startDraft(await aliasesApi.load()), 'xai/0/0#0', { alias: 'g' });
-    expect(await aliasesApi.commit(draft)).toEqual({
-      done: [],
-      failed: [{ entryId: 'xai/0/0', reason: 'invalid', message: 'invalid_config: bad row' }],
-    });
-  });
-});
-
-describe('C-2 If-Match and conflicts', () => {
-  let s: ReturnType<typeof server>;
-  beforeEach(() => {
-    s = server(fixture('config-full.json'));
-  });
-  const twoUnits = (draft: AliasDraft) =>
-    changeRow(changeRow(draft, 'xai/0/0#0', { alias: 'g' }), 'login/codex#1', { alias: 'g54-b' });
-
-  test('every put carries If-Match with the ETag of its unit’s read', async () => {
-    await aliasesApi.commit(twoUnits(startDraft(await aliasesApi.load())));
-    expect(s.puts.map((p) => [p.path, p.ifMatch])).toEqual([
-      ['/config/api-keys/xai', '"v1"'],
-      ['/config/oauth/model-alias', '"v2"'],
-    ]);
-  });
-
-  test('none when the header is missing', async () => {
-    s.sendEtag = false;
-    const state = await aliasesApi.load();
-    expect(state.etag).toBeNull();
-    await aliasesApi.commit(twoUnits(startDraft(state)));
-    expect(s.puts.map((p) => p.ifMatch)).toEqual([undefined, undefined]);
-    expect(s.puts).toHaveLength(2);
-  });
-
-  test('a 412: the unit is read and written once more, and succeeds when its entries are unchanged', async () => {
-    const draft = twoUnits(startDraft(await aliasesApi.load()));
-    let once = true;
-    s.beforePut = () => {
-      if (!once) return;
-      once = false;
-      s.edit((doc) => {
-        (doc.routing as Doc).strategy = 'fill-first';
-      });
-    };
-    s.log.length = 0;
-    expect(await aliasesApi.commit(draft)).toEqual({
-      done: ['xai/0/0', 'login/codex'],
-      failed: [],
-    });
-    expect(s.log.slice(0, 6)).toEqual([
-      'read /config',
-      'put /config/api-keys/xai start',
-      'put /config/api-keys/xai 412',
-      'read /config',
-      'put /config/api-keys/xai start',
-      'put /config/api-keys/xai end',
-    ]);
-    expect((s.stored().routing as Doc).strategy).toBe('fill-first');
-  });
-
-  test('a second 412 fails the unit’s entries as conflict; the next unit still runs', async () => {
-    const draft = twoUnits(startDraft(await aliasesApi.load()));
-    s.beforePut = (put) => {
-      if (put.path.endsWith('/xai')) s.edit((doc) => ((doc.routing as Doc).strategy = 'x'));
-    };
-    const outcome = await aliasesApi.commit(draft);
-    expect(outcome.done).toEqual(['login/codex']);
-    expect(outcome.failed.map((f) => [f.entryId, f.reason])).toEqual([['xai/0/0', 'conflict']]);
-    expect(s.puts.filter((p) => p.path.endsWith('/xai'))).toHaveLength(2);
-  });
-
-  test('a group changed since load: its entries conflict, the family’s others are written', async () => {
-    let draft = startDraft(await aliasesApi.load());
-    draft = changeRow(draft, 'claude/0/0#0', { alias: 'o1' });
-    draft = changeRow(draft, 'claude/0/1#0', { alias: 'o2' });
-    draft = changeRow(draft, 'claude/1/0#0', { alias: 'o3' });
-    s.edit((doc) => {
-      ((family(doc, 'claude')[0].keys as Doc[])[1] as Doc).weight = 5;
-    });
-    const outcome = await aliasesApi.commit(draft);
-    expect(outcome.done).toEqual(['claude/1/0']);
-    expect(outcome.failed.map((f) => [f.entryId, f.reason])).toEqual([
-      ['claude/0/0', 'conflict'],
-      ['claude/0/1', 'conflict'],
-    ]);
-    const claude = family(s.stored(), 'claude');
-    expect(((claude[0].keys as Doc[])[1] as Doc).weight).toBe(5);
-    expect(((claude[1].keys as Doc[])[0].models as Doc[])[0].alias).toBe('o3');
-  });
-
-  test('a group found at another index is written there', async () => {
-    const draft = changeRow(startDraft(await aliasesApi.load()), 'claude/1/0#0', { alias: 'o3' });
-    s.edit((doc) => {
-      family(doc, 'claude').unshift({ name: 'new', keys: [{ 'api-key': 'fixture-key-new' }] });
-    });
-    expect((await aliasesApi.commit(draft)).done).toEqual(['claude/1/0']);
-    expect(((family(s.stored(), 'claude')[2].keys as Doc[])[0].models as Doc[])[0].alias).toBe(
-      'o3'
-    );
-  });
-
-  test('locate and sameChannel ignore the auth indexes the proxy injects', async () => {
-    const state = await aliasesApi.load();
-    const entry = state.entries.find((e) => e.id === 'claude/0/1')!;
-    if (entry.store !== 'api-key') throw new Error('not a key entry');
-    const fresh = clone(family(s.stored(), 'claude'));
-    const keys = fresh[0].keys as Doc[];
-    keys[0].auth_index = 'ai-claude-1-after-reload';
-    delete keys[1].auth_index;
-    keys[1]['auth-index'] = 'ai-claude-2';
-    expect(locate(fresh, entry)).toBe(0);
-    (keys[0] as Doc).weight = 2;
-    expect(locate(fresh, entry)).toBe(-1);
-    const codex = state.entries.find((e) => e.id === 'login/codex')!;
-    if (codex.store !== 'login') throw new Error('not a login entry');
-    const map = clone(loginMap(s.stored())) as Record<string, Doc[]>;
-    map.codex[0].auth_index = 'x';
-    expect(sameChannel(map, codex)).toBe(true);
-  });
-
-  test('a changed auth_index alone since load: no conflict, the write lands', async () => {
-    const draft = changeRow(startDraft(await aliasesApi.load()), 'claude/0/1#0', { alias: 'o2' });
-    s.edit((doc) => {
-      ((family(doc, 'claude')[0].keys as Doc[])[0] as Doc).auth_index = 'ai-claude-1-new';
-      delete ((family(doc, 'claude')[1].keys as Doc[])[1] as Doc).auth_index;
-    });
-    expect(await aliasesApi.commit(draft)).toEqual({ done: ['claude/0/1'], failed: [] });
-    expect(s.puts).toHaveLength(1);
-  });
-
-  test('every entry of a unit in conflict: no put', async () => {
-    const draft = changeRow(startDraft(await aliasesApi.load()), 'gemini/0/0#0', { alias: 'gp' });
-    s.edit((doc) => {
-      family(doc, 'gemini')[0].name = 'renamed';
-    });
-    expect(await aliasesApi.commit(draft)).toEqual({
-      done: [],
-      failed: [
-        {
-          entryId: 'gemini/0/0',
-          reason: 'conflict',
-          message: expect.any(String) as unknown as string,
-        },
-      ],
-    });
-    expect(s.puts).toEqual([]);
-  });
-
-  test('a channel changed since load: conflict; other channels written', async () => {
-    let draft = startDraft(await aliasesApi.load());
-    draft = changeRow(draft, 'login/codex#1', { alias: 'g54-b' });
-    draft = addLoginAlias(draft, 'kimi', { upstream: 'k1', alias: 'ka' });
-    s.edit((doc) => {
-      loginMap(doc).CODEX.push({ name: 'gpt-5.3', alias: 'g53' });
-    });
-    const outcome = await aliasesApi.commit(draft);
-    expect(outcome.done).toEqual(['login/kimi']);
-    expect(outcome.failed.map((f) => [f.entryId, f.reason])).toEqual([['login/codex', 'conflict']]);
-    expect(loginMap(s.stored()).CODEX).toHaveLength(2);
-    expect(loginMap(s.stored()).kimi).toEqual([{ name: 'k1', alias: 'ka', fork: true }]);
-  });
-
-  test('a connection change during the commit aborts it', async () => {
-    let revision = 1;
-    apiClient.getConnectionRevision = () => revision;
-    const draft = twoUnits(startDraft(await aliasesApi.load()));
-    s.beforePut = () => {
-      revision += 1;
-    };
-    s.log.length = 0;
-    await expect(aliasesApi.commit(draft)).rejects.toMatchObject({ name: 'AbortError' });
-    // The first unit's put was already sent; nothing after it.
-    expect(s.log).toEqual([
-      'read /config',
-      'put /config/api-keys/xai start',
-      'put /config/api-keys/xai end',
-    ]);
-  });
-
-  test('a connection change before a unit’s write: no write', async () => {
-    let revision = 1;
-    apiClient.getConnectionRevision = () => revision;
-    const draft = twoUnits(startDraft(await aliasesApi.load()));
-    const getRaw = apiClient.getRaw;
-    apiClient.getRaw = (async (path: string) => {
-      const answer = await getRaw(path);
-      revision += 1;
-      return answer;
-    }) as typeof apiClient.getRaw;
-    await expect(aliasesApi.commit(draft)).rejects.toMatchObject({ name: 'AbortError' });
-    expect(s.puts).toEqual([]);
-  });
-
-  test('a draft with a blocking issue: no request at all', async () => {
-    const draft = addLoginAlias(
-      changeRow(startDraft(await aliasesApi.load()), 'xai/0/0#0', { alias: 'g' }),
-      'kimi',
-      { upstream: 'k1', alias: '' }
-    );
-    s.log.length = 0;
-    const outcome = await aliasesApi.commit(draft);
-    expect(outcome.done).toEqual([]);
-    expect(outcome.failed.map((f) => [f.entryId, f.reason])).toEqual([['login/kimi', 'invalid']]);
-    expect(s.log).toEqual([]);
   });
 });
 

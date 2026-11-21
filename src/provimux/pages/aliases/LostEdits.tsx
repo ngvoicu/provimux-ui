@@ -2,7 +2,7 @@ import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { IconAlertTriangle, IconX } from '@/components/ui/icons';
 import { entryLabelOf } from './labels';
-import type { LostEdit } from './rebase';
+import type { LostEdit } from './draft';
 import type { AliasEntry, AliasRow } from './types';
 import styles from './AliasesPage.module.scss';
 

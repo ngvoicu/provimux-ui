@@ -1,26 +1,22 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import type { AxiosResponseTransformer } from 'axios';
 import { parse as parseYaml } from 'yaml';
 import { apiClient } from '@/services/api/client';
-import { aliasesApi } from '@/provimux/pages/aliases/aliasesApi';
-import { changeRow, startDraft } from '@/provimux/pages/aliases/draft';
-import { planCommit, sameConfig } from '@/provimux/pages/aliases/plan';
-import { rebase } from '@/provimux/pages/aliases/rebase';
-import {
-  ALIAS_FAMILIES,
-  familyGroups,
-  loginMapIn,
-  readAliasState,
-} from '@/provimux/pages/aliases/rows';
+import { aliasesApi, etagOf } from '@/provimux/pages/aliases/aliasesApi';
+import { changeRow, editsOf, startDraft } from '@/provimux/pages/aliases/draft';
+import { planCommit } from '@/provimux/pages/aliases/plan';
+import { ALIAS_FAMILIES, familyGroups, loginMapIn } from '@/provimux/pages/aliases/rows';
 import type { AliasDraft, AliasRow, AliasState, KeyEntry } from '@/provimux/pages/aliases/types';
 import type { ProviderFamily } from '@/services/api/providers';
+import { same, sameFamily } from './support/injected';
 
 /*
- * ALP live test (T-265): the page's data layer and `apiClient` against a real proxy built from source.
- * Skipped unless ALIASES_LIVE_BASE (http://127.0.0.1:<port>) and ALIASES_LIVE_KEY are set. It writes only
- * to a proxy on 127.0.0.1 whose touched families each hold an `alp-live-` group, and for a login write a
- * file whose every group is `alp-live-`. Optional:
+ * ALP live test (T-265, rebuilt in W7 for design 3.4): the page's data layer and `apiClient` against a
+ * real proxy built from source. Skipped unless ALIASES_LIVE_BASE (http://127.0.0.1:<port>) and
+ * ALIASES_LIVE_KEY are set. It writes only to a proxy on 127.0.0.1 whose touched families each hold an
+ * `alp-live-` group, and for a login write a file whose every group is `alp-live-`. Optional:
  *   ALIASES_LIVE_FILE      the proxy's config file, read for the checks on disk (else GET /config.yaml);
  *   ALIASES_LIVE_PRISTINE  a hand-written copy put back onto ALIASES_LIVE_FILE before each L-4 round,
  *                          so every round starts from a file never written through the API;
@@ -49,6 +45,7 @@ interface Logged {
   ifMatch?: string;
   body?: unknown;
   status: number;
+  /** GET: the read's tag. PUT: the tag the answer carried, as the page's transform saw it. */
   etag?: string | null;
   answer?: unknown;
 }
@@ -58,10 +55,6 @@ const statusOf = (error: unknown) =>
   error && typeof error === 'object' && typeof (error as { status?: unknown }).status === 'number'
     ? (error as { status: number }).status
     : 0;
-const etagIn = (headers: unknown): string | null => {
-  const value = (headers as { get?: (n: string) => unknown } | undefined)?.get?.('etag');
-  return typeof value === 'string' ? value : null;
-};
 
 /** The file as on disk: ALIASES_LIVE_FILE, else the proxy's own YAML view of it. */
 async function disk(): Promise<string> {
@@ -78,14 +71,9 @@ function evidence(name: string, data: Record<string, unknown>) {
 
 async function readDoc(): Promise<{ doc: Doc; etag: string | null }> {
   const read = await foreign.getRaw('/config');
-  requests.push({
-    method: 'GET',
-    path: '/config',
-    who: 'other',
-    status: read.status,
-    etag: etagIn(read.headers),
-  });
-  return { doc: read.data as Doc, etag: etagIn(read.headers) };
+  const etag = etagOf(read.headers);
+  requests.push({ method: 'GET', path: '/config', who: 'other', status: read.status, etag });
+  return { doc: read.data as Doc, etag };
 }
 
 const groupName = (group: unknown) =>
@@ -138,13 +126,13 @@ const foreignVertexEdit = () =>
   });
 
 interface Hooks {
-  /** After each page read of /config, before it is returned; `n` counts from 1. */
-  afterRead?: (n: number, data: Doc) => Promise<void> | void;
+  /** After the n-th page put has answered (200 or not), before commit goes on; `n` counts from 1. */
+  afterPut?: (n: number) => Promise<void> | void;
 }
 let pageReads: Doc[] = [];
 let pagePuts: Logged[] = [];
 
-/** The page's own client, logged and guarded; hooks for the foreign writes. */
+/** The page's own client, logged and guarded; a hook for the foreign writes. */
 function watch(hooks: Hooks = {}) {
   pageReads = [];
   pagePuts = [];
@@ -155,12 +143,9 @@ function watch(hooks: Hooks = {}) {
       path: args[0],
       who: 'page',
       status: read.status,
-      etag: etagIn(read.headers),
+      etag: etagOf(read.headers),
     });
-    if (args[0] === '/config') {
-      pageReads.push(structuredClone(read.data as Doc));
-      await hooks.afterRead?.(pageReads.length, read.data as Doc);
-    }
+    if (args[0] === '/config') pageReads.push(structuredClone(read.data as Doc));
     return read;
   }) as typeof apiClient.getRaw;
   apiClient.put = (async (...args: Parameters<typeof apiClient.put>) => {
@@ -173,11 +158,22 @@ function watch(hooks: Hooks = {}) {
       ifMatch: (config?.headers as Doc | undefined)?.['If-Match'] as string | undefined,
       body: structuredClone(body),
       status: 0,
+      etag: null,
     };
     requests.push(entry);
     pagePuts.push(entry);
+    const n = pagePuts.length;
+    // Records the tag the answer carried, after the page's own transforms (which read it).
+    const record: AxiosResponseTransformer = function (data, headers) {
+      entry.etag = etagOf(headers);
+      return data;
+    };
+    const transforms = [config?.transformResponse ?? []].flat() as AxiosResponseTransformer[];
     try {
-      const answer = await original.put.apply(apiClient, args);
+      const answer = await original.put.call(apiClient, path, body, {
+        ...config,
+        transformResponse: [...transforms, record],
+      });
       entry.status = 200;
       entry.answer = answer;
       return answer;
@@ -185,6 +181,8 @@ function watch(hooks: Hooks = {}) {
       entry.status = statusOf(error);
       entry.answer = (error as { data?: unknown }).data;
       throw error;
+    } finally {
+      await hooks.afterPut?.(n);
     }
   }) as typeof apiClient.put;
 }
@@ -215,13 +213,12 @@ const rowOf = (state: AliasState, entryId: string, upstream: string): AliasRow =
 const loginRowOf = (state: AliasState, channel: string, upstream: string) =>
   rowOf(state, `login/${channel}`, upstream);
 
-/** The index of every entry, by id, of one read. */
-const indexesOf = (doc: unknown) =>
-  Object.fromEntries(
-    readAliasState(doc, null)
-      .entries.filter((e): e is KeyEntry => e.store === 'api-key')
-      .map((e) => [e.id, e.authIndexes.join(',')])
-  );
+/** The page's puts: each carried the tag the one before answered (the first, the read's). */
+function expectChained(readTag: string | null) {
+  const tags = [readTag, ...pagePuts.map((p) => p.etag)];
+  expect(pagePuts.map((p) => p.ifMatch)).toEqual(tags.slice(0, pagePuts.length) as string[]);
+  for (const put of pagePuts) expect(put.ifMatch ?? '').toMatch(TAG);
+}
 
 beforeAll(() => {
   if (!live) return;
@@ -247,10 +244,9 @@ afterAll(() => {
 
 describe.skipIf(!live)('ALP live, against a proxy built from source', () => {
   test(
-    'L-4 two families and a login channel from the never-written file, 20 times: all done',
+    'L-4 two families and a login channel from the never-written file, 20 times: all confirmed, no GET between the units',
     async () => {
       const rounds: unknown[] = [];
-      const differed: unknown[] = [];
       const firstDisk = await disk();
       for (let round = 1; round <= 20; round += 1) {
         if (PRISTINE && FILE && round > 1) writeFileSync(FILE, readFileSync(PRISTINE));
@@ -258,7 +254,6 @@ describe.skipIf(!live)('ALP live, against a proxy built from source', () => {
         watch();
         const state = await aliasesApi.load();
         const loadDoc = pageReads[0];
-        const loadIndexes = indexesOf(loadDoc);
         const claude = firstLiveKey(state, 'claude');
         const oai = firstLiveKey(state, 'openai-compatibility');
         let draft: AliasDraft = startDraft(state);
@@ -276,46 +271,50 @@ describe.skipIf(!live)('ALP live, against a proxy built from source', () => {
           'openai-compatibility',
           'login',
         ]);
+        const readsBefore = requests.filter((r) => r.who === 'page' && r.method === 'GET').length;
         const outcome = await aliasesApi.commit(draft);
-        const unitReads = pageReads.slice(1);
-        for (const [n, read] of unitReads.entries()) {
-          const now = indexesOf(read);
-          for (const [id, index] of Object.entries(loadIndexes)) {
-            if (now[id] !== index)
-              differed.push({ round, unitRead: n + 1, id, load: index, read: now[id] });
-          }
-        }
+        const readsDuring =
+          requests.filter((r) => r.who === 'page' && r.method === 'GET').length - readsBefore;
         const after = await readDoc();
         rounds.push({
           round,
           neverWritten: round === 1 ? before === firstDisk : Boolean(PRISTINE && FILE),
-          etag: state.etag,
+          loadEtag: state.etag,
           outcome,
-          puts: pagePuts.map((p) => ({ path: p.path, status: p.status, ifMatch: p.ifMatch })),
+          readsDuring,
+          puts: pagePuts.map((p) => ({
+            path: p.path,
+            status: p.status,
+            ifMatch: p.ifMatch,
+            answered: p.etag,
+          })),
+          getAfter: after.etag,
         });
-        if (outcome.failed.length)
+        if (outcome.failure) {
           evidence(`L-4-round-${round}-failed`, { before, after: await disk(), outcome });
-        expect(outcome.failed).toEqual([]);
-        expect(outcome.done.sort()).toEqual([claude.id, oai.id, 'login/codex'].sort());
-        expect(pagePuts.every((p) => p.status === 200 && p.ifMatch && TAG.test(p.ifMatch))).toBe(
-          true
-        );
+        }
+        expect(outcome).toEqual({
+          confirmed: [claude.id, oai.id, 'login/codex'],
+          unconfirmed: [],
+          failure: null,
+        });
+        expect(readsDuring).toBe(0);
+        expect(pagePuts.map((p) => p.status)).toEqual([200, 200, 200]);
+        expectChained(state.etag);
         // What the commit did not touch reads back as loaded (L-5 on the first write of the file).
         for (const family of ['gemini', 'vertex'] as const) {
-          expect(sameConfig(familyGroups(after.doc, family), familyGroups(loadDoc, family))).toBe(
+          expect(sameFamily(familyGroups(after.doc, family), familyGroups(loadDoc, family))).toBe(
             true
           );
         }
         const map = loginMapIn(after.doc) as Doc;
-        expect(sameConfig(map.claude, (loginMapIn(loadDoc) as Doc).claude)).toBe(true);
+        expect(same(map.claude, (loginMapIn(loadDoc) as Doc).claude)).toBe(true);
         expect((map.codex as Doc[])[1].alias).toBe(`gy-l4-${round}`);
+        // L-7 in passing: the GET after the commit carries the last write's tag.
+        expect(after.etag).toBe(pagePuts[2].etag ?? '');
         unwatch();
       }
-      console.log(
-        `[alp-live] L-4 auth_index differences between load and unit read: ${differed.length}`
-      );
-      if (differed.length) console.log(JSON.stringify(differed, null, 2));
-      evidence('L-4', { rounds, authIndexDifferences: differed });
+      evidence('L-4', { rounds });
     },
     TIMEOUT
   );
@@ -335,8 +334,9 @@ describe.skipIf(!live)('ALP live, against a proxy built from source', () => {
       });
       const outcome = await aliasesApi.commit(draft);
       const fresh = await aliasesApi.load();
-      evidence('L-1', { loadEtag: state.etag, outcome, before, after: await disk() });
-      expect(outcome).toEqual({ done: [claude.id], failed: [] });
+      const after = await disk();
+      evidence('L-1', { loadEtag: state.etag, outcome, before, after });
+      expect(outcome).toEqual({ confirmed: [claude.id], unconfirmed: [], failure: null });
       // The tag went through axios and apiClient unchanged: the PUT carried the read's tag, quotes and all.
       expect(pagePuts).toHaveLength(1);
       expect(pagePuts[0].ifMatch).toBe(state.etag ?? '');
@@ -344,66 +344,82 @@ describe.skipIf(!live)('ALP live, against a proxy built from source', () => {
       expect(rowOf(fresh, firstLiveKey(fresh, 'claude').id, 'claude-sonnet-x').alias).toBe(alias);
       expect(fresh.etag).toMatch(TAG);
       expect(fresh.etag).not.toBe(state.etag);
+      if (FILE) expect(fresh.etag).toBe(`"${sha256(after)}"`);
     },
     TIMEOUT
   );
 
   test(
-    'L-2 a foreign write after the unit read: 412, the unit runs again and lands',
+    'L-2 a foreign write between the page’s read and its save: changed, nothing of the page in the file',
     async () => {
-      const before = await disk();
-      // Read 1 is load(); read 2 is the unit's read: the other client writes right after it.
-      watch({ afterRead: (n) => (n === 2 ? foreignVertexEdit() : undefined) });
-      const state = await aliasesApi.load();
-      const claude = firstLiveKey(state, 'claude');
-      const alias = `sonnet-l2-${Date.now()}`;
-      const draft = changeRow(startDraft(state), rowOf(state, claude.id, 'claude-sonnet-x').id, {
-        alias,
-      });
-      const outcome = await aliasesApi.commit(draft);
-      const after = await readDoc();
-      evidence('L-2-retry', { outcome, before, after: await disk() });
-      expect(pagePuts.map((p) => p.status)).toEqual([412, 200]);
-      expect((pagePuts[0].answer as Doc).error).toBe('precondition_failed');
-      expect(pagePuts[0].ifMatch).not.toBe(pagePuts[1].ifMatch);
-      expect(outcome).toEqual({ done: [claude.id], failed: [] });
-      const freshState = readAliasState(after.doc, null);
-      expect(
-        rowOf(freshState, firstLiveKey(freshState, 'claude').id, 'claude-sonnet-x').alias
-      ).toBe(alias);
-      // The other client's write is still there.
-      const vertexName = ((familyGroups(after.doc, 'vertex')[0] as Doc).keys as Doc[])[0]
-        .models as Doc[];
-      expect(String(vertexName[0]['display-name'])).toStartWith('other-client-');
-    },
-    TIMEOUT
-  );
-
-  test(
-    'L-2 a foreign write after every read: conflict, and nothing of the page in the file',
-    async () => {
-      const before = await disk();
-      watch({ afterRead: (n) => (n >= 2 ? foreignVertexEdit() : undefined) });
+      watch();
       const state = await aliasesApi.load();
       const claude = firstLiveKey(state, 'claude');
       const alias = `sonnet-l2-never-${Date.now()}`;
       const draft = changeRow(startDraft(state), rowOf(state, claude.id, 'claude-sonnet-x').id, {
         alias,
       });
+      await foreignVertexEdit();
+      const before = await disk();
       const outcome = await aliasesApi.commit(draft);
       const after = await disk();
-      evidence('L-2-conflict', { outcome, before, after });
-      expect(pagePuts.map((p) => p.status)).toEqual([412, 412]);
-      expect(outcome.done).toEqual([]);
-      expect(outcome.failed.map((f) => [f.entryId, f.reason])).toEqual([[claude.id, 'conflict']]);
+      evidence('L-2-before-save', { outcome, before, after });
+      expect(outcome).toEqual({
+        confirmed: [],
+        unconfirmed: [claude.id],
+        failure: { reason: 'changed', message: expect.any(String) as unknown as string },
+      });
+      expect(pagePuts.map((p) => [p.status, p.ifMatch])).toEqual([[412, state.etag]]);
+      expect((pagePuts[0].answer as Doc).error).toBe('precondition_failed');
+      // The file is exactly the other client's: not a byte of the page's.
+      expect(after).toBe(before);
       expect(after).not.toContain(alias);
-      expect(before).not.toContain(alias);
     },
     TIMEOUT
   );
 
   test(
-    'L-3 a row inserted at the head elsewhere: conflict, rebase, second save; the file is the other’s',
+    'L-2 a foreign write between the first and the second unit: the first unit in the file, nothing of the others',
+    async () => {
+      watch({ afterPut: (n) => (n === 1 ? foreignVertexEdit() : undefined) });
+      const state = await aliasesApi.load();
+      const claude = firstLiveKey(state, 'claude');
+      const oai = firstLiveKey(state, 'openai-compatibility');
+      const first = `sonnet-l2-first-${Date.now()}`;
+      const second = `two-l2-second-${Date.now()}`;
+      let draft = changeRow(startDraft(state), rowOf(state, claude.id, 'claude-sonnet-x').id, {
+        alias: first,
+      });
+      draft = changeRow(draft, rowOf(state, oai.id, 'vendor/model-two').id, { alias: second });
+      const outcome = await aliasesApi.commit(draft);
+      const after = await disk();
+      const read = await readDoc();
+      evidence('L-2-between-units', { outcome, after });
+      expect(outcome).toEqual({
+        confirmed: [claude.id],
+        unconfirmed: [oai.id],
+        failure: { reason: 'changed', message: expect.any(String) as unknown as string },
+      });
+      expect(pagePuts.map((p) => p.status)).toEqual([200, 412]);
+      expectChained(state.etag);
+      expect(after).toContain(first);
+      expect(after).not.toContain(second);
+      // The other client's write is there too, and the OpenAI-compatible family is as loaded.
+      const vertex = ((familyGroups(read.doc, 'vertex')[0] as Doc).keys as Doc[])[0]
+        .models as Doc[];
+      expect(String(vertex[0]['display-name'])).toStartWith('other-client-');
+      expect(
+        sameFamily(
+          familyGroups(read.doc, 'openai-compatibility'),
+          familyGroups(pageReads[0], 'openai-compatibility')
+        )
+      ).toBe(true);
+    },
+    TIMEOUT
+  );
+
+  test(
+    'L-3 a row inserted at the head elsewhere: changed, the edit listed, the file’s list is the other’s',
     async () => {
       // Two rows of one key, a -> fast and b -> slow, as another client would set them.
       await otherWrite('/config/api-keys/gemini', (doc) => {
@@ -415,7 +431,6 @@ describe.skipIf(!live)('ALP live, against a proxy built from source', () => {
         ];
         return groups;
       });
-      const before = await disk();
       watch();
       const state = await aliasesApi.load();
       const gemini = firstLiveKey(state, 'gemini');
@@ -433,27 +448,30 @@ describe.skipIf(!live)('ALP live, against a proxy built from source', () => {
         key.models = theirs;
         return groups;
       });
-      const first = await aliasesApi.commit(draft);
-      const fresh = await aliasesApi.load();
-      const rebased = rebase(draft, fresh, first.done);
-      const second = await aliasesApi.commit(rebased.draft);
+      const before = await disk();
+      const outcome = await aliasesApi.commit(draft);
+      const lost = outcome.unconfirmed.map((id) => ({ id, edits: editsOf(draft, id) }));
+      // After the save the page reads again and shows the file as it is, with no edit on it.
+      const next = startDraft(await aliasesApi.load());
       const after = await readDoc();
-      evidence('L-3', { first, lost: rebased.lost, second, before, after: await disk() });
-      expect(first.done).toEqual([]);
-      expect(first.failed.map((f) => [f.entryId, f.reason])).toEqual([[gemini.id, 'conflict']]);
-      expect(rebased.lost).toHaveLength(1);
-      expect(rebased.lost[0].entry.id).toBe(gemini.id);
-      expect(rebased.lost[0].edits).toHaveLength(1);
-      const edit = rebased.lost[0].edits[0];
+      evidence('L-3', { outcome, lost, before, after: await disk() });
+      expect(outcome).toEqual({
+        confirmed: [],
+        unconfirmed: [gemini.id],
+        failure: { reason: 'changed', message: expect.any(String) as unknown as string },
+      });
+      expect(pagePuts.map((p) => p.status)).toEqual([412]);
+      expect(lost).toHaveLength(1);
+      expect(lost[0].edits).toHaveLength(1);
+      const edit = lost[0].edits[0];
       expect(edit.kind).toBe('changed');
       expect([edit.before?.upstream, edit.before?.alias]).toEqual(['a', 'fast']);
       expect([edit.after?.upstream, edit.after?.alias]).toEqual(['a', 'fast2']);
-      expect(planCommit(rebased.draft)).toEqual([]);
-      expect(second).toEqual({ done: [], failed: [] });
-      // No PUT of the page reached the proxy at all: the conflict was found by locate, the second save is empty.
-      expect(pagePuts).toEqual([]);
+      expect(planCommit(next)).toEqual([]);
+      expect(next.rows.some((r) => r.alias === 'fast2')).toBe(false);
+      expect(await disk()).toBe(before);
       const key = ((familyGroups(after.doc, 'gemini').find(isLiveGroup) as Doc).keys as Doc[])[0];
-      expect(sameConfig(key.models, theirs)).toBe(true);
+      expect(same(key.models, theirs)).toBe(true);
     },
     TIMEOUT
   );
@@ -472,31 +490,31 @@ describe.skipIf(!live)('ALP live, against a proxy built from source', () => {
       const outcome = await aliasesApi.commit(draft);
       const after = await readDoc();
       evidence('L-5', { outcome, before, after: await disk() });
-      expect(outcome).toEqual({ done: [oai.id], failed: [] });
+      expect(outcome).toEqual({ confirmed: [oai.id], unconfirmed: [], failure: null });
       for (const family of ALIAS_FAMILIES) {
         if (family === 'openai-compatibility') continue;
         expect([
           family,
-          sameConfig(familyGroups(after.doc, family), familyGroups(loadDoc, family)),
+          sameFamily(familyGroups(after.doc, family), familyGroups(loadDoc, family)),
         ]).toEqual([family, true]);
       }
       const freshMap = loginMapIn(after.doc) as Doc;
       const loadMap = loginMapIn(loadDoc) as Doc;
       expect(Object.keys(freshMap).sort()).toEqual(Object.keys(loadMap).sort());
       for (const channel of Object.keys(loadMap)) {
-        expect([channel, sameConfig(freshMap[channel], loadMap[channel])]).toEqual([channel, true]);
+        expect([channel, same(freshMap[channel], loadMap[channel])]).toEqual([channel, true]);
       }
-      // The written family is the PUT body, the injected auth_index aside.
+      // The written family is the PUT body, the injected index on groups and keys aside.
       expect(pagePuts).toHaveLength(1);
-      expect(sameConfig(familyGroups(after.doc, 'openai-compatibility'), pagePuts[0].body)).toBe(
+      expect(sameFamily(familyGroups(after.doc, 'openai-compatibility'), pagePuts[0].body)).toBe(
         true
       );
-      // And the rest of the document did not move either.
+      // And the rest of the document (every family is compared above) did not move either.
       const rest = (doc: Doc) => ({
         ...doc,
-        'api-keys': { ...(doc['api-keys'] as Doc), 'openai-compatibility': null },
+        'api-keys': Object.keys(doc['api-keys'] as Doc).sort(),
       });
-      expect(sameConfig(rest(after.doc), rest(loadDoc))).toBe(true);
+      expect(same(rest(after.doc), rest(loadDoc))).toBe(true);
     },
     TIMEOUT
   );
@@ -513,6 +531,42 @@ describe.skipIf(!live)('ALP live, against a proxy built from source', () => {
       expect(text).not.toContain('auth_index');
       expect(text).not.toContain('auth-index');
       expect(JSON.stringify(parseYaml(text))).not.toContain('auth_index');
+    },
+    TIMEOUT
+  );
+
+  test(
+    'L-7 the tag of a GET after a commit is the tag its last write answered, and still is three seconds later',
+    async () => {
+      watch();
+      const state = await aliasesApi.load();
+      const claude = firstLiveKey(state, 'claude');
+      let draft = changeRow(startDraft(state), rowOf(state, claude.id, 'claude-haiku-x').id, {
+        alias: `haiku-l7-${Date.now()}`,
+      });
+      draft = changeRow(draft, loginRowOf(state, 'claude', 'claude-opus-x').id, {
+        alias: `login-opus-l7-${Date.now()}`,
+      });
+      const outcome = await aliasesApi.commit(draft);
+      const now = await readDoc();
+      await Bun.sleep(3_000);
+      const later = await readDoc();
+      const onDisk = await disk();
+      evidence('L-7', {
+        outcome,
+        answered: pagePuts.map((p) => p.etag),
+        getNow: now.etag,
+        getLater: later.etag,
+        diskSha: FILE ? `"${sha256(onDisk)}"` : null,
+      });
+      expect(outcome.failure).toBeNull();
+      expect(pagePuts).toHaveLength(2);
+      expectChained(state.etag);
+      const last = pagePuts[1].etag;
+      expect(last ?? '').toMatch(TAG);
+      expect(now.etag).toBe(last);
+      expect(later.etag).toBe(last);
+      if (FILE) expect(`"${sha256(onDisk)}"`).toBe(last ?? '');
     },
     TIMEOUT
   );

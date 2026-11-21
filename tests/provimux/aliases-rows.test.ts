@@ -439,6 +439,7 @@ describe('R-1 rows', () => {
       entries: [],
       rows: [],
       forceModelPrefix: false,
+      document: fixture('config-empty.json'),
       etag: null,
       unread: [],
     });
