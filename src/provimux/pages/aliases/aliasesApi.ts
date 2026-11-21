@@ -1,8 +1,10 @@
 /**
- * The Aliases page's requests (design aliases-page.md, 3.4). Every write carries `If-Match` with the
- * `ETag` of the read it was planned from, so it lands only on the exact file it read; a 412 runs the unit
- * once more from a fresh read. The page never downloads a login file.
+ * The Aliases page's requests (design aliases-page.md, 3.4). The page has one read, `load()`. A save reads
+ * nothing more: it writes parts of that read back, changed, each `PUT` with `If-Match`: the first with the
+ * read's tag, each next one with the tag the write before it answered. The first unit not confirmed ends
+ * the save; nothing is sent twice and nothing is carried. The page never downloads a login file.
  */
+import axios, { type AxiosResponseTransformer } from 'axios';
 import { apiClient } from '@/services/api/client';
 import { guardConfigConnection } from '@/services/api/configValue';
 import { normalizeAuthFilesResponse } from '@/services/api/authFiles';
@@ -11,38 +13,21 @@ import { isRecord } from '@/utils/helpers';
 import { provimuxApi } from '@/provimux/api/provimuxApi';
 import { useProvimuxPresence } from '@/provimux/presence';
 import { nameKey } from './collisions';
-import { familyGroups, loginMapIn, readAliasState } from './rows';
-import {
-  blockedEntries,
-  locate,
-  planCommit,
-  replaceChannel,
-  rowsForWrite,
-  sameChannel,
-  unitEntry,
-  withModels,
-  writtenRowsOf,
-} from './plan';
+import { readAliasState } from './rows';
+import { ALIAS_PATHS, blockedEntries, planWrites } from './plan';
 import type {
   AliasDraft,
   AliasState,
   CommitOutcome,
-  CommitUnit,
-  KeyEntry,
-  LoginEntry,
+  PlannedWrite,
+  SaveFailure,
   ServedNames,
   ServedRoute,
 } from './types';
 
-type Client = Pick<typeof apiClient, 'get' | 'getRaw' | 'put'>;
-type Failure = CommitOutcome['failed'][number];
+export { ALIAS_PATHS } from './plan';
 
-export const ALIAS_PATHS = {
-  config: '/config',
-  credentials: '/credentials',
-  loginAliases: '/config/oauth/model-alias',
-  family: (family: string) => `/config/api-keys/${family}`,
-} as const;
+type Client = Pick<typeof apiClient, 'get' | 'getRaw' | 'put'>;
 
 /** The HTTP status an `apiClient` error carries, if any. */
 const statusOf = (error: unknown): number | null =>
@@ -51,7 +36,7 @@ const statusOf = (error: unknown): number | null =>
 const messageOf = (error: unknown): string =>
   error instanceof Error && error.message ? error.message : String(error ?? 'Unknown error');
 
-/** The `ETag` of a raw response; null when the browser could not read the header. */
+/** The `ETag` of a response's headers; null when the browser could not read the header. */
 export function etagOf(headers: unknown): string | null {
   if (!headers || typeof headers !== 'object') return null;
   const getter = (headers as { get?: (name: string) => unknown }).get;
@@ -65,92 +50,43 @@ export function etagOf(headers: unknown): string | null {
   return null;
 }
 
-const ifMatch = (etag: string | null) => (etag ? { headers: { 'If-Match': etag } } : undefined);
-
-export const CONFLICT_MESSAGE =
-  'The configuration changed since the page loaded it; reload and try again.';
 export const BLOCKED_MESSAGE =
   'Some rows would be ignored by the proxy (no name or no alias, alias equal to the name, or a ' +
   'repeated alias); fix or remove them first.';
+export const NO_TAG_MESSAGE =
+  'The proxy’s answer carried no ETag, so the page cannot make the next write conditional; it wrote ' +
+  'nothing further.';
 
 const isAbort = (error: unknown) => error instanceof DOMException && error.name === 'AbortError';
 
-/** One unit's read and write. Resolves with the outcome, or `'retry'` after a first 412. */
-async function runUnit(
-  unit: CommitUnit,
-  draft: AliasDraft,
-  assertConnection: () => void,
-  lastAttempt: boolean
-): Promise<CommitOutcome | 'retry'> {
-  const read = await apiClient.getRaw(ALIAS_PATHS.config);
-  assertConnection();
-  const etag = etagOf(read.headers);
-  const document: unknown = read.data;
-  const failed: Failure[] = [];
-  const written: string[] = [];
-  let path: string;
-  let body: unknown;
+/** axios's own response transforms (JSON parsing), which a request's `transformResponse` replaces. */
+const defaultTransforms = (): AxiosResponseTransformer[] =>
+  [axios.defaults.transformResponse ?? []].flat() as AxiosResponseTransformer[];
 
-  if (unit.store === 'api-key') {
-    // 2.5: a family no longer a list gives locate nothing to find: a conflict, without a request.
-    const groups = [...familyGroups(document, unit.family)];
-    const located = unit.entryIds.map((entryId) => {
-      const entry = unitEntry(draft, entryId) as KeyEntry;
-      return { entry, index: locate(groups, entry) };
-    });
-    for (const { entry, index } of located) {
-      if (index < 0) {
-        failed.push({ entryId: entry.id, reason: 'conflict', message: CONFLICT_MESSAGE });
-        continue;
-      }
-      const { rows, base } = rowsForWrite(draft, entry.id);
-      groups[index] = withModels(groups[index] as Record<string, unknown>, entry, rows, base);
-      written.push(entry.id);
-    }
-    path = ALIAS_PATHS.family(unit.family);
-    body = groups;
-  } else {
-    // 2.5: a map no longer readable is not sameChannel for any entry: a conflict, without a request.
-    const stored = loginMapIn(document);
-    let map: Record<string, unknown> = isRecord(stored) ? { ...stored } : {};
-    for (const entryId of unit.entryIds) {
-      const entry = unitEntry(draft, entryId) as LoginEntry;
-      if (!sameChannel(isRecord(stored) ? map : stored, entry)) {
-        failed.push({ entryId, reason: 'conflict', message: CONFLICT_MESSAGE });
-        continue;
-      }
-      const { rows, base } = rowsForWrite(draft, entryId);
-      map = replaceChannel(map, entry, writtenRowsOf(entry, rows, base));
-      written.push(entryId);
-    }
-    path = ALIAS_PATHS.loginAliases;
-    body = map;
-  }
-
-  if (!written.length) return { done: [], failed };
-  assertConnection();
-  try {
-    await apiClient.put(path, body, ifMatch(etag));
-  } catch (error) {
-    if (isAbort(error)) throw error;
-    const status = statusOf(error);
-    if (status === 412) {
-      if (!lastAttempt) return 'retry';
-      return {
-        done: [],
-        failed: unit.entryIds.map((entryId) => ({
-          entryId,
-          reason: 'conflict' as const,
-          message: CONFLICT_MESSAGE,
-        })),
-      };
-    }
-    const reason = status === 400 || status === 422 ? 'invalid' : 'error';
-    for (const entryId of written) failed.push({ entryId, reason, message: messageOf(error) });
-    return { done: [], failed };
-  }
-  return { done: written, failed };
+/**
+ * `PUT path` with `If-Match: tag`; resolves with the `ETag` of the 200, or null when it has none.
+ * `apiClient.put` returns the body alone, so the tag is read in the request's own `transformResponse`,
+ * placed after axios's defaults; only a 200's headers are read. Rejects as `apiClient.put` does.
+ */
+export async function putWithTag(path: string, body: unknown, tag: string): Promise<string | null> {
+  let answered: string | null = null;
+  const takeTag: AxiosResponseTransformer = function (data, headers, status) {
+    if (status === 200) answered = etagOf(headers);
+    return data;
+  };
+  await apiClient.put(path, body, {
+    headers: { 'If-Match': tag },
+    transformResponse: [...defaultTransforms(), takeTag],
+  });
+  return answered;
 }
+
+const reasonOf = (error: unknown): SaveFailure => {
+  const status = statusOf(error);
+  if (status === 412) return 'changed';
+  if (status === 400 || status === 422) return 'refused';
+  return 'error';
+};
 
 export const aliasesApi = {
   /** `GET /config` (document and `ETag`) and the credentials list; without the list, counts are null. */
@@ -166,46 +102,35 @@ export const aliasesApi = {
   },
 
   /**
-   * The units one after another (3.4): a failed unit does not stop the next; each is atomic by itself.
-   * A draft with a blocking issue in a changed entry is refused whole, before any request. A change of
-   * the management connection aborts (rejects with an AbortError).
+   * 3.4. The units one after another, each body from the page's own read, each `PUT` conditional on the
+   * tag of the write before (the read's for the first). The first unit not confirmed ends the save: it is
+   * not sent again, and no unit after it is sent. No `GET`, no write without a tag. A draft with a blocking
+   * issue in a changed entry sends nothing. A change of the management connection aborts (rejects with an
+   * AbortError) before the next write.
    */
   async commit(draft: AliasDraft): Promise<CommitOutcome> {
-    const blocked = blockedEntries(draft);
-    if (blocked.length) {
-      return {
-        done: [],
-        failed: blocked.map((entryId) => ({
-          entryId,
-          reason: 'invalid' as const,
-          message: BLOCKED_MESSAGE,
-        })),
-      };
-    }
+    const writes: PlannedWrite[] = planWrites(draft);
+    const confirmed: string[] = [];
+    const ended = (from: number, reason: SaveFailure, message: string): CommitOutcome => ({
+      confirmed,
+      unconfirmed: writes.slice(from).flatMap((write) => write.unit.entryIds),
+      failure: { reason, message },
+    });
+    if (blockedEntries(draft).length) return ended(0, 'blocked', BLOCKED_MESSAGE);
     const assertConnection = guardConfigConnection();
-    const outcome: CommitOutcome = { done: [], failed: [] };
-    for (const unit of planCommit(draft)) {
+    let tag = draft.base.etag;
+    for (const [index, write] of writes.entries()) {
+      if (!tag) return ended(index, 'no-tag', NO_TAG_MESSAGE);
       assertConnection();
-      let result: CommitOutcome | 'retry';
       try {
-        result = await runUnit(unit, draft, assertConnection, false);
-        if (result === 'retry') result = await runUnit(unit, draft, assertConnection, true);
+        tag = await putWithTag(write.path, write.body, tag);
       } catch (error) {
         if (isAbort(error)) throw error;
-        result = {
-          done: [],
-          failed: unit.entryIds.map((entryId) => ({
-            entryId,
-            reason: 'error' as const,
-            message: messageOf(error),
-          })),
-        };
+        return ended(index, reasonOf(error), messageOf(error));
       }
-      if (result === 'retry') continue;
-      outcome.done.push(...result.done);
-      outcome.failed.push(...result.failed);
+      confirmed.push(...write.unit.entryIds);
     }
-    return outcome;
+    return { confirmed, unconfirmed: [], failure: null };
   },
 };
 

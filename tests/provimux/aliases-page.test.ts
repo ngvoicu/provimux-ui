@@ -13,6 +13,7 @@ import {
   addKeyAlias,
   addLoginAlias,
   changeRow,
+  editsOf,
   removeRow,
   rowIssues,
   startDraft,
@@ -33,7 +34,6 @@ import {
 } from '@/provimux/pages/aliases/pageLogic';
 import { AliasesBoard, type BoardActions } from '@/provimux/pages/aliases/AliasesBoard';
 import { LostEdits } from '@/provimux/pages/aliases/LostEdits';
-import { rebase } from '@/provimux/pages/aliases/rebase';
 import { AliasesPage } from '@/provimux/pages/aliases/AliasesPage';
 import { PROVIMUX_ROUTES } from '@/provimux/routes';
 import { AliasesRedirect } from '@/provimux/pages/aliases/AliasesRedirect';
@@ -343,17 +343,13 @@ describe('after a save: carried and lost', () => {
     const state = loaded();
     let draft = changeRow(startDraft(state), 'gemini/0/0#0', { alias: 'g-pro-2' });
     draft = addKeyAlias(draft, 'gemini/0/0', 'gemini-2.5-pro', 'second');
-    // The same entry, its group changed elsewhere: the edits cannot be carried.
-    const document = fixture('config-full.json') as {
-      'api-keys': { gemini: { name: string }[] };
-    };
-    document['api-keys'].gemini[0].name = 'renamed-elsewhere';
-    const fresh = { ...readAliasState(document, files()), etag: '"e2"' };
-    const { lost } = rebase(draft, fresh, []);
-    expect(lost).toHaveLength(1);
+    // W7: the edits of an entry a save did not confirm (3.6), from the dropped draft.
+    const edits = editsOf(draft, 'gemini/0/0');
+    expect(edits).toHaveLength(2);
+    const entry = state.entries.find((e) => e.id === 'gemini/0/0')!;
     const html = renderToStaticMarkup(
       createElement(LostEdits, {
-        notices: [{ key: 1, entry: lost[0].entry, edits: lost[0].edits }],
+        notices: [{ key: 1, entry, edits }],
         onDismiss: noop,
       })
     );

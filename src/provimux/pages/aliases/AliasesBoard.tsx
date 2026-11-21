@@ -30,7 +30,6 @@ import type {
   AliasDraft,
   AliasEntry,
   AliasRow,
-  CommitOutcome,
   KeyEntry,
   LoginEntry,
   NameGroup,
@@ -39,7 +38,12 @@ import type {
 import shared from '../shared/Shared.module.scss';
 import styles from './AliasesPage.module.scss';
 
-export type Failure = CommitOutcome['failed'][number];
+/** An entry's failure mark. W7: no longer produced by the save (the page passes none); U4 removes it. */
+export interface Failure {
+  entryId: string;
+  reason: 'conflict' | 'invalid' | 'error';
+  message: string;
+}
 
 export interface BoardActions extends RowActions {
   addLoginAlias: (channel: string) => void;

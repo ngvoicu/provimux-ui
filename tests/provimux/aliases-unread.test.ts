@@ -7,11 +7,11 @@ import {
   addKeyAlias,
   addLoginAlias,
   changeRow,
+  removeRow,
   rowIssues,
   startDraft,
 } from '@/provimux/pages/aliases/draft';
 import { planCommit } from '@/provimux/pages/aliases/plan';
-import { rebase } from '@/provimux/pages/aliases/rebase';
 import { readAliasState } from '@/provimux/pages/aliases/rows';
 import type { AliasDraft, AliasEntry, AliasState } from '@/provimux/pages/aliases/types';
 import {
@@ -24,7 +24,8 @@ import {
   type Doc,
 } from '../helpers/aliasesStore';
 
-/* ALP-03, design aliases-page.md 2.5: what the page cannot read. Tests X-1 … X-6. */
+/* ALP-03, W7, design aliases-page.md 2.5: what the page cannot read. Tests X-1 … X-6 (X-7, numbers:
+ * aliases-save.test.ts). */
 
 afterEach(restoreClient);
 
@@ -197,8 +198,9 @@ describe('X-3 an unreadable part beside a write stays as it is, in its place', (
     draft = changeRow(draft, 'claude/0/0#0', { alias: 'o1' });
     draft = changeRow(draft, 'claude/1/0#0', { alias: 'o3' });
     expect(await aliasesApi.commit(draft)).toEqual({
-      done: ['claude/0/0', 'claude/1/0'],
-      failed: [],
+      confirmed: ['claude/0/0', 'claude/1/0'],
+      unconfirmed: [],
+      failure: null,
     });
     const body = s.puts[0].body as unknown[];
     const before = family(doc, 'claude');
@@ -224,7 +226,11 @@ describe('X-3 an unreadable part beside a write stays as it is, in its place', (
     const draft = changeRow(startDraft(await aliasesApi.load()), 'login/codex#0', {
       alias: 'g55-b',
     });
-    expect(await aliasesApi.commit(draft)).toEqual({ done: ['login/codex'], failed: [] });
+    expect(await aliasesApi.commit(draft)).toEqual({
+      confirmed: ['login/codex'],
+      unconfirmed: [],
+      failure: null,
+    });
     const body = s.puts[0].body as Doc;
     expect(body.kimi).toBe('not-a-list');
     expect(body.claude).toEqual(loginMap(doc).claude);
@@ -241,6 +247,23 @@ describe('X-4 nothing can be added to what cannot be read', () => {
     expect(addLoginAlias(draft, 'codex', { upstream: 'g', alias: 'ga' })).not.toBe(draft);
   });
 
+  test('no change and no removal for a row of an unread channel (2.5)', () => {
+    const doc = fixture('config-full.json');
+    loginMap(doc).CODEX = 'x' as never;
+    const draft = startDraft(readAliasState(doc, files()));
+    const codex = draft.rows.filter((r) => r.entryId === 'login/codex');
+    expect(codex.length).toBeGreaterThan(0);
+    for (const row of codex) {
+      expect(changeRow(draft, row.id, { alias: 'other' })).toBe(draft);
+      expect(changeRow(draft, row.id, { fork: !row.fork })).toBe(draft);
+      expect(removeRow(draft, row.id)).toBe(draft);
+    }
+    expect(planCommit(draft)).toEqual([]);
+    // A readable channel beside it still takes edits.
+    const claude = draft.rows.find((r) => r.entryId === 'login/claude')!;
+    expect(changeRow(draft, claude.id, { alias: 'other' })).not.toBe(draft);
+  });
+
   test('every channel when the map is unreadable', () => {
     for (const bad of [CASES[9], CASES[10]]) {
       const doc = fixture('config-full.json');
@@ -253,7 +276,7 @@ describe('X-4 nothing can be added to what cannot be read', () => {
   });
 });
 
-describe('X-5 made unreadable between load and commit', () => {
+describe('X-5 made unreadable elsewhere after the read: a change like any other', () => {
   const change = (rowId: string) => (draft: AliasDraft) => changeRow(draft, rowId, { alias: 'zz' });
   const qwen = (draft: AliasDraft) => addLoginAlias(draft, 'qwen', { upstream: 'q', alias: 'qq' });
   const cases: [string, (d: AliasDraft) => AliasDraft, string, (d: Doc) => void][] = [
@@ -277,7 +300,6 @@ describe('X-5 made unreadable between load and commit', () => {
       'login/codex',
       (d) => void (loginMap(d).CODEX = 'x' as never),
     ],
-    // The stored list still matches here: only the readability check stops the write.
     [
       'a new junk spelling of the channel',
       change('login/codex#0'),
@@ -292,30 +314,20 @@ describe('X-5 made unreadable between load and commit', () => {
     ],
     ['oauth, for a new channel', qwen, 'login/qwen', (d) => void (d.oauth = 'x')],
   ];
-  test.each(cases)('%s: conflict, no put, no throw', async (_l, page, entryId, bad) => {
+  test.each(cases)('%s: 412, nothing written, no throw', async (_l, page, entryId, bad) => {
     const s = server(fixture('config-full.json'));
     const draft = page(startDraft(await aliasesApi.load()));
     s.edit(bad);
     const before = clone(s.stored());
     const outcome = await aliasesApi.commit(draft);
-    expect(outcome.done).toEqual([]);
-    expect(outcome.failed.map((f) => [f.entryId, f.reason])).toEqual([[entryId, 'conflict']]);
-    expect(s.puts).toEqual([]);
+    expect(outcome).toEqual({
+      confirmed: [],
+      unconfirmed: [entryId],
+      failure: { reason: 'changed', message: 'precondition_failed' },
+    });
+    // One conditional put with the read's tag, refused; the file is as the other writer left it.
+    expect(s.puts.map((p) => p.ifMatch)).toEqual(['"v1"']);
     expect(s.stored()).toEqual(before);
-  });
-});
-
-describe('3.6 with 2.5: rebase carries only onto a readable channel', () => {
-  test.each([
-    ['a junk spelling beside the channel', (d: Doc) => void (loginMap(d).Codex = 'x' as never)],
-    ['the map', (d: Doc) => void ((d.oauth as Doc)['model-alias'] = 'x')],
-  ])('%s: lost', async (_l, bad) => {
-    const s = server(fixture('config-full.json'));
-    const draft = changeRow(startDraft(await aliasesApi.load()), 'login/codex#0', { alias: 'zz' });
-    s.edit(bad);
-    const rebased = rebase(draft, await aliasesApi.load(), []);
-    expect(rebased.carried).toEqual({});
-    expect(rebased.lost.map((l) => l.entry.id)).toEqual(['login/codex']);
   });
 });
 

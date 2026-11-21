@@ -78,6 +78,37 @@ export function loginMapIn(document: unknown): unknown {
   return map === undefined || map === null ? {} : map;
 }
 
+/**
+ * 2.5, numbers: a parsed number the browser does not hold as written. An integer beyond ±(2^53 − 1)
+ * parses to an integer-valued double of at least 2^53, and one too large for a double to Infinity.
+ */
+export const isInexactNumber = (value: unknown): boolean =>
+  typeof value === 'number' &&
+  (!Number.isFinite(value) || (Number.isInteger(value) && !Number.isSafeInteger(value)));
+
+/** The paths of every inexact number in a value, walked once; `path` names the value itself. */
+export function inexactNumbers(value: unknown, path: string): string[] {
+  if (isInexactNumber(value)) return [path];
+  if (Array.isArray(value)) {
+    return value.flatMap((element, index) => inexactNumbers(element, `${path}[${index}]`));
+  }
+  if (isRecord(value)) {
+    return Object.entries(value).flatMap(([key, element]) =>
+      inexactNumbers(element, `${path}.${key}`)
+    );
+  }
+  return [];
+}
+
+/**
+ * 2.5: whether the login alias map can be written whole: a map, without a number the browser cannot
+ * hold. When it cannot, every login entry is `unread` and nothing of the map is ever written.
+ */
+export function loginMapWritable(document: unknown): boolean {
+  const map = loginMapIn(document);
+  return isRecord(map) && inexactNumbers(map, 'oauth.model-alias').length === 0;
+}
+
 /** A list that is present and not null but not a list: not readable (2.5). */
 const unreadableList = (value: unknown) =>
   value !== undefined && value !== null && !Array.isArray(value);
@@ -159,6 +190,9 @@ function readKeyEntries(document: unknown, family: ProviderFamily) {
     unread.add(path);
     return { entries, rows, unread };
   }
+  // 2.5, numbers: a family holding one gives no entries, so it is never written and never rounded.
+  const inexact = inexactNumbers(familyGroups(document, family), path);
+  if (inexact.length) return { entries, rows, unread: new Set(inexact) };
   const groups = familyGroups(document, family);
   const openai = family === 'openai-compatibility';
   let configs: ReturnType<typeof normalizeProviderGroups>;
@@ -255,8 +289,11 @@ function readLoginEntries(document: unknown, files: readonly AliasLoginFile[] | 
   const unread = new Set<string>();
   const oauth = isRecord(document) ? document.oauth : undefined;
   const stored = loginMapIn(document);
-  const mapReadable = isRecord(stored);
-  if (!mapReadable) unread.add(isRecord(oauth) ? 'oauth.model-alias' : 'oauth');
+  const inexact = isRecord(stored) ? inexactNumbers(stored, 'oauth.model-alias') : [];
+  const mapReadable = isRecord(stored) && inexact.length === 0;
+  if (!isRecord(stored)) unread.add(isRecord(oauth) ? 'oauth.model-alias' : 'oauth');
+  // 2.5, numbers: the map is not shown, every login entry is unread, and the map is never written.
+  for (const path of inexact) unread.add(path);
   const map = mapReadable ? stored : {};
   type Channel = { spellings: string[]; storedList: unknown[]; paths: string[]; unread: boolean };
   const channels = new Map<string, Channel>();
@@ -310,9 +347,10 @@ function readLoginEntries(document: unknown, files: readonly AliasLoginFile[] | 
 }
 
 /**
- * The entries and rows of a `GET /config` document. `files` is the credentials list, or null when it
- * could not be read (login counts are then null). The ETag is the caller's (`aliasesApi.load`). Never
- * throws on the document's shape: what it cannot read is named in `unread` (2.5).
+ * The entries and rows of a `GET /config` document, which the state keeps as read (a save builds its
+ * bodies from it, 3.4). `files` is the credentials list, or null when it could not be read (login counts
+ * are then null). The ETag is the caller's (`aliasesApi.load`). Never throws on the document's shape:
+ * what it cannot read is named in `unread` (2.5).
  */
 export function readAliasState(
   document: unknown,
@@ -331,6 +369,7 @@ export function readAliasState(
     entries: [...keyParts.flatMap((part) => part.entries), ...login.entries],
     rows: [...keyParts.flatMap((part) => part.rows), ...login.rows],
     forceModelPrefix: isRecord(routing) && routing['force-model-prefix'] === true,
+    document,
     etag: null,
     unread,
   };

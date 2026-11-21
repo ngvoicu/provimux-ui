@@ -56,8 +56,8 @@ export interface LoginEntry {
   /** The stored lists of the spellings, concatenated, untouched. */
   storedList: readonly unknown[];
   /**
-   * 2.5: the alias map, or one of the spellings' lists, is present and not readable. Nothing can be added,
-   * and a commit of this channel is a conflict (`sameChannel` is false): the file keeps it as it is.
+   * 2.5: the alias map, or one of the spellings' lists, is present and not readable (a number the browser
+   * cannot hold exactly included). Nothing can be added, nothing changed: never written.
    */
   unread: boolean;
 }
@@ -65,7 +65,10 @@ export interface LoginEntry {
 export type AliasEntry = KeyEntry | LoginEntry;
 
 export interface AliasRow {
-  /** `<entry.id>#<sourceIndex>` for a stored row, `<entry.id>#new-<n>` for a row of the draft. */
+  /**
+   * `<entry.id>#<sourceIndex>` for a stored row, `<entry.id>#new-<n>` for a row of the draft. Valid for one
+   * load, as the entry's id (3.4).
+   */
   id: string;
   entryId: string;
   store: 'api-key' | 'login';
@@ -86,7 +89,12 @@ export interface AliasState {
   entries: AliasEntry[];
   rows: AliasRow[];
   forceModelPrefix: boolean;
-  /** ETag of the read; null when the browser could not read the header (writes are then unconditional). */
+  /**
+   * The `GET /config` answer of this read, as parsed. A save builds its bodies from it (3.4). The data
+   * layer's own; never rendered: it holds the keys.
+   */
+  document: unknown;
+  /** ETag of the read; null when the browser could not read the header: the page then saves nothing (3.4). */
   etag: string | null;
   /**
    * 2.5: the parts of the file the page cannot read, by path (`api-keys.claude[2]`,
@@ -121,10 +129,32 @@ export type CommitUnit =
   | { store: 'api-key'; family: ProviderFamily; entryIds: string[] }
   | { store: 'login'; entryIds: string[] };
 
+/** A unit with its request, `PUT <path>` with `body`. Pure: from the draft and its base alone (3.4). */
+export interface PlannedWrite {
+  unit: CommitUnit;
+  path: string;
+  body: unknown;
+}
+
+export type SaveFailure =
+  /** A changed entry has a blocking issue (3.5): nothing was sent. */
+  | 'blocked'
+  /** The read, or the answer of the write before, carried no tag: this write was not sent. */
+  | 'no-tag'
+  /** 412: the file is not the one the page read. */
+  | 'changed'
+  /** 400 or 422: the proxy refused the configuration; `message` is its text. */
+  | 'refused'
+  /** Anything else, an answer that never came included: this write may have landed. */
+  | 'error';
+
 export interface CommitOutcome {
-  /** Entry ids written. */
-  done: string[];
-  failed: { entryId: string; reason: 'conflict' | 'invalid' | 'error'; message: string }[];
+  /** Entries of the units confirmed written: a 200 to a `PUT` sent with `If-Match`. Nothing else confirms. */
+  confirmed: string[];
+  /** Entries of the unit that ended the save and of every unit after it, in unit order. */
+  unconfirmed: string[];
+  /** Why the save ended early; null when every unit is confirmed. */
+  failure: { reason: SaveFailure; message: string } | null;
 }
 
 export type RowIssue =

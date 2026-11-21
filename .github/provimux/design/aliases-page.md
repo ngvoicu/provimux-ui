@@ -1,13 +1,13 @@
 # One page for all model aliases (ALP-02)
 
 Built: steps W1 to U3 of section 8, the data layer (W1 to W6, `src/provimux/pages/aliases/`), the page (U1,
-`/provimux/aliases`), the old address (U2) and the provider forms (U3). U3's checks against a running proxy are
-not done yet.
+`/provimux/aliases`), the old address (U2) and the provider forms (U3), and W7, the save of 3.4 as it stands
+here. U3's checks against a running proxy are not done yet.
 
-**Not built yet: W7 and U4 (section 8), the save of 3.4 and 3.6 as they stand here.** The code still has the save
-those sections replace: a fresh read for each unit, entries found again by their content, a second attempt after
-a 412, and edits carried onto the next read. Two reviews found lost data in exactly that part, so it is removed,
-not repaired (decision D6).
+**Not built yet: U4 (section 8), the page after a save as 3.6 describes it.** W7 removed the save those sections
+replace (a fresh read for each unit, entries found again by their content, a second attempt after a 412, edits
+carried onto the next read; decision D6). Until U4 the page only lists, after a save, the edits of every
+entry not confirmed and reads the file again; it carries nothing.
 
 A model alias is the name a client sends for an upstream model. Today aliases are edited in two forms (each API-key
 provider's model list; the login alias sub-page). This design moves alias editing to one Provimux page,
