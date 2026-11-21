@@ -8,7 +8,6 @@ import {
   changeRow,
   discard,
   draftEntries,
-  rebase,
   removeRow,
   rowIssues,
   startDraft,
@@ -197,7 +196,7 @@ describe('O operations', () => {
     expect(draftEntries(draft).some((e) => e.id === 'login/codex')).toBe(true);
   });
 
-  test('discard and rebase', () => {
+  test('discard', () => {
     const state = loaded();
     const edited = changeRow(
       changeRow(startDraft(state), 'gemini/0/0#0', { alias: 'gp' }),
@@ -208,17 +207,6 @@ describe('O operations', () => {
     const dropped = discard(withNew);
     expect(dropped.rows).toEqual(state.rows);
     expect(dropped.nextNew).toBe(1);
-
-    const freshState = loaded();
-    const rebased = rebase(withNew, freshState, ['xai/0/0', 'login/qwen']);
-    expect(rebased.base).toBe(freshState);
-    expect(row(rebased, 'gemini/0/0#0').alias).toBe('g-pro');
-    expect(row(rebased, 'xai/0/0#0').alias).toBe('gk');
-    expect(row(rebased, 'login/qwen#new-0').alias).toBe('qq');
-    expect(rebased.rows.map((r) => r.id)).toEqual([
-      ...freshState.rows.map((r) => r.id),
-      'login/qwen#new-0',
-    ]);
   });
 });
 

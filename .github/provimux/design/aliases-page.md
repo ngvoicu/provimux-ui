@@ -217,7 +217,7 @@ export interface LoginEntry {
 export type AliasEntry = KeyEntry | LoginEntry;
 
 export interface AliasRow {
-  /** `<entry.id>#<sourceIndex>` for a stored row, `<entry.id>#new-<n>` for a row of the draft. */
+  /** `<entry.id>#<sourceIndex>` for a stored row, `<entry.id>#new-<n>` for a row of the draft. Valid for one load, as the entry's id (3.6). */
   id: string;
   entryId: string;
   store: 'api-key' | 'login';
@@ -318,8 +318,15 @@ export function addLoginAlias(draft: AliasDraft, channel: string, row: NewLoginA
 /** Remove: see 3.2 and 3.3 for what it means per store. */
 export function removeRow(draft: AliasDraft, rowId: string): AliasDraft;
 export function discard(draft: AliasDraft): AliasDraft;
-/** After a commit: the fresh state, keeping the draft rows of the entries in `keep`. */
-export function rebase(draft: AliasDraft, state: AliasState, keep: string[]): AliasDraft;
+export interface LostEdit { kind: 'changed' | 'added' | 'removed'; before: AliasRow | null; after: AliasRow | null }
+export interface Rebased {
+  draft: AliasDraft;
+  /** Old entry id -> the same entry's id in the fresh state, for every entry carried. */
+  carried: Record<string, string>;
+  /** Entries with edits neither written nor carried: the old entry and its edits. */
+  lost: { entry: AliasEntry; edits: LostEdit[] }[];
+}
+export function rebase(draft: AliasDraft, state: AliasState, written: string[]): Rebased;
 ```
 
 ### 3.1 Change
@@ -434,7 +441,7 @@ export const aliasesApi: {
 - `conflict` is also an entry that `locate` or `sameChannel` did not find unchanged. `invalid` is a 400 or 422
   from the server, with its message. Everything else is `error`.
 - After `commit` the page calls `load()` again and `useConfigStore.getState().clearCache()`, so other pages do
-  not show the old configuration, then `rebase(draft, state, failedIds)`.
+  not show the old configuration, then `rebase(draft, state, outcome.done)` (3.6).
 - `load()` is `apiClient.getRaw('/config')` (document and `ETag`) and `authFilesApi.list()`; if the credentials
   list fails, `loginCount` is null and the page still works. `etag` null (a browser that cannot read the header)
   is shown by the page as "saves are not protected against a change made elsewhere".
@@ -453,6 +460,30 @@ export function rowIssues(draft: AliasDraft): Record<string, RowIssue>;   // by 
 
 A new row with neither name nor alias is not a row yet: no issue, not written. The three blocking issues are the
 old editor's (`getAliasRowIssues`), which are the proxy's drop rules.
+
+### 3.6 Rebase: a row belongs to the read it came from
+
+Entry ids, row ids and `sourceIndex` are positions in one read of the file. They say which stored object a row is
+only together with the state they were read from. **So a row is never moved to another state by its id or its
+position.** `rebase` moves an entry's edits to a fresh state only through the entry's stored content.
+
+- **The same entry** in the fresh state is an entry with equal stored content, compared as `locate` and
+  `sameChannel` compare (`sameConfig`).
+  - API key: a fresh `KeyEntry` of the same `family` and `keyIndex` whose `storedGroup` equals the old one's: the
+    one at the old `groupIndex` when that one does, otherwise the only one that does, otherwise none.
+  - Login: the fresh `LoginEntry` of the same `channel`, readable (2.5), whose `storedList` equals the old one's.
+    A channel without an entry has an empty list, on either side.
+- **Carried**: an entry with edits (`entryChanged`) that is not in `written` and is the same entry in the fresh
+  state. Its draft rows are kept under the fresh entry's id (`entryId`, and `id` rebuilt from it; `sourceIndex`
+  and the `new-<n>` numbers unchanged), in the fresh entry's place.
+- **Lost**: an entry with edits that is not in `written` and is not the same entry in the fresh state: changed
+  elsewhere, gone, or no longer the only one alike. It takes the fresh rows. Its edits are returned in `lost`,
+  each as the base row and the draft row (`changed`: both; `added`: the draft row; `removed`: the base row).
+  Nothing of them is in the new draft.
+- Every other entry takes the fresh rows.
+
+After any `rebase`, each draft row with a `sourceIndex` stands, in `draft.base`, on a stored object equal to the
+one it was read from. With `locate` at commit, a write changes only the row the user edited.
 
 ## 4. "One name, several services"
 
@@ -625,7 +656,8 @@ ledger. Cost: the old page's code remains in the built file, as today (decision 
 src/provimux/pages/aliases/
   types.ts            the types of sections 2, 3 and 4
   rows.ts             readAliasState: document + login files -> entries and rows
-  draft.ts            startDraft, changeRow, addKeyAlias, addLoginAlias, removeRow, discard, rebase, rowIssues
+  draft.ts            startDraft, changeRow, addKeyAlias, addLoginAlias, removeRow, discard, rowIssues
+  rebase.ts           rebase: the draft carried onto a fresh read (3.6)
   collisions.ts       clientNames, nameGroups, groupOfRow, serviceOf
   plan.ts             planCommit, locate, withModels, sameChannel, replaceChannel
   aliasesApi.ts       load, commit, loadServedNames
@@ -700,7 +732,7 @@ each ignored kind), `config-empty.json` (no `api-keys`, no `oauth`), `credential
   (fork true by default; new channel); remove a channel's last row (key gone; last channel: body `{}`).
 - **C-1 commit**: units run in order, one after the other (a unit's read starts after the previous `put`
   resolved); all changed entries of a family are in one `put`; a failing unit is reported and the next still
-  runs; `rebase` keeps the failed entries' edits.
+  runs; `rebase` carries the edits of entries not written (RB-1 … RB-8).
 - **C-2 If-Match and conflicts**: every `put` of both stores carries `If-Match` with the `ETag` of that unit's
   read, and none when the header is missing. A 412: the unit is read and written once more, and succeeds when
   its entries are unchanged; a second 412 fails its entries as `conflict`. A group changed since load:
@@ -757,8 +789,9 @@ From `main` `42bb2925`. Each ends with `bun run verify` green and one commit (`P
 
 7. **U1 page.** `AliasesPage`, the nav item, the route `/provimux/aliases`, the strings. Reads `?store=`,
    `?channel=`, `?family=` as its initial filter. Holds after: every operation of section 3 can be done and
-   committed on the page; verdicts and issues are visible on the draft; a failed or conflicting entry keeps its
-   edits and says why; leaving with a dirty draft asks first (`useUnsavedChangesGuard`); an entry with
+   committed on the page; verdicts and issues are visible on the draft; an entry whose save failed keeps its
+   edits and says why; an entry changed elsewhere shows the current rows, and the page lists the edits that were
+   not saved; leaving with a dirty draft asks first (`useUnsavedChangesGuard`); an entry with
    `listSource: 'none'` explains itself; the statement of 5.3 is shown; native names take part in the verdicts,
    and on a proxy without `/provimux/model-routes` the page says in one line that they were not checked; the nav
    and route parts of F-5. The old editors still exist: nothing is
@@ -796,6 +829,8 @@ layer; until then they are a possible conflict when upstream edits that function
 
 Known limits, accepted:
 
+- The page does not merge: an entry changed elsewhere loses the page's edits on it. They are listed, to be typed
+  again.
 - The provider form's own saves stay unconditional (upstream's writer). Giving them `If-Match` too is a change of
   `getGroups` and `putGroups` in `providers.ts`, outside this item.
 - A commit over several families and the logins is several requests; a failure in between leaves the earlier

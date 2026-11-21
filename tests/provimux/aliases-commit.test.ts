@@ -1,5 +1,14 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { readFileSync } from 'node:fs';
+import {
+  clone,
+  family,
+  fixture,
+  httpError,
+  loginMap,
+  restoreClient,
+  server,
+  type Doc,
+} from '../helpers/aliasesStore';
 import { apiClient } from '@/services/api/client';
 import { authFilesApi } from '@/services/api/authFiles';
 import { providersApi, type ProviderFamily } from '@/services/api/providers';
@@ -9,10 +18,10 @@ import {
   addKeyAlias,
   addLoginAlias,
   changeRow,
-  rebase,
   removeRow,
   startDraft,
 } from '@/provimux/pages/aliases/draft';
+import { rebase } from '@/provimux/pages/aliases/rebase';
 import { locate, planCommit, sameChannel } from '@/provimux/pages/aliases/plan';
 import type { AliasDraft } from '@/provimux/pages/aliases/types';
 import type {
@@ -24,108 +33,7 @@ import type {
 
 /* ALP-03 W4: tests R-2, R-3, A-1, B-1, C-1, C-2 and the write side of O-2 and O-6. */
 
-type Doc = Record<string, unknown>;
-const clone = <T>(value: T): T => structuredClone(value);
-const fixture = (name: string): Doc =>
-  JSON.parse(readFileSync(`tests/provimux/fixtures/aliases/${name}`, 'utf8'));
-
-const original = {
-  get: apiClient.get,
-  getRaw: apiClient.getRaw,
-  put: apiClient.put,
-  revision: apiClient.getConnectionRevision,
-};
-afterEach(() => {
-  apiClient.get = original.get;
-  apiClient.getRaw = original.getRaw;
-  apiClient.put = original.put;
-  apiClient.getConnectionRevision = original.revision;
-});
-
-const httpError = (status: number, message: string, apiCode?: string) =>
-  Object.assign(new Error(message), { name: 'ApiError', status, apiCode });
-
-interface Put {
-  path: string;
-  body: unknown;
-  ifMatch: string | undefined;
-}
-
-/**
- * A canned management API over one document: GET /config (and its paths), GET /credentials,
- * PUT /config/api-keys/<family> and /config/oauth/model-alias. Every write moves the ETag; a write
- * whose If-Match is not the current ETag is a 412 and writes nothing, as the proxy does.
- */
-function server(doc: Doc) {
-  const stored = clone(doc);
-  let version = 1;
-  const log: string[] = [];
-  const puts: Put[] = [];
-  const s = {
-    sendEtag: true,
-    /** Called before each PUT is checked: a change made elsewhere in the meantime. */
-    beforePut: null as null | ((put: Put) => void),
-    /** Called before each PUT is checked: throw to fail it. */
-    failPut: null as null | ((put: Put) => void),
-    stored: () => stored,
-    log,
-    puts,
-    etag: () => `"v${version}"`,
-    edit(change: (doc: Doc) => void) {
-      change(stored);
-      version += 1;
-    },
-  };
-  const at = (path: string): unknown =>
-    path
-      .split('/')
-      .filter(Boolean)
-      .reduce<unknown>(
-        (value, key) => (value && typeof value === 'object' ? (value as Doc)[key] : undefined),
-        stored
-      );
-  apiClient.getRaw = (async (path: string) => {
-    log.push(`read ${path}`);
-    expect(path).toBe('/config');
-    return { data: clone(stored), headers: s.sendEtag ? { etag: s.etag() } : {} };
-  }) as typeof apiClient.getRaw;
-  apiClient.get = (async (path: string) => {
-    log.push(`get ${path}`);
-    if (path === '/credentials') return clone(fixture('credentials.json'));
-    if (path === '/config') return clone(stored);
-    const value = at(path.replace(/^\/config/, ''));
-    if (value === undefined) throw httpError(404, 'not_found', 'not_found');
-    return clone(value);
-  }) as typeof apiClient.get;
-  apiClient.put = (async (path: string, body: unknown, config?: { headers?: Doc }) => {
-    const put: Put = {
-      path,
-      body: clone(body),
-      ifMatch: config?.headers?.['If-Match'] as string | undefined,
-    };
-    log.push(`put ${path} start`);
-    puts.push(put);
-    await Promise.resolve();
-    s.beforePut?.(put);
-    s.failPut?.(put);
-    if (put.ifMatch !== undefined && put.ifMatch !== s.etag()) {
-      log.push(`put ${path} 412`);
-      throw httpError(412, 'precondition_failed', 'precondition_failed');
-    }
-    if (path.startsWith('/config/api-keys/')) {
-      const family = path.slice('/config/api-keys/'.length);
-      stored['api-keys'] = { ...((stored['api-keys'] as Doc) ?? {}), [family]: clone(body) };
-    } else if (path === '/config/oauth/model-alias') {
-      stored.oauth = { ...((stored.oauth as Doc) ?? {}), 'model-alias': clone(body) };
-    } else {
-      throw new Error(`unexpected PUT ${path}`);
-    }
-    version += 1;
-    log.push(`put ${path} end`);
-    return { status: 'ok', 'config-version': 8 };
-  }) as typeof apiClient.put;
-  return s;
-}
+afterEach(restoreClient);
 
 /** Without the fields the server adds (auth-index) and the old console-only field upstream removes. */
 function strip(value: unknown): unknown {
@@ -139,9 +47,6 @@ function strip(value: unknown): unknown {
   }
   return value;
 }
-
-const family = (doc: Doc, name: string) => (doc['api-keys'] as Doc)[name] as Doc[];
-const loginMap = (doc: Doc) => (doc.oauth as Doc)['model-alias'] as Record<string, Doc[]>;
 
 describe('R-2 nothing lost, store A', () => {
   test('a draft with no change plans no unit and requests nothing', async () => {
@@ -715,7 +620,7 @@ describe('C-1 commit', () => {
     ]);
   });
 
-  test('a failing unit is reported, the next still runs; rebase keeps the failed edits', async () => {
+  test('a failing unit is reported, the next still runs; rebase carries the edits of entries not written', async () => {
     const s = server(fixture('config-full.json'));
     const draft = edits(startDraft(await aliasesApi.load()));
     s.failPut = (put) => {
@@ -730,11 +635,10 @@ describe('C-1 commit', () => {
       ],
     });
     const fresh = await aliasesApi.load();
-    const next = rebase(
-      draft,
-      fresh,
-      outcome.failed.map((f) => f.entryId)
-    );
+    const rebased = rebase(draft, fresh, outcome.done);
+    expect(rebased.carried).toEqual({ 'claude/0/0': 'claude/0/0', 'claude/1/0': 'claude/1/0' });
+    expect(rebased.lost).toEqual([]);
+    const next = rebased.draft;
     const alias = (id: string) => next.rows.find((r) => r.id === id)!.alias;
     expect(alias('claude/0/0#2')).toBe('haiku');
     expect(alias('claude/1/0#0')).toBe('opus-own');
