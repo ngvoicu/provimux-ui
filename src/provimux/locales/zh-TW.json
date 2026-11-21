@@ -149,6 +149,13 @@
       "entry_list_unread": "它的模型清單在此無法讀取；檔案會原樣保留它，本頁無法向其中新增內容。",
       "login_unread": "此登入類型的部分別名在此無法讀取，因此不能在本頁編輯。檔案會原樣保留它。",
       "login_map_unread": "登入別名對應在此無法讀取，因此本頁不能編輯任何登入別名。檔案會原樣保留它。"
+    },
+    "forms": {
+      "aliases_count_other": "{{count}} 個別名",
+      "aliases_none": "沒有別名",
+      "aliases_link": "在別名頁面設定別名",
+      "row_alias_label": "別名：",
+      "row_alias_title": "別名，於別名頁面設定"
     }
   }
 }

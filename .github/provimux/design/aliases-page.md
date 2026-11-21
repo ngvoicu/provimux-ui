@@ -1,7 +1,8 @@
 # One page for all model aliases (ALP-02)
 
-Built so far: the data layer, steps W1 to W6 of section 8 (`src/provimux/pages/aliases/`), the page, step U1
-(`/provimux/aliases`), and the old address, step U2. Step U3, the provider forms, is not built yet.
+Built: every step of section 8, the data layer (W1 to W6, `src/provimux/pages/aliases/`), the page (U1,
+`/provimux/aliases`), the old address (U2) and the provider forms (U3). U3's checks against a running proxy are
+not done yet.
 
 A model alias is the name a client sends for an upstream model. Today aliases are edited in two forms (each API-key
 provider's model list; the login alias sub-page). This design moves alias editing to one Provimux page,

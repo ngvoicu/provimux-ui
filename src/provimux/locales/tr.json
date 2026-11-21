@@ -165,6 +165,14 @@
       "entry_list_unread": "Model listesi burada okunamıyor; dosya onu olduğu gibi tutar ve bu sayfada ona hiçbir şey eklenemez.",
       "login_unread": "Bu giriş türünün takma adlarının bir kısmı burada okunamıyor, bu yüzden bu sayfada düzenlenemez. Dosya onu olduğu gibi tutar.",
       "login_map_unread": "Giriş takma adı haritası burada okunamıyor, bu yüzden bu sayfada hiçbir giriş takma adı düzenlenemez. Dosya onu olduğu gibi tutar."
+    },
+    "forms": {
+      "aliases_count_one": "{{count}} takma ad",
+      "aliases_count_other": "{{count}} takma ad",
+      "aliases_none": "Takma ad yok",
+      "aliases_link": "Takma adları Takma adlar sayfasında ayarlayın",
+      "row_alias_label": "Takma ad:",
+      "row_alias_title": "Takma ad, Takma adlar sayfasında ayarlanır"
     }
   }
 }

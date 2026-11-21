@@ -652,6 +652,14 @@
       "entry_list_unread": "Its model list cannot be read here; the file keeps it as it is, and nothing can be added to it on this page.",
       "login_unread": "Part of this login type's aliases cannot be read here, so it cannot be edited on this page. The file keeps it as it is.",
       "login_map_unread": "The login alias map cannot be read here, so no login alias can be edited on this page. The file keeps it as it is."
+    },
+    "forms": {
+      "aliases_count_one": "{{count}} alias",
+      "aliases_count_other": "{{count}} aliases",
+      "aliases_none": "No aliases",
+      "aliases_link": "Set aliases on the Aliases page",
+      "row_alias_label": "Alias:",
+      "row_alias_title": "Alias, set on the Aliases page"
     }
   },
   "theme": {

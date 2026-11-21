@@ -264,43 +264,46 @@ describe('route and nav (F-5, the U1 part)', () => {
 describe('strings in seven languages', () => {
   type Tree = { [key: string]: string | Tree };
   const en = JSON.parse(readFileSync('src/provimux/locales/en.json', 'utf8')) as Tree;
-  const enAliases = (en.provimux as Tree).aliases as Tree;
   const placeholders = (text: string) =>
     [...text.matchAll(/\{\{(\w+)\}\}/g)].map((m) => m[1]).sort();
   const baseOf = (key: string) => key.replace(/_(zero|one|two|few|many|other)$/, '');
-  const plural = new Set(
-    Object.keys(enAliases)
-      .filter((key) => baseOf(key) !== key)
-      .map(baseOf)
-  );
 
-  test('every language has every key of the page, in its own plural forms, with the same placeholders', () => {
-    expect(Object.keys(PROVIMUX_TRANSLATIONS).sort()).toEqual(
-      ['ko', 'ru', 'tr', 'vi', 'zh-CN', 'zh-TW'].sort()
-    );
-    for (const [language, own] of Object.entries(PROVIMUX_TRANSLATIONS)) {
-      const aliases = ((own as Tree).provimux as Tree).aliases as Record<string, string>;
-      const forms = new Intl.PluralRules(language).resolvedOptions().pluralCategories;
-      const expected = new Set<string>();
-      for (const key of Object.keys(enAliases)) {
-        const base = baseOf(key);
-        if (plural.has(base)) for (const form of forms) expected.add(`${base}_${form}`);
-        else expected.add(key);
-      }
-      expect({ language, keys: Object.keys(aliases).sort() }).toEqual({
-        language,
-        keys: [...expected].sort(),
-      });
-      for (const [key, text] of Object.entries(aliases)) {
-        const source = enAliases[key] ?? enAliases[`${baseOf(key)}_other`];
-        expect({ language, key, p: placeholders(text) }).toEqual({
+  // The page's strings, and the provider forms' line (U3).
+  for (const block of ['aliases', 'forms'] as const) {
+    test(`every language has every key of provimux.${block}, in its own plural forms, with the same placeholders`, () => {
+      const source = (en.provimux as Tree)[block] as Tree;
+      const plural = new Set(
+        Object.keys(source)
+          .filter((key) => baseOf(key) !== key)
+          .map(baseOf)
+      );
+      expect(Object.keys(PROVIMUX_TRANSLATIONS).sort()).toEqual(
+        ['ko', 'ru', 'tr', 'vi', 'zh-CN', 'zh-TW'].sort()
+      );
+      for (const [language, own] of Object.entries(PROVIMUX_TRANSLATIONS)) {
+        const strings = ((own as Tree).provimux as Tree)[block] as Record<string, string>;
+        const forms = new Intl.PluralRules(language).resolvedOptions().pluralCategories;
+        const expected = new Set<string>();
+        for (const key of Object.keys(source)) {
+          const base = baseOf(key);
+          if (plural.has(base)) for (const form of forms) expected.add(`${base}_${form}`);
+          else expected.add(key);
+        }
+        expect({ language, keys: Object.keys(strings).sort() }).toEqual({
           language,
-          key,
-          p: placeholders(source as string),
+          keys: [...expected].sort(),
         });
+        for (const [key, text] of Object.entries(strings)) {
+          const original = source[key] ?? source[`${baseOf(key)}_other`];
+          expect({ language, key, p: placeholders(text) }).toEqual({
+            language,
+            key,
+            p: placeholders(original as string),
+          });
+        }
       }
-    }
-  });
+    });
+  }
 
   test('each language shows the page in its words, and keeps the other Provimux strings', async () => {
     for (const language of Object.keys(PROVIMUX_TRANSLATIONS)) {

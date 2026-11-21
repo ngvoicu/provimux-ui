@@ -149,6 +149,13 @@
       "entry_list_unread": "Không đọc được danh sách model của nó ở đây; tệp giữ nguyên danh sách đó và trang này không thể thêm gì vào.",
       "login_unread": "Một phần bí danh của loại đăng nhập này không đọc được ở đây, nên không thể chỉnh sửa trên trang này. Tệp giữ nguyên phần đó.",
       "login_map_unread": "Không đọc được bảng bí danh đăng nhập ở đây, nên không thể chỉnh sửa bí danh đăng nhập nào trên trang này. Tệp giữ nguyên bảng đó."
+    },
+    "forms": {
+      "aliases_count_other": "{{count}} bí danh",
+      "aliases_none": "Không có bí danh",
+      "aliases_link": "Đặt bí danh trên trang Bí danh",
+      "row_alias_label": "Bí danh:",
+      "row_alias_title": "Bí danh, đặt trên trang Bí danh"
     }
   }
 }
