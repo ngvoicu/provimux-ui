@@ -20,8 +20,16 @@ export interface KeyEntry {
   /** `maskApiKey(apiKey)`; null for an OpenAI-compatible entry (it has `keyCount` keys). */
   keyPreview: string | null;
   keyCount: number;
-  /** `auth-index` of the key (of the entry for OpenAI-compatible); null when the server sent none. */
+  /**
+   * The index the proxy injects at read time (`auth_index`, or `auth-index`), read from the stored key;
+   * for an OpenAI-compatible entry, the entry's own (it has one only without keys). null when none.
+   */
   authIndex: string | null;
+  /**
+   * Every index a route of this entry can carry: the key's; for an OpenAI-compatible entry, those of
+   * all its keys, or the entry's own when it has none. A route is this entry's when its index is here.
+   */
+  authIndexes: string[];
   /** Lower-case host of the effective base URL, no port, path or user info; null without a base URL. */
   host: string | null;
   prefix: string | null;

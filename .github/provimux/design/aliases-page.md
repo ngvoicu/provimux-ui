@@ -63,7 +63,12 @@ All paths are under `/v8/management`. `apiClient` adds the prefix and the key.
   The console never sends `If-Match` today.
 - A write is validated as a whole document (400 or 422 `{"error":"invalid_config","message":…}`), written to the
   file as given (rows the proxy ignores stay in the file), and the proxy reloads.
-- A read adds `auth-index` to every API key (and to an OpenAI-compatible entry); a write strips it.
+- A read adds the key's auth index as **`auth_index`** (underscore; `config_auth_index.go`,
+  `injectV8APIKeyAuthIndexesLocked`) to every API key; an OpenAI-compatible entry gets it on each of its keys, and
+  on the entry itself only when it has no keys. A write strips both `auth_index` and `auth-index`. The index is not
+  configuration: it exists while the proxy's auth manager lists the key. Upstream's normalizer reads only
+  `auth-index`, so the page reads the index from the stored objects itself (2.2). (Corrected in ALP-03, decision
+  of 2026-11-20 by the chief with the owner's approval.)
 
 ### 1.2 Store A: API-key providers
 
@@ -176,8 +181,11 @@ export interface KeyEntry {
   /** `maskApiKey(apiKey)`; null for an OpenAI-compatible entry (it has `keyCount` keys). */
   keyPreview: string | null;
   keyCount: number;
-  /** `auth-index` of the key (of the entry for OpenAI-compatible); null when the server sent none. */
+  /** The stored key's `auth_index`, else `auth-index` (for OpenAI-compatible: the entry's own); null if none. */
   authIndex: string | null;
+  /** Every index a route of this entry can carry: the key's; OpenAI-compatible: all its keys' (the entry's own
+   *  when it has no keys). */
+  authIndexes: string[];
   /** Lower-case host of the effective base URL, no port, path or user info; null without a base URL. */
   host: string | null;
   prefix: string | null;
@@ -251,7 +259,8 @@ export interface AliasState {
 1. For each family: `groups = readProviderGroups(document, family)` and `normalizeProviderGroups(groups, family
    === 'openai-compatibility')` for the effective display values (key, base URL, prefix, exclusions). One
    `KeyEntry` per normalized entry, ordered by family (the order of 1.2), `groupIndex`, `keyIndex`;
-   `storedGroup = groups[groupIndex]`.
+   `storedGroup = groups[groupIndex]`. `authIndex` and `authIndexes` are read from the stored key (entry), as
+   `auth_index` falling back to `auth-index`, not through the normalizer (1.1).
 2. The effective list is the stored key's `models` when that is present and not null, else the group's; for
    OpenAI-compatible, the group's. `listSource` is `'none'` when it gives no row, otherwise `'key'` or `'group'`
    by where it came from.
@@ -339,7 +348,8 @@ upstream name makes it null.
     etag ? { headers: { 'If-Match': etag } } : undefined);         // not sent when every entry conflicted
   ```
 
-  - `locate`: the index `entry.groupIndex` when the fresh group there deep-equals `entry.storedGroup`; otherwise
+  - `locate`: the index `entry.groupIndex` when the fresh group there deep-equals `entry.storedGroup`, both compared
+    with `auth_index` and `auth-index` stripped (injected at read time, never a conflict); otherwise
     the single index whose group does; otherwise -1. Any change to the group since the page loaded is a conflict
     for its entries.
   - `withModels`: the effective list (2.2) with the rows' changes applied by the table of 2.4, new rows inserted,
@@ -350,7 +360,7 @@ upstream name makes it null.
 **Proof that the written configuration is the old editor's.** Test A-1 (section 7): for each family and each
 operation, upstream's writer is run as the provider form runs it (one `providersApi.update…` per changed entry,
 each answered from the state the previous one wrote) and the page's `commit` is run on the same canned document;
-the final stored family is compared as JSON, `auth-index` aside (the server strips it). They are equal. That
+the final stored family is compared as JSON, `auth_index` and `auth-index` aside (the server strips them). They are equal. That
 includes where the list lands: upstream's writer also gives an inheriting key its own list. The differences, each
 on purpose and each tested:
 
@@ -377,7 +387,8 @@ on purpose and each tested:
     etag ? { headers: { 'If-Match': etag } } : undefined);
   ```
 
-  `sameChannel`: the fresh lists of the channel's spellings, concatenated, deep-equal `entry.storedList`.
+  `sameChannel`: the fresh lists of the channel's spellings, concatenated, deep-equal `entry.storedList`, compared
+  with `auth_index` and `auth-index` stripped as in `locate`.
   `replaceChannel` removes every spelling of the channel and, when rows remain, sets the list under the
   normalized key: the old editor's rule (`updateOauthProviderMap`). When no channel remains the body is `{}`, as
   the old editor sends.
@@ -517,8 +528,8 @@ export function loadServedNames(names: string[], client?: Client): Promise<Serve
   draft's set of client names changes (debounced; a late answer for an older set is dropped). For a group,
   `nativeServices` is
   the set of services of the routes of that name that the rows do not account for. A route is accounted for when
-  the **base** state has a row with this client name in the route's entry (API key: the entry whose `authIndex`
-  equals the route's; login: the channel equal to `normalizeOAuthProviderKey(route.provider)`). The service of a
+  the **base** state has a row with this client name in the route's entry (API key: the entry whose `authIndexes`
+  include the route's `auth_index`, one rule for a key and for an OpenAI-compatible entry; login: the channel equal to `normalizeOAuthProviderKey(route.provider)`). The service of a
   route: `login:<that channel>` for `oauth`; `key:<host>` for `apikey` with a host, `key:<provider>` without; a
   route with `kind` null is ignored. `nameGroups` adds them to `services` (4.3, step 1).
 - **The fallback, a proxy without the endpoint** (stock CLIProxyAPI, or a build older than `provimux/main`):
