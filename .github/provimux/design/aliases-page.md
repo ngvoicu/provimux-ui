@@ -1,8 +1,13 @@
 # One page for all model aliases (ALP-02)
 
-Built: every step of section 8, the data layer (W1 to W6, `src/provimux/pages/aliases/`), the page (U1,
+Built: steps W1 to U3 of section 8, the data layer (W1 to W6, `src/provimux/pages/aliases/`), the page (U1,
 `/provimux/aliases`), the old address (U2) and the provider forms (U3). U3's checks against a running proxy are
 not done yet.
+
+**Not built yet: W7 and U4 (section 8), the save of 3.4 and 3.6 as they stand here.** The code still has the save
+those sections replace: a fresh read for each unit, entries found again by their content, a second attempt after
+a 412, and edits carried onto the next read. Two reviews found lost data in exactly that part, so it is removed,
+not repaired (decision D6).
 
 A model alias is the name a client sends for an upstream model. Today aliases are edited in two forms (each API-key
 provider's model list; the login alias sub-page). This design moves alias editing to one Provimux page,
@@ -63,6 +68,14 @@ All paths are under `/v8/management`. `apiClient` adds the prefix and the key.
   header the write is unconditional. The check and the write are under one mutex in the handler. The proxy exposes
   `ETag` to cross-origin pages and accepts `If-Match` in preflight (`proxy:internal/api/server_middleware.go`).
   The console never sends `If-Match` today.
+- **The 200 of a write carries the tag of the file that write left**, read back before the handler releases the
+  same mutex (`config_v8.go`: `h.mu` is held from the read of the file to the answer). A second write can
+  therefore be made conditional on the first with no read between them (3.4). When the file cannot be read back
+  the answer has no `ETag`. A 412 and a refused write (400, 422) leave the file and its tag as they were; a 412's
+  answer carries the current tag.
+- Nothing in the proxy rewrites the file while it runs unasked: its writers are the management requests (all
+  under that mutex) and the loader, which rewrites only a file somebody else changed (a plain management secret
+  is hashed, conflicting old fields are removed; `proxy:internal/config/config_load.go`).
 - A write is validated as a whole document (400 or 422 `{"error":"invalid_config","message":…}`), written to the
   file as given (rows the proxy ignores stay in the file), and the proxy reloads.
 - A read adds the key's auth index as **`auth_index`** (underscore; `config_auth_index.go`,
@@ -145,12 +158,12 @@ that save.
 | --- | --- | --- |
 | provider form, store A (upstream) | entry snapshot from the form's opening, compared with a fresh read just before the write | the round trip between that read and the write; no queue between two saves of one tab |
 | old login alias page, store B (upstream) | fresh read before each write; one tab's writes queued | the same round trip; nothing across tabs |
-| **the Aliases page, both stores** | fresh read, comparison of every entry it changes with what the page loaded, then **`If-Match` with that read's `ETag`** | none: a write lands only on the exact file it read |
+| **the Aliases page, both stores** | no read at the save: every write is built from the page's own read and carries **`If-Match` with that read's `ETag`** (after the first write, the tag that write answered) | none: a write lands only on the exact file the page shows |
 
-**The page sends `If-Match` on every write.** A second tab, another client, or a hand edit of the file between the
-page's read and its write gives 412 and no write. This is why the page has its own writer for store A (3.2):
-upstream's writer cannot carry the header without edits in `providers.ts`. The provider form's own saves stay
-unconditional, as today (section 9).
+**The page sends `If-Match` on every write, and never writes without one** (3.4). A second tab, another client, or
+a hand edit of the file after the page's read gives 412 and no write. This is why the page has its own writer for
+store A (3.2): upstream's writer cannot carry the header without edits in `providers.ts`. The provider form's own
+saves stay unconditional, as today (section 9).
 
 ### 1.5 Requests the page reads besides the configuration
 
@@ -220,7 +233,7 @@ export interface LoginEntry {
 export type AliasEntry = KeyEntry | LoginEntry;
 
 export interface AliasRow {
-  /** `<entry.id>#<sourceIndex>` for a stored row, `<entry.id>#new-<n>` for a row of the draft. Valid for one load, as the entry's id (3.6). */
+  /** `<entry.id>#<sourceIndex>` for a stored row, `<entry.id>#new-<n>` for a row of the draft. Valid for one load, as the entry's id (3.4). */
   id: string;
   entryId: string;
   store: 'api-key' | 'login';
@@ -241,12 +254,18 @@ export interface AliasState {
   entries: AliasEntry[];
   rows: AliasRow[];
   forceModelPrefix: boolean;
-  /** ETag of the read; null when the browser could not read the header (writes are then unconditional). */
+  /** The `GET /config` answer of this read, as parsed. A save builds its bodies from it (3.4). The data layer's
+   *  own; never rendered: it holds the keys. */
+  document: unknown;
+  /** ETag of the read; null when the browser could not read the header: the page then saves nothing (3.4). */
   etag: string | null;
   /** 2.5: the parts the page cannot read, by path (such as `api-keys.claude[2]`). */
   unread: string[];
 }
 ```
+
+Everything in an `AliasState` belongs to **one read** of the file: the entries, the rows, their ids, `groupIndex`,
+`keyIndex` and `sourceIndex` are positions in `document`, and mean nothing in any other read (3.4).
 
 ### 2.1 What belongs to the alias, what to the model
 
@@ -291,19 +310,27 @@ export interface AliasState {
 ### 2.4 Rows → stores
 
 Both writers work on **the stored objects as read**, never on a re-serialized form. A row that did not change is
-written exactly as it was read; a changed row is its stored object with only these keys touched:
+written exactly as it was read. **In a changed row only the fields the user changed are written**: each field of
+the draft row is compared with the same field of its base row (the row as read: `upstream`, `alias` and
+`displayName` after trimming, `fork` and `forceMapping` as values), and a field that is equal leaves its stored
+key exactly as it is, however it is spelled there: a padded `display-name`, an explicit `fork: false`, an `alias`
+equal to the name all stay.
 
-| Key | Store A | Store B |
+| Field the user changed | Store A | Store B |
 | --- | --- | --- |
-| `alias` | set (trimmed); **removed** when the row has no alias, in every family, Vertex included | set (trimmed); a row cannot be without one |
-| `name` | never | set (trimmed) |
-| `force-mapping` | `true` set; `false` written when the row stored a value, else the key removed | the same |
-| `fork` | never | `true` set; else the key removed |
-| `display-name` | never | set (trimmed), or removed when empty |
-| every other key | untouched | untouched |
+| `alias` | `alias` set (trimmed); **removed** when the row now has no alias, in every family, Vertex included | `alias` set (trimmed); a row cannot be without one |
+| `upstream` | cannot change (3.1) | `name` set (trimmed) |
+| `forceMapping` | `force-mapping`: `true` set; `false` written when the row stored a value, else the key removed | the same |
+| `fork` | does not exist | `fork: true` set; turned off: the key removed |
+| `displayName` | cannot change | `display-name` set (trimmed), or removed when empty |
+| a field not changed, and every other key | untouched | untouched |
 
-A new row is `{ name, alias }` (store B: plus the optional keys above). This is the whole mapping; no field the
-page does not show can be lost, because the page never builds a row from its own fields.
+A new row is `{ name, alias }` (store B: plus the optional keys above that are set). This is the whole mapping; no
+field the page does not show can be lost, because the page never builds a stored row from its own fields.
+
+A list is written with every element the page did not remove, each in its place; elements that are not rows are
+never removed (2.5). **A list's key is left out only when the list is empty**: a list whose last row was removed
+and that still holds an element the page cannot read is written with that element.
 
 ### 2.5 What the page cannot read
 
@@ -320,19 +347,35 @@ function of the data layer throws on the document's shape.
 | a model list, a channel's list | present, not null, not a list | no rows; nothing can be added (`listSource: 'none'`, `LoginEntry.unread`) |
 | an element of a list | store A: not an object with a name; store B: not an object | no row; sent back in its place |
 | `oauth.model-alias` | present and not a map | every login entry is `unread`; the map is never written |
+| a number anywhere in a family's list, or in `oauth.model-alias` | the browser cannot hold it exactly: an integer beyond ±(2^53 − 1) | named by the number's path; the family gives no entries, the map makes every login entry `unread`: neither is ever written, so the number is never rounded |
 
 `api-keys` or `oauth` itself present and not a map is named by that path, and is the same as every family, or the
 map, not readable.
 
 `familyGroups(document, family)` (`rows.ts`) is the family's list as stored, or `[]` when absent or not a list. If
-upstream's normalizer throws on a family, the whole family is unread. The commit uses the same readers on its fresh
-read: a family that is no longer a list gives `locate` nothing to find, and a map or channel no longer readable is
-not `sameChannel`. Both are a `conflict`, without a request.
+upstream's normalizer throws on a family, the whole family is unread.
+
+**Numbers.** A write sends a whole family, or the whole login map, back through the browser, and `JSON.parse` has
+already turned every number into a double: `9007199254740993` is read as `…992`, and would be written so. The
+proxy keeps such integers exactly, so the page must not round them. A rounded integer is recognised in the parsed
+value itself: `Number.isInteger(n) && !Number.isSafeInteger(n)`, or a number that is not finite (an integer
+written beyond 2^53 − 1 parses to an integer-valued double of at least 2^53; at or below it the double is exact;
+a decimal is written back as the same double the proxy would read). `readAliasState` walks each family's
+list and the login map once for such a number. The price is that a family holding one is not on the page until
+the number is changed in the file; no real option of a model row comes near that size.
+
+**A save sends an unreadable part back as it was read.** The bodies of a save are built from the page's own read
+(3.4), so a group, key, element or channel the page cannot read is in the body in its place, untouched. An entry
+that is `unread` takes no edit: `changeRow`, `removeRow` and `addLoginAlias` return the draft unchanged for it, and
+for every login row when the map is not readable, so no unit is ever planned for something the page cannot write
+whole.
 
 ## 3. The operations
 
 The page holds **one draft** over a loaded `AliasState` and commits it with one action. Operations are pure
-functions in `draft.ts`: `(draft, …) => draft`. Nothing is requested until `commit`.
+functions in `draft.ts`: `(draft, …) => draft`. Nothing is requested until `commit`. A draft never leaves its
+`base`: `startDraft` is the only function that gives a draft a state, and no function takes a draft and another
+state (3.6).
 
 ```ts
 export interface AliasDraft { base: AliasState; rows: AliasRow[]; nextNew: number }
@@ -347,22 +390,20 @@ export function addLoginAlias(draft: AliasDraft, channel: string, row: NewLoginA
 /** Remove: see 3.2 and 3.3 for what it means per store. */
 export function removeRow(draft: AliasDraft, rowId: string): AliasDraft;
 export function discard(draft: AliasDraft): AliasDraft;
+/** One entry's rows are its base rows again; every other entry as it is. The same base. */
+export function discardEntry(draft: AliasDraft, entryId: string): AliasDraft;
+/** One edit of the draft, as the base row and the draft row (`changed`: both; `added`: the draft row;
+ *  `removed`: the base row). */
 export interface LostEdit { kind: 'changed' | 'added' | 'removed'; before: AliasRow | null; after: AliasRow | null }
-export interface Rebased {
-  draft: AliasDraft;
-  /** Old entry id -> the same entry's id in the fresh state, for every entry carried. */
-  carried: Record<string, string>;
-  /** Entries with edits neither written nor carried: the old entry and its edits. */
-  lost: { entry: AliasEntry; edits: LostEdit[] }[];
-}
-export function rebase(draft: AliasDraft, state: AliasState, written: string[]): Rebased;
+/** The edits of one entry: its draft rows against its base rows. A blank new row is not an edit. */
+export function editsOf(draft: AliasDraft, entryId: string): LostEdit[];
 ```
 
 ### 3.1 Change
 
 Sets fields of one row in the draft. For an API-key row only `alias` and `forceMapping` can change; `upstream`
 cannot (which models a key serves is the provider form's). Setting `alias` to an empty string or to the row's
-upstream name makes it null.
+upstream name makes it null. A row of an `unread` entry takes no change (2.5).
 
 ### 3.2 Store A: add, remove, the request
 
@@ -372,23 +413,24 @@ upstream name makes it null.
 - **Remove** (`removeRow`):
   - when another row of the entry has the same upstream name, the row is deleted (the key still serves the model);
   - otherwise the row stays and its alias becomes null. The page never removes the last row of a model.
-- **Request**: one per family that has changed entries, whatever their number:
+  - Either way the page drops the alias text being typed for that row, so its box shows what the draft holds.
+- **Request**: one per family that has changed entries, whatever their number. Its body is built **from the
+  page's own read**, never from another one (`planWrites`, 3.4):
 
   ```ts
-  const read = await apiClient.getRaw('/config');                  // the fresh document and its ETag
-  const groups = familyGroups(read.data, family);
+  const groups = [...familyGroups(draft.base.document, family)];   // the read the rows came from
   for (const entry of changedEntriesOf(family)) {
-    const g = locate(groups, entry);                               // -1: this entry is a conflict, left out
-    if (g >= 0) groups[g] = withModels(groups[g], entry, draftRowsOf(entry));
+    groups[entry.groupIndex] =
+      withModels(groups[entry.groupIndex], entry, draftRowsOf(entry), baseRowsOf(entry));
   }
-  await apiClient.put(`/config/api-keys/${family}`, groups,
-    etag ? { headers: { 'If-Match': etag } } : undefined);         // not sent when every entry conflicted
+  // PUT /config/api-keys/<family> with `groups`; sent by `commit` with If-Match (3.4)
   ```
 
-  - `locate`: the index `entry.groupIndex` when the fresh group there deep-equals `entry.storedGroup`, both compared
-    with `auth_index` and `auth-index` stripped (injected at read time, never a conflict); otherwise
-    the single index whose group does; otherwise -1. Any change to the group since the page loaded is a conflict
-    for its entries.
+  - Each entry is written at its own position (`groupIndex`, `keyIndex`), which is a position in this very list.
+    Two entries are two positions, so two entries are never written onto one key. Nothing is looked up, and
+    nothing is compared: the proxy's `If-Match` check says whether the file still is this read.
+  - The `auth_index` the proxy injected goes back as it was read; the proxy strips it (1.1). The page strips
+    nothing.
   - `withModels`: the effective list (2.2) with the rows' changes applied by the table of 2.4, new rows inserted,
     removed rows taken out, non-row elements in place. It is stored on **the key** (`keys[keyIndex].models`), and
     on the group for OpenAI-compatible. A key that inherited its group's list thereby gets its own; the group's
@@ -412,25 +454,21 @@ on purpose and each tested:
 - **Add** (`addLoginAlias`): a new row for a channel (an existing `LoginEntry`, or a new one for a channel name
   the user gives). It returns the draft unchanged for an `unread` entry, and for every channel when the map is
   not readable (2.5). **Remove**: the row is deleted; the upstream name is then served under its own name again.
-- **Request**: one for all changed channels:
+- **Request**: one for all changed channels, built from the page's own read as in 3.2:
 
   ```ts
-  const read = await apiClient.getRaw('/config');
-  const map = { ...(read.data?.oauth?.['model-alias'] ?? {}) };
+  let map = { ...loginMapIn(draft.base.document) };                // the read the rows came from
   for (const entry of changedChannels()) {
-    if (!sameChannel(map, entry)) continue;                        // changed since the page loaded: conflict
-    replaceChannel(map, entry, writtenRowsOf(entry));              // every other key untouched
+    map = replaceChannel(map, entry, writtenRowsOf(entry));        // every other key untouched
   }
-  await apiClient.put('/config/oauth/model-alias', map,
-    etag ? { headers: { 'If-Match': etag } } : undefined);
+  // PUT /config/oauth/model-alias with `map`; sent by `commit` with If-Match (3.4)
   ```
 
-  `sameChannel`: the fresh lists of the channel's spellings, concatenated, deep-equal `entry.storedList`, compared
-  with `auth_index` and `auth-index` stripped as in `locate`. It is false when the map or a spelling's value is not
-  readable (2.5).
-  `replaceChannel` removes every spelling of the channel and, when rows remain, sets the list under the
-  normalized key: the old editor's rule (`updateOauthProviderMap`). When no channel remains the body is `{}`, as
-  the old editor sends.
+  `replaceChannel` removes every spelling of the channel and, **when the written list is not empty**, sets it
+  under the normalized key: the old editor's rule (`updateOauthProviderMap`), except that an element the page
+  cannot read counts and stays (2.4, 2.5): a channel holding `null` and one alias keeps `[null]` when the alias
+  is removed. When no channel remains the body is `{}`, as the old editor sends. A changed channel is always one
+  the page can write whole: an `unread` entry takes no edit (2.5).
 
 **Proof.** Test B-1: for the same edit, upstream's `authFilesApi.saveOauthModelAlias` / `deleteOauthModelAlias`
 and the page's writer run against the same canned read, and the two `PUT /config/oauth/model-alias` bodies are
@@ -438,44 +476,107 @@ compared as JSON (maps unordered, lists ordered). They are equal **on `name`, `a
 `force-mapping` of every row of every channel**. The differences, each on purpose and each tested:
 
 1. the page keeps `display-name`, `openapi` and unknown fields of rows it did not remove; the old editor deletes
-   them (section 0, fact 4);
+   them (section 0, fact 4). In a changed row it leaves a field the user did not change as stored (2.4), so an
+   explicit `fork: false` stays where the old editor dropped the key: the same meaning, and B-1 compares `fork`
+   as "is true";
 2. the page never drops a stored row silently: a row the old editor would have discarded while reading (no name
    or no alias) is shown with an issue and blocks the commit until it is fixed or removed;
 3. the page sends `If-Match`, and one request for all channels where the old editor sent one per channel.
 
-### 3.4 Commit
+### 3.4 Save: every write is to the file the page read
+
+The page has **one read**: the `GET /config` of `load()`, its document and its tag (the `ETag`). Every entry, row,
+id and position on the page belongs to that read (section 2). A save reads nothing more. It writes parts of that
+same read back, changed, and makes each write conditional on the file still being what the page knows:
+
+- the body of a unit is built from the read's own document, `draft.base.document` (3.2, 3.3);
+- the first write carries `If-Match` with the read's tag; each next write carries the tag the write before it
+  answered (1.1).
+
+So write *k* lands only on a file that is, byte for byte, the read plus the writes 1 … *k* − 1 of this save, and
+every position in its body means what it meant when the user made the edit. The proxy makes that comparison, on
+the SHA-256 of the file, under the lock it writes under. **The page itself compares nothing by content.** It has
+no "same entry in another read", no search for an entry that moved, no stripping of fields before a comparison,
+and no second attempt: there is nothing left that those could get wrong.
 
 ```ts
 export type CommitUnit =
   | { store: 'api-key'; family: ProviderFamily; entryIds: string[] }
   | { store: 'login'; entryIds: string[] };
+/** A unit with its request, `PUT <path>` with `body`. Pure: from the draft and its base alone. */
+export interface PlannedWrite { unit: CommitUnit; path: string; body: unknown }
+export type SaveFailure =
+  | 'blocked'   // a changed entry has a blocking issue (3.5): nothing was sent
+  | 'no-tag'    // the read, or the answer of the write before, carried no tag: this write was not sent
+  | 'changed'   // 412: the file is not the one the page read
+  | 'refused'   // 400 or 422: the proxy refused the configuration; `message` is its text
+  | 'error';    // anything else, an answer that never came included: this write may have landed
 export interface CommitOutcome {
-  done: string[];                                         // entry ids written
-  failed: { entryId: string; reason: 'conflict' | 'invalid' | 'error'; message: string }[];
+  /** Entries of the units confirmed written: a 200 to a `PUT` sent with `If-Match`. Nothing else confirms. */
+  confirmed: string[];
+  /** Entries of the unit that ended the save and of every unit after it, in unit order. */
+  unconfirmed: string[];
+  /** Why the save ended early; null when every unit is confirmed. */
+  failure: { reason: SaveFailure; message: string } | null;
 }
 export function planCommit(draft: AliasDraft): CommitUnit[];
+export function planWrites(draft: AliasDraft): PlannedWrite[];
 export const aliasesApi: {
   load(client?: Client): Promise<AliasState>;
   commit(draft: AliasDraft): Promise<CommitOutcome>;
 };
 ```
 
+The whole of `commit`, after the check for blocking issues:
+
+```ts
+let tag = draft.base.etag;
+for (const write of planWrites(draft)) {
+  if (!tag) return ended('no-tag');                       // no write without a tag
+  assertConnection();                                     // guardConfigConnection()
+  try {
+    tag = await putWithTag(write.path, write.body, tag);  // the 200's ETag, or null
+  } catch (error) {
+    return ended(statusOf(error) === 412 ? 'changed' : refusedOrError(error));
+  }
+  confirmed.push(...write.unit.entryIds);
+}
+```
+
 - `planCommit`: one unit per family with an entry whose draft rows differ from its base rows, in the family order
-  of 1.2, then one unit for the logins when a channel differs. While any such entry has a row with a blocking
-  issue (3.5), `commit` refuses the whole draft and requests nothing, as the old editor's save did.
-- `commit` runs the units **one after another**, each guarded by `guardConfigConnection()`. A unit is: read,
-  locate, write (3.2, 3.3). A failed unit does not stop the next. The units are not one transaction: each is
-  atomic by itself.
-- **412**: the file changed between the unit's read and its write. The unit is run **once more** from its read
-  (the change may be elsewhere in the file; entries that still match are written). A second 412 fails every entry
-  of the unit as `conflict`.
-- `conflict` is also an entry that `locate` or `sameChannel` did not find unchanged. `invalid` is a 400 or 422
-  from the server, with its message. Everything else is `error`.
-- After `commit` the page calls `load()` again and `useConfigStore.getState().clearCache()`, so other pages do
-  not show the old configuration, then `rebase(draft, state, outcome.done)` (3.6).
+  of 1.2, then one unit for the logins when a channel differs. `planWrites` gives each unit its path and body
+  (3.2, 3.3). Both are pure, so what a save would send can be checked without a request.
+- While a changed entry has a row with a blocking issue (3.5), `commit` sends nothing (`blocked`), as the old
+  editor's save did. The page does not offer Save then.
+- The units are sent **one after another**, in that order. They are not one transaction: each is atomic by
+  itself. **The first unit that is not confirmed ends the save**: it is not sent again, and no unit after it is
+  sent. After a 412 the file is not the read any more. After an `error` the page does not know what the file is.
+  After a refusal the file is unchanged, but the proxy validates the whole document on every write, so what
+  refused one unit refuses the next (the live run recorded it: one unknown field in one family refused every
+  unit of the commit).
+- **What a save never does**: send a `PUT` without `If-Match`; send a `GET`; use the tag a 412 answered; try a
+  unit a second time; write an entry anywhere but at its own position in the read.
+- `putWithTag(path, body, tag)` sends `apiClient.put` with `If-Match: tag` and resolves with the `ETag` of the 200,
+  or null when it has none. `apiClient.put` returns the body alone and `client.ts` is upstream's, so the header
+  is read in the request's own `transformResponse`, placed after axios's default transforms (axios hands a
+  transform the answer's headers and status; error bodies are still parsed for `apiClient`'s messages). It is the
+  only place that reads a write's answer.
+- A change of the management connection aborts the save (an `AbortError`, as `guardConfigConnection` throws it);
+  the page then belongs to another connection and loads from it.
 - `load()` is `apiClient.getRaw('/config')` (document and `ETag`) and `authFilesApi.list()`; if the credentials
-  list fails, `loginCount` is null and the page still works. `etag` null (a browser that cannot read the header)
-  is shown by the page as "saves are not protected against a change made elsewhere".
+  list fails, `loginCount` is null and the page still works.
+- **A read without a tag** (`etag` null: a browser, or something between it and the proxy, that hides the header):
+  the page shows the rows, takes no edit and says in one line that it cannot save and why (3.6). There is no
+  unprotected save.
+
+**What it rests on, and how it was checked.** One fact of the proxy: the 200 of a write carries the tag of the
+file that write left (1.1). On 2026-11-21, against a proxy built from `provimux/main` `ac538607` with a
+hand-written file never written through the API: one read, then three writes built from that one read (a family,
+a second family, the login map), each with the tag the one before answered, all 200; a `GET` afterwards carried
+the last answer's tag, and the same tag four seconds later (the reload after a write does not touch the file); a
+write with the first read's tag then got 412 and a refused write left the tag as it was; through axios 1.20, a
+`transformResponse` that takes the tag from a 200 alone read it, and took none from the 412. The live test
+repeats this (L-4, L-7).
 
 ### 3.5 Issues
 
@@ -492,29 +593,85 @@ export function rowIssues(draft: AliasDraft): Record<string, RowIssue>;   // by 
 A new row with neither name nor alias is not a row yet: no issue, not written. The three blocking issues are the
 old editor's (`getAliasRowIssues`), which are the proxy's drop rules.
 
-### 3.6 Rebase: a row belongs to the read it came from
+### 3.6 After a save: nothing is carried
 
-Entry ids, row ids and `sourceIndex` are positions in one read of the file. They say which stored object a row is
-only together with the state they were read from. **So a row is never moved to another state by its id or its
-position.** `rebase` moves an entry's edits to a fresh state only through the entry's stored content.
+A draft lives and ends with its read. **No edit is ever moved onto another read**: not by id, not by position,
+not by content. What a save did not confirm is not kept as an edit; it is written down for the user, who types it
+again on the file as it now is. The owner chose this: no automatic merge, retyping accepted.
 
-- **The same entry** in the fresh state is an entry with equal stored content, compared as `locate` and
-  `sameChannel` compare (`sameConfig`).
-  - API key: a fresh `KeyEntry` of the same `family` and `keyIndex` whose `storedGroup` equals the old one's: the
-    one at the old `groupIndex` when that one does, otherwise the only one that does, otherwise none.
-  - Login: the fresh `LoginEntry` of the same `channel`, readable (2.5), whose `storedList` equals the old one's.
-    A channel without an entry has an empty list, on either side.
-- **Carried**: an entry with edits (`entryChanged`) that is not in `written` and is the same entry in the fresh
-  state. Its draft rows are kept under the fresh entry's id (`entryId`, and `id` rebuilt from it; `sourceIndex`
-  and the `new-<n>` numbers unchanged), in the fresh entry's place.
-- **Lost**: an entry with edits that is not in `written` and is not the same entry in the fresh state: changed
-  elsewhere, gone, or no longer the only one alike. It takes the fresh rows. Its edits are returned in `lost`,
-  each as the base row and the draft row (`changed`: both; `added`: the draft row; `removed`: the base row).
-  Nothing of them is in the new draft.
-- Every other entry takes the fresh rows.
+When `commit` returns, whatever it returns:
 
-After any `rebase`, each draft row with a `sourceIndex` stands, in `draft.base`, on a stored object equal to the
-one it was read from. With `locate` at commit, a write changes only the row the user edited.
+1. The page drops the draft, the alias texts being typed and every mark of the old read, at once, before it
+   requests anything.
+2. Every edit of every entry in `outcome.unconfirmed` goes into the page's list of **edits not confirmed saved**
+   (`unconfirmedEdits(draft, outcome)`, from the dropped draft): the entry's label as it was, each edit in words
+   to type again from, and once for the save its reason (`outcome.failure`):
+   - `changed`: the file was changed elsewhere after the page read it;
+   - `refused`: the proxy's message, then one sentence: when the message names a field of the configuration,
+     correct that field in the configuration first, then type these edits again;
+   - `error`: the message, and that the last write may have landed, so each edit is to be checked against what
+     the page now shows;
+   - `no-tag`: the proxy's answer carried no tag, so the page did not write further.
+3. The page calls `useConfigStore.getState().clearCache()` and `load()`. The fresh read is shown as it is, with no
+   edit on it. When that read fails, the page shows the load error with its retry; the list stays above it.
+4. The list stays until the user dismisses its items. Leaving the page while it has one asks first, as leaving
+   with a dirty draft does: the list is the only copy of what was typed.
+
+"Undo this entry" is `discardEntry` (section 3): the entry's rows are its base rows again, on the same read.
+
+**The page's state, as one pure function.** What decides whether an edit is kept, shown or lost is not left to
+effects and refs in the component. `pageLogic.ts` holds it, and `AliasesPage` keeps one `PageState` and sends
+events:
+
+```ts
+export interface LostNotice { key: number; entry: AliasEntry; edits: LostEdit[]; failure: CommitOutcome['failure'] }
+export interface PageState {
+  /** null: no read is held (before the first read, after a save, until a read answers). */
+  draft: AliasDraft | null;
+  /** The alias texts being typed, by row id; a row of `draft` only. */
+  texts: Record<string, string>;
+  saving: boolean;
+  /** From the start of any read to its answer or failure, the Reload button's included. */
+  reading: boolean;
+  /** The edits not confirmed saved, until dismissed. */
+  lost: LostNotice[];
+}
+export type PageEvent =
+  | { type: 'read-started' }
+  | { type: 'read-answered'; state: AliasState }
+  | { type: 'read-failed' }
+  | { type: 'edited'; change: (draft: AliasDraft) => AliasDraft }
+  | { type: 'alias-typed'; rowId: string; text: string }
+  | { type: 'row-removed'; rowId: string }
+  | { type: 'save-started' }
+  | { type: 'save-answered'; outcome: CommitOutcome }
+  | { type: 'dismissed'; key: number };
+export function pageStep(page: PageState, event: PageEvent): PageState;
+/** Whether the board takes input: a read is held, it has a tag, and nothing is pending. */
+export function canEdit(page: PageState): boolean;
+/** One item per entry of `outcome.unconfirmed` that has edits (`editsOf`). */
+export function unconfirmedEdits(draft: AliasDraft, outcome: CommitOutcome): Omit<LostNotice, 'key'>[];
+```
+
+- `canEdit` is `draft !== null && draft.base.etag !== null && !saving && !reading`. `edited`, `alias-typed` and
+  `row-removed` change nothing when it is false. **So nothing can be typed while a read is pending**, and the
+  answer of a read never meets an edit made after the read began.
+- The page starts a read only when the draft has no edit, or after the user agreed to drop its edits (the reload
+  confirmation), or after a save. `read-answered` sets `draft` to `startDraft(state)` and empties `texts`: no row
+  of an earlier draft is in it. `read-failed` leaves `draft` as it was (null after a save).
+- `save-answered` sets `draft` to null, empties `texts`, and appends `unconfirmedEdits` to `lost`.
+- `row-removed` is `removeRow` and drops `texts[rowId]`; `alias-typed` sets the text and `changeRow`'s alias.
+
+**What the page shows below its header**, always in this order, each part independent of the others
+(`AliasesBody`, a component of plain values, so it renders in a test without a request):
+
+1. the edits not confirmed saved: page state, shown in every phase (reading, load error, empty, board);
+2. while a read is held: the line that the page cannot save, when the read has no tag; and the line naming what
+   the page cannot read (2.5);
+3. the body, one of: the skeleton, the load error with its retry, the empty state, the board.
+
+The empty state stands in for the board and for nothing else: a list of lost edits, or a path the page cannot
+read, is shown above it as above a board.
 
 ## 4. "One name, several services"
 
@@ -687,13 +844,15 @@ ledger. Cost: the old page's code remains in the built file, as today (decision 
 src/provimux/pages/aliases/
   types.ts            the types of sections 2, 3 and 4
   rows.ts             readAliasState: document + login files -> entries and rows
-  draft.ts            startDraft, changeRow, addKeyAlias, addLoginAlias, removeRow, discard, rowIssues
-  rebase.ts           rebase: the draft carried onto a fresh read (3.6)
+  draft.ts            startDraft, changeRow, addKeyAlias, addLoginAlias, removeRow, discard, discardEntry,
+                      editsOf, rowIssues
   collisions.ts       clientNames, nameGroups, groupOfRow, serviceOf
-  plan.ts             planCommit, locate, withModels, sameChannel, replaceChannel
-  aliasesApi.ts       load, commit, loadServedNames
+  plan.ts             planCommit, planWrites, withModels, replaceChannel (2.4, 3.2, 3.3); no comparison of
+                      stored content
+  aliasesApi.ts       load, commit, putWithTag, loadServedNames
   formSeams.ts        aliasFieldType, countAliases (the forms' side)
-  AliasesPage.tsx, AliasesPage.module.scss      the page (designer)
+  pageLogic.ts        the page's pure rules: its filter and marks; pageStep, canEdit, unconfirmedEdits (3.6)
+  AliasesPage.tsx, AliasesBody.tsx, LostEdits.tsx, AliasesPage.module.scss      the page (designer)
   AliasesRedirect.tsx                           the old address
 src/provimux/components/ProvimuxAliasesLine.tsx  "N aliases" + link
 src/provimux/components/ProvimuxRowAlias.tsx     a row's alias as text
@@ -762,15 +921,13 @@ one part of each kind of 2.5 that the page cannot read), `credentials.json`, `mo
   its model's last row, no options copied; refused for an unknown upstream and for `listSource: 'none'`);
   `removeRow` on an extra row (deleted) and on a model's only row (alias cleared, row kept); `addLoginAlias`
   (fork true by default; new channel); remove a channel's last row (key gone; last channel: body `{}`).
-- **C-1 commit**: units run in order, one after the other (a unit's read starts after the previous `put`
-  resolved); all changed entries of a family are in one `put`; a failing unit is reported and the next still
-  runs; `rebase` carries the edits of entries not written (RB-1 … RB-8).
-- **C-2 If-Match and conflicts**: every `put` of both stores carries `If-Match` with the `ETag` of that unit's
-  read, and none when the header is missing. A 412: the unit is read and written once more, and succeeds when
-  its entries are unchanged; a second 412 fails its entries as `conflict`. A group changed since load:
-  `conflict` for its entries, the family's other entries still written; every entry in conflict: no `put`. A
-  channel changed since load: `conflict`, other channels written. A connection change during commit aborts
-  (`guardConfigConnection`). A draft with a blocking issue: no request at all.
+- **C-1, C-2 the save**: below, with the other tests of 3.4 and 3.6.
+- **X-1 … X-7 what the page cannot read** (2.5): one case per line of its table, `unread` naming exactly that
+  path and everything else read as without the bad part (X-1); `load()` resolves (X-2); an alias changed beside
+  an unreadable group, key, element or channel sends that part back deep-equal, in its place (X-3); no operation
+  changes the draft of an `unread` entry, nor of any login row when the map is unreadable, so no unit is planned
+  (X-4); a part made unreadable elsewhere after the read is a change of the file like any other: 412, nothing
+  written (X-5); junk at every level does not throw (X-6); numbers (X-7, below).
 - **I-1 issues**: each `RowIssue`, blocking or not; a blank new row has none.
 - **N-1 names**: `clientNames` for no prefix, prefix, forced prefix, prefix equal to the name.
 - **N-2 the rule**: one table-driven test, one case per line of 4.3 and of "not a problem": `single`;
@@ -781,6 +938,137 @@ one part of each kind of 2.5 that the page cannot read), `credentials.json`, `mo
   with that login in `nativeServices`; a route of the row's own entry is not native; a changed set of names
   asks again and an answer for an older set is dropped. The fallback: a 404 gives `known: false` and the verdict
   from rows only; presence `unsupported` makes no request.
+
+**The save (3.4, 3.6)**
+
+The requests are answered by one stub, `fakeProxy(document)` (`tests/provimux/support/fakeProxy.ts`), which is
+the contract of 1.1 and nothing else: one document and one tag that changes with every write; `getRaw('/config')`
+answers both; `put` with a tag that is not the current one rejects with 412 and changes nothing; otherwise it
+replaces the node at the path (stripping `auth_index` from groups and keys, as the proxy does), changes the tag,
+and hands the new `ETag` to the request's `transformResponse` as axios would. `foreign(change)` edits the
+document and changes the tag at any moment, also between two writes (`beforePut(n, fn)`). The stub records every
+request and **counts each `put` without `If-Match`; every test of this group ends by checking that count is 0**.
+
+- **C-1 the writes**: units in order, one after the other; all changed entries of a family in one `put`; no
+  `getRaw` during `commit`; the first `put` carries the read's tag and each next one the tag the one before
+  answered; after the commit the stub's document is the read with exactly the planned bodies in it.
+- **C-2 the first unit not confirmed ends the save**, one case per reason, each checking `confirmed`,
+  `unconfirmed`, `failure`, the number of `put`s, and that the stub's document is the read plus exactly the
+  confirmed units: 412 (`changed`; the tag the 412 answered is never sent); 400 and 422 (`refused`, with the
+  proxy's message); a rejected request and a 500 (`error`); a 200 without a tag before another unit (`no-tag`:
+  the answered unit is confirmed, the next is not sent); a read without a tag (no request at all); a blocking
+  issue (`blocked`, no request). A connection change before a write aborts, and that write is not sent.
+- **C-3 two alike** (the review's first case): two deep-equal groups, an edit in each. With nothing changed
+  elsewhere, each edit is in its own group of the `put` body. With one of the groups removed elsewhere before
+  the save: 412, no write, both edits in `unconfirmedEdits`, and nothing reported confirmed.
+- **C-4 keys that differ only below the top** (the review's second case): two keys equal but for
+  `headers.auth-index` (`left`, `right`), an edit on `left`. It is in `left`'s list of the body. After a 503 and
+  a reorder elsewhere, the edit is in `unconfirmedEdits`, the next draft is the fresh read without it, and no
+  later save writes it anywhere.
+- **W-1 only the edited field changes** (2.4), table-driven, both stores: on a stored row with a padded
+  `display-name`, an explicit `fork: false`, `force-mapping: false`, an `alias` equal to its name, a padded
+  `alias` and an unknown field, change one field at a time: the written object equals the stored one in every
+  other key, spelling included.
+- **W-2 elements the page cannot read stay** (2.4, 2.5): a channel `[null, row]` with the row removed is written
+  as `[null]`; a channel `[row]` with the row removed loses its key; a store A list with a `null`, a string and
+  an object without a name keeps each in its place through an add and a remove.
+- **X-7 numbers** (2.5): a family whose list holds `9007199254740993` (the fixture is JSON text, parsed by
+  `JSON.parse` as the browser does) gives no entries, `unread` names the number's path, and an edit in another
+  family plans a body in which that family does not appear; the login map likewise makes every login entry
+  `unread`; `9007199254740991` is read as any number.
+
+**The properties** (`tests/provimux/aliases-save-property.test.ts`; seeded, 300 cases each, no library). They
+replace RB-9, which compared counts taken from the draft it was testing and so passed with rows exchanged.
+
+The generator makes documents in which **nothing can be told apart by its content**: one to three families of one
+to three groups of one to three keys, lists on the group, on the key, on both or on neither, rows drawn from a
+small pool of names and aliases, so that deep-equal groups, deep-equal keys, rows that share a name and differ
+in the alias, and rows equal in every field are all common; keys that differ only in a nested field; an injected
+`auth_index` on keys; elements that are not rows; stored spellings the reader normalizes (a padded `alias` or
+`display-name`, an `alias` equal to its name, `fork: false`, `force-mapping: false`); unknown fields; a login map
+with a channel in two spellings and a `null` element. No element carries a unique marker. The operations go
+through `draft.ts` alone, and each is recorded by **where the test found its target in the document** (family,
+group, key or channel, list position), from which the test writes the row id itself by the scheme of section 2;
+it takes no id and no `sourceIndex` from the state.
+
+Each property names the faults it must catch. The builder puts each fault into a scratch copy of the source, runs
+the property, and reports that it fails, with the first failing seed. A fault that passes means the property is
+not finished.
+
+- **P-0 a row is the stored object at its position.** For every document: the rows of an entry, in order, are
+  exactly the elements of its list that are rows, in list order; `sourceIndex` is the element's position; `id` is
+  `<entry.id>#<position>`; every shown field is that element's (2.2, 2.3); the entry's id is its place in the
+  document. *Must catch:* in `rows.ts`, two rows of an entry that share an upstream name exchange their
+  `sourceIndex` (the exchange RB-9 let pass); an entry given another group's `storedGroup`.
+- **P-1 an edit lands on the object the user edited, and nothing else changes.** `planWrites(draft)`, each body
+  put at its path in a copy of the read, deep-equals **the oracle**: the recorded operations applied to another
+  copy of the read at their recorded places, by the table of 2.4, in test code that uses nothing of `plan.ts`.
+  The whole document is compared, so every other field of an edited row, every other row, key, group, family and
+  channel, and every element that is not a row are compared too. *Must catch:* the writer finding a stored row by
+  its upstream name or its content instead of its position; the writer rewriting a field that was not edited
+  (trimming `display-name`, dropping `fork: false`); the writer dropping an element that is not a row, or a list
+  left with only such elements; two entries written onto one key.
+- **P-2 after a change elsewhere, the page writes nothing.** A random foreign change (a row, key or group
+  inserted, removed, moved or edited, in the page's families or not; a setting outside both stores) at a random
+  moment: before the first unit, or between two units. After `commit`, the stub's document deep-equals its
+  document right after the foreign change; `confirmed` is exactly the entries of the units sent before it, and
+  the document right before it is the read plus those units' bodies; every other changed entry is `unconfirmed`;
+  `failure.reason` is `changed`; exactly one `put` was sent after the foreign change; `unconfirmedEdits` holds
+  every recorded operation of those entries. *Must catch:* a unit tried again after a 412, from a fresh read or
+  with the tag the 412 answered; the next unit sent after a 412; a unit reported confirmed without its 200.
+- **P-3 no write without the right tag.** At random: a read without a tag, one answer without a tag, or neither.
+  Every `put` carries the tag the stub last handed the page; `commit` makes no `getRaw`; after a missing tag no
+  `put` follows and the remaining entries are `unconfirmed` with `no-tag`. *Must catch:* a write without
+  `If-Match` when the tag is missing; a `GET` in the save to fetch a tag; the read's tag sent with every unit.
+- **P-4 nothing is carried** (`pageStep`, pure). Random sequences of page events over random documents, reads and
+  outcomes. After `read-answered`, `draft` equals `startDraft(state)` and `texts` is empty. An `edited`,
+  `alias-typed` or `row-removed` between `read-started` and its answer, or while saving, or on a read without a
+  tag, changes nothing. After `save-answered`, `draft` is null, and every operation made on the dropped draft is
+  either of a confirmed entry or in `lost`. `lost` only grows, except by `dismissed`. *Must catch:* rows of an
+  entry not confirmed kept in the next draft, by id, position or content; an edit accepted while a read is
+  pending; an unconfirmed entry missing from `lost` when the fresh read has no entry left.
+
+**The page** (`tests/provimux/aliases-page.test.ts`, `renderToStaticMarkup`)
+
+- **G-1 the frame**: `AliasesBody` with a read that has no entry and one item in `lost` shows the item (the
+  entry's label, the alias to type again) and the empty state; with a read that has no entry and a path in
+  `unread`, the path and the empty state; with a load error and an item, both; while reading, the item.
+- **G-2 not editable**: with `canEdit` false the board's fieldset is `disabled` and the save bar is not rendered;
+  a read without a tag shows the line that the page cannot save.
+- **G-3 the reasons**: an item for `refused` shows the proxy's message and the sentence about correcting the
+  named field first; for `error`, that the last write may have landed; for `changed` and `no-tag`, their lines.
+- **G-4 the remove control**: after `alias-typed` then `row-removed` on a model's only row, `texts` has no text
+  for the row and the rendered box shows the draft's value, empty.
+- Once in a browser, on the built page with intercepted answers: nothing can be typed between a click on Reload
+  and its answer; a save refused with 412 after the last entry was removed elsewhere shows the list and the
+  empty state; a sibling's `9007199254740993` is in no request.
+
+**Against a live proxy** (`tests/provimux/aliases-live.test.ts`, skipped unless `ALIASES_LIVE_BASE` and
+`ALIASES_LIVE_KEY` are set; a proxy built from source in a temporary folder, on `127.0.0.1`, families named
+`alp-live-…`). L-1: `load()` gives a tag and a commit with it lands. L-2: a foreign write between the page's read
+and its save: `changed`, and the file holds nothing of the page's; a foreign write between the first and the
+second unit: the first unit's write is in the file, nothing of the others. L-3: the reported sequence (a row
+inserted elsewhere at the head of the list the page edits): the file's list is the other client's. L-4: one
+commit over two families and a login channel from a hand-written file, twenty times, all confirmed, **with no
+`GET` between the units**. L-5: the families and channels not written read back as loaded. L-6: no `auth_index`
+on disk. L-7: the tag of a `GET` after a commit is the tag its last write answered, and still is three seconds
+later.
+
+What each answers, of the review of `98fdc5ea`:
+
+| The review found | The rule now | Tests |
+| --- | --- | --- |
+| 1. two edits written onto one key after a 412, both reported saved | no second attempt; an entry is written at its own position in the page's read (3.2, 3.4) | C-3, P-1, P-2 |
+| 2. after a failed save, an edit carried to another key (a nested `headers.auth-index` was ignored in the comparison) | nothing is carried and nothing is compared (3.4, 3.6) | C-4, P-2, P-4 |
+| 3. an unconditional write when a read had no tag | no write without a tag; a read without one takes no edit (3.4) | C-2, P-3, G-2 |
+| 4. typing while a reload was pending, then replaced without a word | nothing is editable while a read is pending (3.6) | P-4, G-2, the browser check |
+| 5. the empty state hid lost edits and unreadable paths | the notices are above the body, whatever the body is (3.6) | G-1, P-4 |
+| 6. a channel `[null, alias]` deleted whole with its alias | a list's key is left out only when the list is empty (2.4, 3.3) | W-2, P-1 |
+| 7. a rename trimmed `display-name` and dropped `fork: false` | only the fields the user changed are written (2.4) | W-1, P-1 |
+| 8. a sibling row's integer above 2^53 rounded | a family or map holding such a number is not read, so never written (2.5) | X-7, the browser check |
+| RB-9 passed with `sourceIndex` exchanged | P-0 and P-1 compare against the document, not against the draft | P-0, P-1 |
+| the 400 for an unknown field did not say what to do | the list's `refused` item says to correct the named field first (3.6) | G-3 |
+| Remove left the typed alias in the box | `row-removed` drops the row's text (3.2, 3.6) | G-4 |
 
 **The forms still saving**
 
@@ -821,9 +1109,9 @@ From `main` `42bb2925`. Each ends with `bun run verify` green and one commit (`P
 
 7. **U1 page.** `AliasesPage`, the nav item, the route `/provimux/aliases`, the strings. Reads `?store=`,
    `?channel=`, `?family=` as its initial filter. Holds after: every operation of section 3 can be done and
-   committed on the page; verdicts and issues are visible on the draft; an entry whose save failed keeps its
-   edits and says why; an entry changed elsewhere shows the current rows, and the page lists the edits that were
-   not saved; leaving with a dirty draft asks first (`useUnsavedChangesGuard`); an entry with
+   committed on the page; verdicts and issues are visible on the draft; after a save the page shows the file as
+   it is and lists the edits not confirmed saved (3.6; rebuilt in U4); leaving with a dirty draft asks first
+   (`useUnsavedChangesGuard`); an entry with
    `listSource: 'none'` explains itself; the statement of 5.3 is shown; native names take part in the verdicts,
    and on a proxy without `/provimux/model-routes` the page says in one line that they were not checked; the nav
    and route parts of F-5. The old editors still exist: nothing is
@@ -837,6 +1125,41 @@ From `main` `42bb2925`. Each ends with `bun run verify` green and one commit (`P
    F-4; in a browser, one form of each kind (standard, sponsor, Vertex, a login's own aliases) saves; and,
    against a proxy the chief names, a Vertex row saved with a name alone is in the proxy's model list under that
    name.
+
+**The save rebuilt** (3.4, 3.6; decision D6). From `98fdc5ea`. Two steps, in this order; the second cannot be
+verified without the first. More is deleted than written.
+
+10. **W7 the save (worker; the data layer and its tests).**
+    - *Delete:* `rebase.ts`; in `plan.ts`: `locate`, `sameChannel`, `sameConfig`, `withoutInjected`, `deepEqual`;
+      in `aliasesApi.ts`: `runUnit`, its fresh read, the second attempt after a 412, the write without
+      `If-Match` (`ifMatch` returning `undefined`), `CONFLICT_MESSAGE`; the file
+      `tests/provimux/aliases-rebase.test.ts` whole (RB-1 to RB-9); in `aliases-commit.test.ts` the cases of the
+      second attempt, of an entry found at another index, of `locate` and `sameChannel`, of a conflict per
+      entry; in `aliases-unread.test.ts` the case of `rebase` onto a readable channel.
+    - *Change:* `types.ts`: `AliasState.document`, `PlannedWrite`, `SaveFailure`, `CommitOutcome` (3.4), the
+      comment of `LoginEntry.unread`. `rows.ts`: `readAliasState` keeps the document; a family's list and the
+      login map are walked once for a number the browser cannot hold (2.5). `draft.ts`: `discardEntry` and
+      `editsOf` (moved from `rebase.ts`, with `LostEdit`); `changeRow` and `removeRow` return the draft unchanged
+      for a row of an `unread` entry. `plan.ts`: `planWrites` (the bodies of 3.2 and 3.3, from
+      `draft.base.document`); the two row writers take the base row and write only the fields that differ (2.4);
+      `replaceChannel` leaves the key out only for an empty list. `aliasesApi.ts`: `commit` as in 3.4,
+      `putWithTag`. The live test's comparison of what reads back moves into the test's own support, and
+      ignores `auth_index` only where the proxy injects it: on a group and on its keys.
+    - *Holds after:* C-1 to C-4, W-1, W-2, X-1 to X-7, P-0 to P-3 with each named fault shown to fail, and the
+      suites that were green before (R, A-1, B-1, O, I, N, F), A-1 and B-1 with the stated differences of 3.2 and
+      3.3; against a proxy built from source, L-1 to L-7.
+11. **U4 the page after a save (frontend designer).**
+    - *Delete:* in `AliasesPage.tsx`: `pendingRef`, `stale`, `failures`, `applyState`'s carrying branch, the
+      per-entry failure marks; in `pageLogic.ts`: `rekeyRows`, `rekeyEntries`; in `AliasesBoard.tsx`: the
+      failure of an entry and the two lines that move to the frame; the strings `saved_partly`, `saved_none`,
+      `failed_invalid`, `stale`, `stale_retry`, `not_saved_*` and the old `etag_missing`, in the seven languages.
+    - *Change:* `pageLogic.ts`: `PageState`, `pageStep`, `canEdit`, `unconfirmedEdits` (3.6). `AliasesPage.tsx`
+      keeps one `PageState`; the board's fieldset is `disabled={!canEdit(page)}`; leaving asks first while the
+      draft is dirty or `lost` has an item. `AliasesBody.tsx`: the order of 3.6. `LostEdits.tsx`: one reason per
+      save, by `failure.reason`; the `refused` sentence. "Undo this entry" calls `discardEntry`. New strings for
+      the four reasons, for "this page cannot save" and for a save not confirmed whole.
+    - *Holds after:* P-4 with each named fault shown to fail, G-1 to G-4, the strings test in seven languages,
+      and the three browser checks of section 7.
 
 ## 9. Decisions left open, and known limits
 
@@ -859,16 +1182,48 @@ upstream's writer, would make equality with the form automatic but cannot send `
 **D5. The Vertex correction** is two lines in an upstream file. Offering it upstream would remove them from the
 layer; until then they are a possible conflict when upstream edits that function.
 
+**D6. A save writes the page's own read back; it reads nothing, compares nothing and carries nothing** (3.4,
+3.6). The save before it read the file again for each unit, found each changed entry in that read by the content
+of its group, tried once more after a 412, and afterwards carried the edits of failed entries onto the next read
+by content. That let a save through when something unrelated had changed in the file, and it needed a comparison
+of stored content in three places. Two reviews found lost data there: positions kept across reads; two entries
+landing on one key; fields ignored in the comparison that were real; a write without a tag. The owner's rule,
+"no automatic merge, an edit that cannot be saved safely is listed to be typed again", makes all of it
+unnecessary. The price: **any change to the file after the page read it, aliases or not, refuses the save**, and
+every edit of that save not yet written is listed. That needs a second tab, another client or a hand edit while
+the page holds edits (nothing in the proxy writes the file by itself, 1.1).
+
+**D7. Open, the owner's: keep the draft after a failure that wrote nothing?** After `refused` or `error` on the
+first unit the file is, as far as the page knows, still its read, and the draft could stay as it is, on the same
+read, for another try. The design does not: every failed save ends the same way, the list. Reasons: one path
+instead of two; after a refusal caused by the file itself the user must change the file, which makes the read
+stale anyway; after an `error` the page cannot know that nothing was written. What it costs: a save that fails
+because the proxy could not be reached is typed again. If that proves a nuisance it can be added in `pageStep`
+alone, without touching a write.
+
+**D8. Open, the owner's: read again when the tab comes back.** A page left open holds an old read, and D6 then
+refuses its next save if anything changed meanwhile. Reading again when the tab becomes visible, only while the
+draft has no edit, would make that rare. Not in the design: it is not needed for safety, and can be added later
+in the page alone.
+
 Known limits, accepted:
 
-- The page does not merge: an entry changed elsewhere loses the page's edits on it. They are listed, to be typed
-  again.
+- The page does not merge and does not carry: after a save that is not confirmed whole, whatever the cause, the
+  edits not confirmed are listed, to be typed again.
 - The provider form's own saves stay unconditional (upstream's writer). Giving them `If-Match` too is a change of
   `getGroups` and `putGroups` in `providers.ts`, outside this item.
 - A commit over several families and the logins is several requests; a failure in between leaves the earlier
-  ones written. The outcome names each entry.
-- The `ETag` is of the whole file, so a 412 can come from a change that has nothing to do with aliases. One
-  retry absorbs it; `locate` and `sameChannel` decide whether the page's own entries were touched.
+  ones written and ends the save: the units after it are not sent. The outcome names the entries of both kinds.
+- The `ETag` is of the whole file, so a change that has nothing to do with aliases refuses the save too (D6).
+- After `error` the page cannot tell whether its last write landed. The edits are listed as not confirmed, and
+  the page shows the file as it is, where the user sees which of them are there.
+- A family, or the login map, holding an integer beyond ±(2^53 − 1) is not on the page (2.5). The alternative
+  keeps the digits (`JSON.parse` with source text, `JSON.rawJSON`) but only in browsers that have both, so the
+  refusal would be needed beside it anyway.
+- The proxy's lock covers every writer that goes through the proxy. A program that writes the file itself while
+  a request is being handled is outside it for every client: the handler reads the file, then writes it whole.
+- Something between the browser and the proxy that drops the tag makes the page read-only; one that weakens it
+  (`W/"…"`) makes every save `changed`. Neither leads to an unprotected write.
 - A key that inherits its group's list is split from the group by its first alias change (the old editor's
   behaviour, 3.2). Shown through `listSource`, not prevented.
 - The rule ignores exclusions: a name excluded on one entry still counts there. 4.4 shows what is served.
