@@ -40,3 +40,17 @@ export function serviceLabel(t: TFunction, service: ServiceId, entries: readonly
   if (isFamily(rest)) return t('provimux.aliases.service_key', { name: familyLabel(t, rest) });
   return rest;
 }
+
+/** An entry as words: "Claude · team · sk-…0001", "Claude logins". */
+export function entryLabelOf(t: TFunction, entry: AliasEntry): string {
+  if (entry.store === 'login') {
+    return t('provimux.aliases.service_login', { name: channelLabel(t, entry.channel) });
+  }
+  return [
+    familyLabel(t, entry.family),
+    entry.groupName,
+    entry.keyPreview ?? t('provimux.aliases.entry_keys', { count: entry.keyCount }),
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}

@@ -1,10 +1,9 @@
 import { Fragment, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import type { TFunction } from 'i18next';
 import { IconAlertTriangle, IconInfo, IconPlus, IconSearch, IconX } from '@/components/ui/icons';
 import { Select } from '@/components/ui/Select';
-import { draftEntries, rowIssues } from './draft';
+import { draftEntries, loginMapUnread, rowIssues } from './draft';
 import { groupOfRow, nameGroups } from './collisions';
 import { entryChanged } from './plan';
 import {
@@ -13,6 +12,7 @@ import {
   blockingCount,
   entryHaystack,
   isClash,
+  keyListUnread,
   providerKeyOf,
   removedCounts,
   rowMarks,
@@ -23,7 +23,7 @@ import {
   type StoreFilter,
 } from './pageLogic';
 import { AliasRowLine, VerdictDetail, type RowActions } from './AliasRowLine';
-import { channelLabel, familyLabel, providerLabelOf } from './labels';
+import { channelLabel, entryLabelOf, familyLabel, providerLabelOf } from './labels';
 import { ProviderLogo, ServicePill } from './ProviderMarks';
 import { ALIAS_FAMILIES } from './rows';
 import type {
@@ -60,19 +60,6 @@ export interface AliasesBoardProps {
 }
 
 const suggestionsIdOf = (channel: string) => `pmx-alias-models-${channel}`;
-
-function entryLabelOf(t: TFunction, entry: AliasEntry): string {
-  if (entry.store === 'login') {
-    return t('provimux.aliases.service_login', { name: channelLabel(t, entry.channel) });
-  }
-  return [
-    familyLabel(t, entry.family),
-    entry.groupName,
-    entry.keyPreview ?? t('provimux.aliases.entry_keys', { count: entry.keyCount }),
-  ]
-    .filter(Boolean)
-    .join(' · ');
-}
 
 /**
  * The page's body for one draft: summary, name check, notes, filters and the entries with their rows.
@@ -165,6 +152,8 @@ export function AliasesBoard({
   const keyEntries = visible.entries.filter((e): e is KeyEntry => e.store === 'api-key');
   const loginEntries = visible.entries.filter((e): e is LoginEntry => e.store === 'login');
   const anyLogin = entries.some((e) => e.store === 'login');
+  // 2.5: the login alias map itself cannot be read: no login alias can be edited or added.
+  const mapUnread = loginMapUnread(draft.base);
   const presentChannels = new Set(
     entries.filter((e): e is LoginEntry => e.store === 'login').map((e) => e.channel)
   );
@@ -188,7 +177,7 @@ export function AliasesBoard({
     { value: 'attention', label: t('provimux.aliases.view_attention') },
   ];
 
-  const renderRows = (entry: AliasEntry, rows: AliasRow[]) => (
+  const renderRows = (entry: AliasEntry, rows: AliasRow[], locked = false) => (
     <ul className={styles.rows}>
       {rows.map((row) => {
         const group = groupsByKey.get(groupOf[row.id]);
@@ -215,6 +204,7 @@ export function AliasesBoard({
             autoFocus={focusRowId === row.id}
             open={openDetail === row.id}
             onToggle={() => setOpenDetail((prev) => (prev === row.id ? null : row.id))}
+            locked={locked}
             actions={actions}
           />
         );
@@ -294,7 +284,12 @@ export function AliasesBoard({
         {entry.disabled ? (
           <p className={styles.entryNote}>{t('provimux.aliases.entry_off_note')}</p>
         ) : null}
-        {entry.listSource === 'none' ? (
+        {entry.listSource === 'none' && keyListUnread(entry, draft.base.unread) ? (
+          <div className={styles.entryEmpty}>
+            <IconInfo size={14} />
+            <p>{t('provimux.aliases.entry_list_unread')}</p>
+          </div>
+        ) : entry.listSource === 'none' ? (
           <div className={styles.entryEmpty}>
             <IconInfo size={14} />
             <p>
@@ -363,26 +358,34 @@ export function AliasesBoard({
           {undoButton(entry)}
         </header>
         {entryNotes(entry)}
+        {entry.unread && !mapUnread ? (
+          <div className={styles.entryEmpty}>
+            <IconInfo size={14} />
+            <p>{t('provimux.aliases.login_unread')}</p>
+          </div>
+        ) : null}
         <datalist id={suggestionsIdOf(entry.channel)}>
           {models.map((model) => (
             <option key={model} value={model} />
           ))}
         </datalist>
         {rows.length ? (
-          renderRows(entry, rows)
-        ) : allRows.length === 0 ? (
+          renderRows(entry, rows, entry.unread)
+        ) : allRows.length === 0 && !entry.unread ? (
           <p className={styles.entryNote}>{t('provimux.aliases.login_empty')}</p>
         ) : null}
-        <div className={styles.entryFoot}>
-          <button
-            type="button"
-            className={styles.add}
-            onClick={() => actions.addLoginAlias(entry.channel)}
-          >
-            <IconPlus size={14} />
-            {t('provimux.aliases.add_login_alias')}
-          </button>
-        </div>
+        {entry.unread ? null : (
+          <div className={styles.entryFoot}>
+            <button
+              type="button"
+              className={styles.add}
+              onClick={() => actions.addLoginAlias(entry.channel)}
+            >
+              <IconPlus size={14} />
+              {t('provimux.aliases.add_login_alias')}
+            </button>
+          </div>
+        )}
       </article>
     );
   };
@@ -482,6 +485,8 @@ export function AliasesBoard({
           <span>{t('provimux.aliases.etag_missing')}</span>
         </p>
       ) : null}
+
+      <UnreadLine paths={draft.base.unread} />
 
       <div className={shared.toolbar}>
         <label className={shared.search}>
@@ -590,6 +595,12 @@ export function AliasesBoard({
           <h2 id="pmx-aliases-logins" className={styles.sectionTitle}>
             {t('provimux.aliases.section_logins')}
           </h2>
+          {mapUnread ? (
+            <div className={styles.entryEmpty}>
+              <IconInfo size={14} />
+              <p>{t('provimux.aliases.login_map_unread')}</p>
+            </div>
+          ) : null}
           {anyLogin ? (
             <p className={shared.note}>
               <IconInfo size={13} />
@@ -606,7 +617,7 @@ export function AliasesBoard({
               <Fragment key={entry.id}>{loginCard(entry)}</Fragment>
             ))}
           </div>
-          {!filtered ? (
+          {!filtered && !mapUnread ? (
             <form
               className={styles.addChannel}
               onSubmit={(event) => {
@@ -683,5 +694,49 @@ function ClashLine({
         {active ? t('provimux.aliases.name_filter_clear') : t('provimux.aliases.check_show')}
       </button>
     </li>
+  );
+}
+
+/** How many unread paths the line names before "N more". */
+const UNREAD_SHOWN = 3;
+
+/**
+ * 2.5: the parts of the file the page cannot read, in one line. They give no entry or row here and are
+ * left in the file as they are.
+ */
+function UnreadLine({ paths }: { paths: readonly string[] }) {
+  const { t } = useTranslation();
+  const [all, setAll] = useState(false);
+  if (!paths.length) return null;
+  const shown = all ? paths : paths.slice(0, UNREAD_SHOWN);
+  const more = paths.length - shown.length;
+  return (
+    <p className={`${shared.note} ${styles.unread}`}>
+      <IconInfo size={13} />
+      <span>
+        {t('provimux.aliases.unread_line', { count: paths.length })}{' '}
+        {shown.map((path, index) => (
+          <Fragment key={path}>
+            {index ? ', ' : null}
+            <code className={styles.unreadPath}>{path}</code>
+          </Fragment>
+        ))}
+        {more > 0 || all ? (
+          <>
+            {' '}
+            <button
+              type="button"
+              className={styles.unreadMore}
+              aria-expanded={all}
+              onClick={() => setAll((prev) => !prev)}
+            >
+              {all
+                ? t('provimux.aliases.unread_fewer')
+                : t('provimux.aliases.unread_more', { count: more })}
+            </button>
+          </>
+        ) : null}
+      </span>
+    </p>
   );
 }

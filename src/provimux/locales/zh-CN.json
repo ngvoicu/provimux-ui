@@ -123,7 +123,32 @@
       "unsaved_cancel": "留下",
       "reload_title": "重新加载并丢弃修改？",
       "reload_message": "重新加载会再次读取配置；未保存的别名修改将会丢失。",
-      "reload_confirm": "重新加载"
+      "reload_confirm": "重新加载",
+      "stale": "保存已完成，但无法重新读取配置：{{message}}。在读取成功之前暂停编辑，以免已保存的内容被显示为未保存。",
+      "stale_retry": "重新读取",
+      "lost_title": "{{entry}}：未保存，已在其他地方被修改",
+      "lost_text": "页面读取之后，它在其他标签页、其他客户端或文件中被修改了，因此现在显示的是文件中的内容。以下修改没有保存；如果仍然需要，请重新输入：",
+      "lost_changed": "修改",
+      "lost_added": "新增",
+      "lost_removed": "移除",
+      "lost_no_alias": "无别名",
+      "lost_to": "改为",
+      "lost_as": "作为",
+      "lost_model_was": "原模型 {{model}}",
+      "lost_fork_on": "保留模型名：开",
+      "lost_fork_off": "保留模型名：关",
+      "lost_force_on": "以别名应答：开",
+      "lost_force_off": "以别名应答：关",
+      "lost_display": "显示名称 {{name}}",
+      "lost_display_none": "无显示名称",
+      "lost_dismiss": "关闭",
+      "lost_dismiss_label": "关闭 {{entry}} 未保存修改的提示",
+      "unread_line_other": "以下部分在此无法读取，已原样保留在文件中：",
+      "unread_more_other": "还有 {{count}} 项",
+      "unread_fewer": "收起",
+      "entry_list_unread": "它的模型列表在此无法读取；文件会原样保留它，本页无法向其中添加内容。",
+      "login_unread": "此登录类型的部分别名在此无法读取，因此不能在本页编辑。文件会原样保留它。",
+      "login_map_unread": "登录别名映射在此无法读取，因此本页不能编辑任何登录别名。文件会原样保留它。"
     }
   }
 }

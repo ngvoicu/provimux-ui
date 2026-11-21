@@ -40,6 +40,8 @@ interface RowLineProps {
   autoFocus: boolean;
   open: boolean;
   onToggle: () => void;
+  /** A row of a part the page cannot fully read (2.5): shown, not editable. */
+  locked?: boolean;
   actions: RowActions;
 }
 
@@ -83,6 +85,7 @@ export function AliasRowLine({
   autoFocus,
   open,
   onToggle,
+  locked = false,
   actions,
 }: RowLineProps) {
   const { t } = useTranslation();
@@ -128,6 +131,7 @@ export function AliasRowLine({
               autoFocus={autoFocus}
               spellCheck={false}
               autoComplete="off"
+              disabled={locked}
               onFocus={() => actions.wantSuggestions((entry as { channel: string }).channel)}
               onChange={(event) => actions.setUpstream(row.id, event.target.value)}
             />
@@ -170,6 +174,7 @@ export function AliasRowLine({
               autoFocus={autoFocus && !login}
               spellCheck={false}
               autoComplete="off"
+              disabled={locked}
               onChange={(event) => actions.setAlias(row.id, event.target.value)}
             />
           </div>
@@ -205,6 +210,7 @@ export function AliasRowLine({
               })}
               spellCheck={false}
               autoComplete="off"
+              disabled={locked}
               onChange={(event) => actions.setDisplayName(row.id, event.target.value)}
             />
           </div>
@@ -232,6 +238,7 @@ export function AliasRowLine({
               <input
                 type="checkbox"
                 checked={row.fork === true}
+                disabled={locked}
                 onChange={(event) => actions.setFork(row.id, event.target.checked)}
               />
               <span>{t('provimux.aliases.fork')}</span>
@@ -242,6 +249,7 @@ export function AliasRowLine({
               <input
                 type="checkbox"
                 checked={row.forceMapping === true}
+                disabled={locked}
                 onChange={(event) => actions.setForceMapping(row.id, event.target.checked)}
               />
               <span>{t('provimux.aliases.force_mapping')}</span>
@@ -267,7 +275,7 @@ export function AliasRowLine({
             data-danger
             title={removeLabel}
             aria-label={removeLabel}
-            disabled={!canRemove}
+            disabled={!canRemove || locked}
             onClick={() => actions.removeRow(row.id)}
           >
             <IconX size={15} />

@@ -367,7 +367,7 @@
 
 .entryHead {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
   min-width: 0;
   padding-bottom: 8px;
@@ -756,6 +756,13 @@
   &:disabled {
     cursor: default;
   }
+
+  // A locked row (a part the page cannot fully read): readable, plainly not editable.
+  &:disabled:not(fieldset:disabled *) {
+    border-style: dashed;
+    background: transparent;
+    color: var(--text-secondary);
+  }
 }
 
 .badge {
@@ -875,6 +882,11 @@
   &:hover {
     border-color: var(--border-hover);
   }
+
+  &:has(input:disabled) {
+    cursor: default;
+    opacity: 0.6;
+  }
 }
 
 .cellActions {
@@ -943,4 +955,189 @@
 .detailHint {
   font-size: 12.5px;
   color: var(--text-tertiary);
+}
+
+/* ---------- after a save: edits not saved, a read that failed ---------- */
+
+.stale {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border: 1px solid var(--warning-border);
+  border-radius: 10px;
+  background: var(--warning-bg);
+  color: var(--warning-text);
+  font-size: 13.5px;
+  line-height: 1.5;
+
+  p {
+    flex: 1 1 320px;
+    margin: 0;
+  }
+}
+
+.lostList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+// Not saved: it stays until dismissed, so it reads as a note to act on, not as a passing error.
+.lost {
+  padding: 12px 14px 12px 16px;
+  border: 1px solid var(--warning-border);
+  border-left-width: 3px;
+  border-radius: 10px;
+  background: var(--bg-primary);
+  box-shadow: var(--shadow);
+}
+
+.lostHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--warning-text);
+
+  svg {
+    flex: none;
+  }
+}
+
+.lostTitle {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.lostDismiss {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 9px;
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+
+  &:hover {
+    border-color: var(--border-hover);
+    color: var(--text-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--pmx-brand);
+    outline-offset: 2px;
+  }
+}
+
+.lostLede {
+  margin: 6px 0 8px;
+  max-width: 96ch;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.lostEdits {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lostEdit {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+
+.lostKind {
+  flex: none;
+  min-width: 64px;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+
+  &[data-kind='added'] {
+    background: var(--pmx-brand-bg);
+    color: var(--pmx-brand);
+  }
+
+  &[data-kind='removed'] {
+    background: var(--warning-bg);
+    color: var(--warning-text);
+  }
+}
+
+.lostText {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.lostName {
+  font-family: var(--pmx-font-mono);
+  font-size: 12.5px;
+}
+
+.lostNone {
+  font-style: italic;
+  color: var(--text-tertiary);
+}
+
+.lostNotes {
+  color: var(--text-tertiary);
+}
+
+/* ---------- what the page cannot read ---------- */
+
+.unread {
+  max-width: none;
+}
+
+.unreadPath {
+  font-family: var(--pmx-font-mono);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.unreadMore {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--pmx-link);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid var(--pmx-brand);
+    outline-offset: 2px;
+  }
 }
