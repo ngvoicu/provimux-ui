@@ -18,13 +18,13 @@ import {
   changeRow,
   discard,
   draftEntries,
-  rebase,
   removeRow,
   rowIssues,
   startDraft,
 } from './draft';
 import { draftClientNames } from './collisions';
 import { blockedEntries, planCommit } from './plan';
+import { rebase } from './rebase';
 import { aliasesApi, createServedNamesSource, loadServedNames } from './aliasesApi';
 import { blockingCount, changeCount, initialFilter, type AliasFilter } from './pageLogic';
 import { AliasesBoard, type BoardActions, type Failure } from './AliasesBoard';
@@ -188,7 +188,7 @@ export function AliasesPage() {
       const state = await aliasesApi.load();
       if (revision !== apiClient.getConnectionRevision()) return;
       const failedIds = [...new Set(outcome.failed.map((failure) => failure.entryId))];
-      const next = rebase(current, state, failedIds);
+      const next = rebase(current, state, outcome.done).draft;
       setDraft(next);
       forgetTexts(new Set(failedIds));
       setFailures(Object.fromEntries(outcome.failed.map((failure) => [failure.entryId, failure])));
@@ -288,15 +288,7 @@ export function AliasesPage() {
       },
       removeRow: (rowId) => update((current) => removeRow(current, rowId)),
       undoEntry: (entryId) => {
-        update((current) =>
-          rebase(
-            current,
-            current.base,
-            draftEntries(current)
-              .map((entry) => entry.id)
-              .filter((id) => id !== entryId)
-          )
-        );
+        update((current) => rebase(current, current.base, [entryId]).draft);
         setTexts((prev) =>
           Object.fromEntries(Object.entries(prev).filter(([id]) => !id.startsWith(`${entryId}#`)))
         );

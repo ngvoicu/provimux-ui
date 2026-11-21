@@ -195,31 +195,6 @@ export function discard(draft: AliasDraft): AliasDraft {
   return { ...startDraft(draft.base), nextNew: draft.nextNew };
 }
 
-/** After a commit: the fresh state, keeping the draft rows of the entries in `keep`. */
-export function rebase(draft: AliasDraft, state: AliasState, keep: string[]): AliasDraft {
-  const kept = new Set(keep);
-  const fresh = startDraft(state);
-  const rows: AliasRow[] = [];
-  const seen = new Set<string>();
-  const keptRows = (entryId: string) => draft.rows.filter((row) => row.entryId === entryId);
-  for (const row of fresh.rows) {
-    if (!kept.has(row.entryId)) {
-      rows.push(row);
-    } else if (!seen.has(row.entryId)) {
-      seen.add(row.entryId);
-      rows.push(...keptRows(row.entryId));
-    }
-  }
-  // Kept entries that have no fresh rows (a new channel, or rows removed elsewhere): their draft rows.
-  for (const entryId of keep) {
-    if (!seen.has(entryId)) {
-      seen.add(entryId);
-      rows.push(...keptRows(entryId));
-    }
-  }
-  return { base: state, rows, nextNew: draft.nextNew };
-}
-
 /** 3.5, by row id. The login rules are the old editor's (`getAliasRowIssues`), the proxy's drop rules. */
 export function rowIssues(draft: AliasDraft): Record<string, RowIssue> {
   const issues: Record<string, RowIssue> = {};
