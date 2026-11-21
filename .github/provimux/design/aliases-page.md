@@ -1,13 +1,8 @@
 # One page for all model aliases (ALP-02)
 
-Built: steps W1 to U3 of section 8, the data layer (W1 to W6, `src/provimux/pages/aliases/`), the page (U1,
-`/provimux/aliases`), the old address (U2) and the provider forms (U3), and W7, the save of 3.4 as it stands
-here. U3's checks against a running proxy are not done yet.
-
-**Not built yet: U4 (section 8), the page after a save as 3.6 describes it.** W7 removed the save those sections
-replace (a fresh read for each unit, entries found again by their content, a second attempt after a 412, edits
-carried onto the next read; decision D6). Until U4 the page only lists, after a save, the edits of every
-entry not confirmed and reads the file again; it carries nothing.
+Built: steps W1 to U4 of section 8: the data layer (W1 to W6, `src/provimux/pages/aliases/`), the page (U1,
+`/provimux/aliases`), the old address (U2), the provider forms (U3), W7, the save of 3.4, and U4, the page after a
+save as 3.6 describes it. U3's checks against a running proxy are not done yet.
 
 A model alias is the name a client sends for an upstream model. Today aliases are edited in two forms (each API-key
 provider's model list; the login alias sub-page). This design moves alias editing to one Provimux page,
@@ -661,6 +656,20 @@ export function unconfirmedEdits(draft: AliasDraft, outcome: CommitOutcome): Omi
   of an earlier draft is in it. `read-failed` leaves `draft` as it was (null after a save).
 - `save-answered` sets `draft` to null, empties `texts`, and appends `unconfirmedEdits` to `lost`.
 - `row-removed` is `removeRow` and drops `texts[rowId]`; `alias-typed` sets the text and `changeRow`'s alias.
+
+As built (U4), the page adds to this, in `pageLogic.ts` alone:
+
+- `read-failed` carries the message, held in `PageState.loadError`, so the body is a function of the state alone.
+- Two more edit events, each a no-op unless `canEdit`: `entry-undone` ("Undo changes here": `discardEntry`, and
+  the entry's texts dropped) and `discarded` (`discard`, no text left).
+- A `read-answered` that lands while a save runs is dropped (`reading` false, the draft kept): the save's draft is
+  the one its answer lists from, and the page reads again after the save. Only a change of the connection can
+  start a read during a save.
+- Each `LostNotice` carries `save`, the number of the save it came from: the list shows one card per save, with
+  its reason once, and one item per entry.
+- The save bar is up while the board takes input and the draft has edits, and stays while a save runs, to say
+  "Saving…" with nothing to click; it is not up while a read is pending or on a read without a tag.
+- A `commit` that rejects (the connection changed, 3.4) is answered as `error`, every planned entry unconfirmed.
 
 **What the page shows below its header**, always in this order, each part independent of the others
 (`AliasesBody`, a component of plain values, so it renders in a test without a request):
