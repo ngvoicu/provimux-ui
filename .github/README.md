@@ -17,8 +17,8 @@ The web console for Provimux and CLIProxyAPI. With Provimux, it shows which acco
 paused, and each login's own model list.
 
 **provimux-ui**, by [providers.dev](https://providers.dev), is the web console of
-[Provimux](https://github.com/ngvoicu/provimux), the self-hosted AI gateway that keeps your prompt cache in use and
-shows which account answered each request. One page in your browser to manage your API keys (API key, `apikey`) and
+[Provimux](https://github.com/ngvoicu/provimux), the self-hosted AI gateway for you or your whole team that keeps your
+prompt cache in use and shows which account answered each request. One page in your browser to manage your API keys (API key, `apikey`) and
 accounts, see on **Model routes** which accounts serve each model, by priority, with the cooldown recorded and its
 reason, check each login's **Live model list**, watch quotas and logs, and edit the config. It is built on the
 [CLI Proxy API Management Center](https://github.com/router-for-me/Cli-Proxy-API-Management-Center) by router-for-me:
@@ -120,8 +120,13 @@ hidden.
 **With Provimux, there is nothing to do.** Provimux downloads the latest provimux-ui release by itself, at startup and
 every 3 hours, and installs it only when it matches the release's `checksums.txt`; a config that still names the
 original console (`management.panel-github-repository`) gets provimux-ui too. Open
-`http://127.0.0.1:8317/management.html` and sign in with your management key (`management.secret-key`). To install
-Provimux, see [its README](https://github.com/ngvoicu/provimux/blob/main/.github/README.md#install).
+`http://127.0.0.1:8317/management.html` (on the same machine; from another machine, use the server's address) and sign
+in with your management key (`management.secret-key`). To install Provimux, see
+[its README](https://github.com/ngvoicu/provimux/blob/main/.github/README.md#install).
+
+**For a team.** Provimux on a server your team shares serves everyone you choose, each with their own client key; to
+open the console to other machines, set `management.allow-remote: true`. See
+[For a team](https://github.com/ngvoicu/provimux/blob/main/.github/README.md#for-a-team) in Provimux's README.
 
 **A release of your choice, or with CLIProxyAPI.** Give the server provimux-ui's `management.html` yourself: the asset
 of a [release](https://github.com/ngvoicu/provimux-ui/releases) of this repository, or [your own build](#build-it).
@@ -155,7 +160,8 @@ of a [release](https://github.com/ngvoicu/provimux-ui/releases) of this reposito
    MANAGEMENT_STATIC_PATH="$HOME/provimux-ui" provimux --config /path/to/your/config.yaml
    ```
 
-4. Open `http://127.0.0.1:8317/management.html` and sign in with your management key (`management.secret-key`).
+4. Open `http://127.0.0.1:8317/management.html` (on the same machine; from another machine, use the server's
+   address) and sign in with your management key (`management.secret-key`).
 
 **Accounts.** Add API keys on the AI Providers page. For a company, use API keys and cloud accounts (for example
 Vertex), billed to the company under its own agreement with the provider.
