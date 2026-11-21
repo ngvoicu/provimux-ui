@@ -51,7 +51,7 @@ export const sameConfig = (a: unknown, b: unknown): boolean =>
 const text = (value: string | null): string => (value ?? '').trim();
 
 /** Whether a draft row says something else than its base row (compared as they would be written). */
-function rowChanged(row: AliasRow, base: AliasRow | undefined): boolean {
+export function rowChanged(row: AliasRow, base: AliasRow | undefined): boolean {
   if (!base) return true;
   return (
     row.upstream.trim() !== base.upstream.trim() ||
