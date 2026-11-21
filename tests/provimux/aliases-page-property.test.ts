@@ -32,15 +32,18 @@ import type {
  * The test keeps its own model of the draft and the texts, made with draft.ts alone (the data layer,
  * not under test here): the draft starts at each read the page takes, and an edit changes it only when
  * the board takes input by the design's definition (a read held, with a tag, nothing pending). After
- * every event the page must hold the model's draft and texts. After each save, every row the dropped
- * draft changed, added or removed is of a confirmed entry or among the edits listed in `lost`; and
- * `lost` only grows, except by `dismissed`.
+ * every event the page must hold the model's draft and texts. After each save, each entry the dropped
+ * draft changed is confirmed, or listed in `lost` once with exactly what is to be typed again: the test
+ * works the edits out itself from the dropped draft (each kind, and the whole row before and after,
+ * every value of it) and compares the listed ones with them. `lost` only grows, except by `dismissed`.
  *
- * Faults it must catch (each put into a scratch copy of pageLogic.ts and shown to fail; see the U4
- * report): rows of an unconfirmed entry kept in the next draft, by id, by position or by content; the
- * texts kept across a read; an edit accepted while a read is pending, or while a save runs; an
- * unconfirmed entry missing from `lost` when the fresh read has no entry left; the edits of a login
- * type the draft added missing from `lost`; a read's answer replacing the draft of a running save.
+ * Faults it must catch (each put into a scratch copy of pageLogic.ts and shown to fail; see the U4 and
+ * T-277 reports): rows of an unconfirmed entry kept in the next draft, by id, by position or by
+ * content; the texts kept across a read; an edit accepted while a read is pending, or while a save
+ * runs; an unconfirmed entry missing from `lost` when the fresh read has no entry left; the edits of a
+ * login type the draft added missing from `lost`; a read's answer replacing the draft of a running
+ * save; the right row listed with another row's alias (the third review's mutation); an edit listed
+ * with the typed alias as its alias before.
  */
 
 const CASES = 300;
@@ -160,25 +163,45 @@ const same = (a: AliasRow, b: AliasRow) =>
   a.fork === b.fork &&
   (a.displayName ?? '').trim() === (b.displayName ?? '').trim();
 
+/** One edit to type again, as the test works it out: its kind, and the whole rows before and after. */
+interface Expected {
+  kind: 'changed' | 'added' | 'removed';
+  before: AliasRow | null;
+  after: AliasRow | null;
+}
+
 /**
- * Per entry, the row ids the draft changed, added or removed, against its own base, as the test sees
- * them (a new row with neither name nor alias is not a row yet).
+ * The oracle: per entry, the edits of the draft against its own base, as the test sees them. A changed
+ * row is listed with its base row and its draft row, an added one with its draft row (a new row with
+ * neither name nor alias is not a row yet), a removed one with its base row; every value is the row's.
  */
-function editedRows(draft: AliasDraft): Map<string, Set<string>> {
-  const result = new Map<string, Set<string>>();
-  const mark = (entryId: string, rowId: string) =>
-    result.set(entryId, (result.get(entryId) ?? new Set()).add(rowId));
+function expectedEdits(draft: AliasDraft): Map<string, Expected[]> {
+  const result = new Map<string, Expected[]>();
+  const add = (entryId: string, edit: Expected) =>
+    result.set(entryId, [...(result.get(entryId) ?? []), edit]);
   const base = new Map(draft.base.rows.map((row) => [row.id, row]));
   const kept = new Set(draft.rows.map((row) => row.id));
   for (const row of draft.rows) {
     const before = base.get(row.id);
     if (!before) {
-      if (row.upstream.trim() || (row.alias ?? '').trim()) mark(row.entryId, row.id);
-    } else if (!same(row, before)) mark(row.entryId, row.id);
+      if (row.upstream.trim() || (row.alias ?? '').trim()) {
+        add(row.entryId, { kind: 'added', before: null, after: row });
+      }
+    } else if (!same(row, before)) add(row.entryId, { kind: 'changed', before, after: row });
   }
-  for (const row of draft.base.rows) if (!kept.has(row.id)) mark(row.entryId, row.id);
+  for (const row of draft.base.rows) {
+    if (!kept.has(row.id)) add(row.entryId, { kind: 'removed', before: row, after: null });
+  }
   return result;
 }
+
+/** Edits in one order, whatever order they are listed in: by row id, then kind. */
+const sorted = (edits: readonly Expected[]) =>
+  [...edits].sort((a, b) => {
+    const ka = `${(a.after ?? a.before)!.id}|${a.kind}`;
+    const kb = `${(b.after ?? b.before)!.id}|${b.kind}`;
+    return ka < kb ? -1 : ka > kb ? 1 : 0;
+  });
 
 // --- events ----------------------------------------------------------------------------------------
 
@@ -291,6 +314,7 @@ describe('P-4 nothing is carried (pageStep, pure)', () => {
       editRefusedWhileSaving: 0,
       readDuringSave: 0,
       addedTypeLost: 0,
+      changedValueListed: 0,
     };
     for (let seed = FIRST_SEED; seed < FIRST_SEED + CASES; seed += 1) {
       const r = rng(seed);
@@ -337,32 +361,36 @@ describe('P-4 nothing is carried (pageStep, pure)', () => {
             expect(next.texts).toEqual({});
             const added = next.lost.slice(prev.lost.length);
             const confirmed = new Set(event.outcome.confirmed);
-            // Every row the dropped draft changed is of a confirmed entry, or listed to type again.
-            for (const [entryId, rowIds] of editedRows(dropped)) {
+            // Each entry the dropped draft changed is confirmed, or listed once, with what to type
+            // again: every edit, its kind, and every value of the rows before and after.
+            const expected = expectedEdits(dropped);
+            for (const [entryId, edits] of expected) {
               if (confirmed.has(entryId)) continue;
               expect(event.outcome.unconfirmed).toContain(entryId);
               const items = added.filter((notice) => notice.entry.id === entryId);
               expect({ entryId, listed: items.length }).toEqual({ entryId, listed: 1 });
-              const listed = new Set(
-                items[0].edits.flatMap((edit) => [edit.before?.id, edit.after?.id])
-              );
-              for (const rowId of rowIds) {
-                expect({ entryId, rowId, listed: listed.has(rowId) }).toEqual({
-                  entryId,
-                  rowId,
-                  listed: true,
-                });
-              }
+              expect({ entryId, edits: sorted(items[0].edits) }).toEqual({
+                entryId,
+                edits: sorted(edits),
+              });
               expect(items[0].failure).toEqual(event.outcome.failure);
-              if (!dropped.base.entries.some((entry) => entry.id === entryId)) {
+              // The entry as it was: the read's, or a login type the draft added.
+              const read = dropped.base.entries.find((entry) => entry.id === entryId);
+              if (read) expect(items[0].entry).toEqual(read);
+              else {
+                expect(items[0].entry).toMatchObject({
+                  store: 'login',
+                  id: entryId,
+                  channel: entryId.slice('login/'.length),
+                });
                 seen.addedTypeLost += 1;
               }
+              if (edits.some((edit) => edit.kind === 'changed')) seen.changedValueListed += 1;
             }
             // And nothing else: an entry listed is one the save did not confirm, with edits.
-            const edited = editedRows(dropped);
             for (const notice of added) {
               expect(confirmed.has(notice.entry.id)).toBe(false);
-              expect(edited.has(notice.entry.id)).toBe(true);
+              expect(expected.has(notice.entry.id)).toBe(true);
             }
             if (added.length) seen.lostAfterSave += 1;
             model = { draft: null, texts: {} };

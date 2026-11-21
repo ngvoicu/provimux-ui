@@ -1034,9 +1034,11 @@ not finished.
   outcomes. After `read-answered`, `draft` equals `startDraft(state)` and `texts` is empty. An `edited`,
   `alias-typed` or `row-removed` between `read-started` and its answer, or while saving, or on a read without a
   tag, changes nothing. After `save-answered`, `draft` is null, and every operation made on the dropped draft is
-  either of a confirmed entry or in `lost`. `lost` only grows, except by `dismissed`. *Must catch:* rows of an
-  entry not confirmed kept in the next draft, by id, position or content; an edit accepted while a read is
-  pending; an unconfirmed entry missing from `lost` when the fresh read has no entry left.
+  either of a confirmed entry or in `lost`, with what is to be typed again: the test works out each entry's edits
+  from the dropped draft (kind, and every value of the rows before and after) and compares the listed ones with
+  them. `lost` only grows, except by `dismissed`. *Must catch:* rows of an entry not confirmed kept in the next
+  draft, by id, position or content; an edit accepted while a read is pending; an unconfirmed entry missing from
+  `lost` when the fresh read has no entry left; the right row listed with another row's value.
 
 **The page** (`tests/provimux/aliases-page.test.ts`, `renderToStaticMarkup`)
 

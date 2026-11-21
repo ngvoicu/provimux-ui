@@ -604,6 +604,50 @@ describe('G-3 the reasons: one per save', () => {
     expect(html).toContain('>changed<');
     expect(html).toContain('>added<');
   });
+
+  test('the value typed on the second of two rows of one model is the value listed (third review)', async () => {
+    await i18n.changeLanguage('en');
+    const document = {
+      'api-keys': {
+        claude: [
+          {
+            name: 'g',
+            keys: [
+              {
+                'api-key': 'fixture-key',
+                models: [
+                  { name: 'm', alias: 'red' },
+                  { name: 'm', alias: 'blue' },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    };
+    let page = pageWith({ ...readAliasState(document, []), etag: '"v1"' });
+    page = pageStep(page, { type: 'alias-typed', rowId: 'claude/0/0#1', text: 'turquoise' });
+    page = pageStep(page, { type: 'save-started' });
+    page = pageStep(page, {
+      type: 'save-answered',
+      outcome: {
+        confirmed: [],
+        unconfirmed: ['claude/0/0'],
+        failure: { reason: 'changed', message: '' },
+      },
+    });
+    expect(page.lost).toHaveLength(1);
+    expect(page.lost[0].edits).toEqual([
+      {
+        kind: 'changed',
+        before: expect.objectContaining({ id: 'claude/0/0#1', alias: 'blue' }),
+        after: expect.objectContaining({ id: 'claude/0/0#1', alias: 'turquoise' }),
+      },
+    ]);
+    const html = lostHtml(page);
+    expect(html).toMatch(/blue<\/code>.*turquoise<\/code>/);
+    expect(html).not.toContain('>red<');
+  });
 });
 
 /** The draft `G-3 each edit` builds, through the draft functions alone. */
