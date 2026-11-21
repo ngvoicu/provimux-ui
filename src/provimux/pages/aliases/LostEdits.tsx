@@ -1,17 +1,12 @@
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 import { IconAlertTriangle, IconX } from '@/components/ui/icons';
 import { entryLabelOf } from './labels';
 import type { LostEdit } from './draft';
-import type { AliasEntry, AliasRow } from './types';
+import type { LostNotice } from './pageLogic';
+import type { AliasRow, CommitOutcome } from './types';
 import styles from './AliasesPage.module.scss';
-
-/** An entry changed elsewhere whose edits were not saved (design 3.6): kept on screen until dismissed. */
-export interface LostNotice {
-  key: number;
-  entry: AliasEntry;
-  edits: LostEdit[];
-}
 
 /** What else an edit set or changed besides the alias, in words. */
 function optionNotes(t: TFunction, edit: LostEdit): string[] {
@@ -85,9 +80,54 @@ function EditLine({ edit }: { edit: LostEdit }) {
   );
 }
 
+/** Why the save ended, said once for the save (3.6). */
+function Reason({ failure }: { failure: CommitOutcome['failure'] }) {
+  const { t } = useTranslation();
+  if (!failure) return null;
+  const message = failure.message.trim();
+  const quoted = message ? <pre className={styles.lostMessage}>{message}</pre> : null;
+  switch (failure.reason) {
+    case 'refused':
+      return (
+        <>
+          <p className={styles.lostReason}>{t('provimux.aliases.lost_reason_refused')}</p>
+          {quoted}
+          <p className={styles.lostFix}>
+            {t('provimux.aliases.lost_refused_fix')}{' '}
+            <Link to="/config" className={styles.link}>
+              {t('nav.config_management')}
+            </Link>
+          </p>
+        </>
+      );
+    case 'error':
+      return (
+        <>
+          <p className={styles.lostReason}>{t('provimux.aliases.lost_reason_error')}</p>
+          {quoted}
+          <p className={styles.lostFix}>{t('provimux.aliases.lost_error_check')}</p>
+        </>
+      );
+    case 'changed':
+      return <p className={styles.lostReason}>{t('provimux.aliases.lost_reason_changed')}</p>;
+    case 'no-tag':
+      return <p className={styles.lostReason}>{t('provimux.aliases.lost_reason_no_tag')}</p>;
+    case 'blocked':
+      return <p className={styles.lostReason}>{t('provimux.aliases.lost_reason_blocked')}</p>;
+  }
+}
+
+/** The notices of one save, in order. */
+function bySave(notices: readonly LostNotice[]): LostNotice[][] {
+  const saves = new Map<number, LostNotice[]>();
+  for (const notice of notices) saves.set(notice.save, [...(saves.get(notice.save) ?? []), notice]);
+  return [...saves.values()];
+}
+
 /**
- * The edits that were not saved because their entry changed elsewhere. The page does not merge: the entry
- * shows what the file holds now, and these lines say what to type again.
+ * The edits a save did not confirm (3.6). The page carries nothing: the board shows the file as it is,
+ * and these lines say what to type again. One card per save, its reason once; one item per entry, kept
+ * until dismissed. Shown above whatever the page's body is, the empty state included.
  */
 export function LostEdits({
   notices,
@@ -100,35 +140,50 @@ export function LostEdits({
   if (!notices.length) return null;
   return (
     <div className={styles.lostList}>
-      {notices.map((notice) => {
-        const label = entryLabelOf(t, notice.entry);
+      {bySave(notices).map((items) => {
+        const save = items[0].save;
+        const headingId = `pmx-aliases-lost-${save}`;
         return (
           <section
-            key={notice.key}
+            key={save}
             className={styles.lost}
-            role="alert"
-            aria-label={t('provimux.aliases.lost_title', { entry: label })}
+            data-reason={items[0].failure?.reason}
+            aria-labelledby={headingId}
           >
             <div className={styles.lostHead}>
-              <IconAlertTriangle size={15} />
-              <h2 className={styles.lostTitle}>
-                {t('provimux.aliases.lost_title', { entry: label })}
+              <IconAlertTriangle size={16} />
+              <h2 id={headingId} className={styles.lostTitle}>
+                {t('provimux.aliases.lost_heading')}
               </h2>
-              <button
-                type="button"
-                className={styles.lostDismiss}
-                onClick={() => onDismiss(notice.key)}
-                aria-label={t('provimux.aliases.lost_dismiss_label', { entry: label })}
-              >
-                <IconX size={14} />
-                <span>{t('provimux.aliases.lost_dismiss')}</span>
-              </button>
             </div>
-            <p className={styles.lostLede}>{t('provimux.aliases.lost_text')}</p>
-            <ul className={styles.lostEdits}>
-              {notice.edits.map((edit, index) => (
-                <EditLine key={index} edit={edit} />
-              ))}
+            <div className={styles.lostWhy}>
+              <Reason failure={items[0].failure} />
+            </div>
+            <ul className={styles.lostEntries}>
+              {items.map((notice) => {
+                const label = entryLabelOf(t, notice.entry);
+                return (
+                  <li key={notice.key} className={styles.lostEntry}>
+                    <div className={styles.lostEntryHead}>
+                      <h3 className={styles.lostEntryName}>{label}</h3>
+                      <button
+                        type="button"
+                        className={styles.lostDismiss}
+                        onClick={() => onDismiss(notice.key)}
+                        aria-label={t('provimux.aliases.lost_dismiss_label', { entry: label })}
+                      >
+                        <IconX size={14} />
+                        <span>{t('provimux.aliases.lost_dismiss')}</span>
+                      </button>
+                    </div>
+                    <ul className={styles.lostEdits}>
+                      {notice.edits.map((edit, index) => (
+                        <EditLine key={index} edit={edit} />
+                      ))}
+                    </ul>
+                  </li>
+                );
+              })}
             </ul>
           </section>
         );
