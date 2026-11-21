@@ -241,10 +241,14 @@ const spellingsOf = (map: Record<string, unknown>, channel: string) =>
 
 /**
  * 3.3: the fresh lists of the channel's spellings, concatenated, deep-equal the stored list (without
- * injected auth indexes).
+ * injected auth indexes). False when the map is not readable or a spelling's value is present and not a
+ * list (2.5): such a channel is never written.
  */
-export function sameChannel(map: Record<string, unknown>, entry: LoginEntry): boolean {
-  const fresh = spellingsOf(map, entry.channel).flatMap((key) =>
+export function sameChannel(map: unknown, entry: LoginEntry): boolean {
+  if (!isRecord(map)) return false;
+  const spellings = spellingsOf(map, entry.channel);
+  if (spellings.some((key) => map[key] !== null && !Array.isArray(map[key]))) return false;
+  const fresh = spellings.flatMap((key) =>
     Array.isArray(map[key]) ? (map[key] as unknown[]) : []
   );
   return sameConfig(fresh, entry.storedList);

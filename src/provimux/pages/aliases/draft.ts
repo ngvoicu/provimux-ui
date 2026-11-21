@@ -33,8 +33,16 @@ export function entryOf(draft: AliasDraft, entryId: string): AliasEntry | null {
     loginCount: null,
     service: `login:${channel}`,
     storedList: [],
+    unread: false,
   };
 }
+
+/** 2.5: the paths that make every login entry unreadable when named in `AliasState.unread`. */
+export const LOGIN_MAP_PATHS = ['oauth', 'oauth.model-alias'] as const;
+
+/** Whether the state's login alias map could not be read (2.5): then no channel can be written. */
+export const loginMapUnread = (state: Pick<AliasState, 'unread'>): boolean =>
+  LOGIN_MAP_PATHS.some((path) => state.unread.includes(path));
 
 /**
  * The loaded entries, then the login channels the draft added (they have rows of the draft only).
@@ -141,15 +149,21 @@ export function addKeyAlias(
   };
 }
 
-/** 3.3: a login alias for a channel, loaded or new. `fork` defaults to true. */
+/**
+ * 3.3: a login alias for a channel, loaded or new. `fork` defaults to true. Refused for a channel the page
+ * cannot read, and for every channel when the alias map cannot be read (2.5).
+ */
 export function addLoginAlias(
   draft: AliasDraft,
   channel: string,
   alias: NewLoginAlias
 ): AliasDraft {
   const key = normalizeOAuthProviderKey(channel);
-  if (!key) return draft;
+  if (!key || loginMapUnread(draft.base)) return draft;
   const entryId = `login/${key}`;
+  const existing = entryOf(draft, entryId);
+  // 2.5: nothing can be added to a channel the page cannot read.
+  if (existing?.store === 'login' && existing.unread) return draft;
   const row: AliasRow = {
     id: `${entryId}#new-${draft.nextNew}`,
     entryId,

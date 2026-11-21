@@ -5,7 +5,7 @@
  * `sameChannel` compare. An entry changed elsewhere takes the fresh rows, and its edits are returned as
  * lost, to be typed again; the page does not merge.
  */
-import { draftEntries, isBlankNewRow, startDraft } from './draft';
+import { draftEntries, isBlankNewRow, loginMapUnread, startDraft } from './draft';
 import { entryChanged, rowChanged, sameConfig } from './plan';
 import type { AliasDraft, AliasEntry, AliasRow, AliasState, KeyEntry, LoginEntry } from './types';
 
@@ -42,13 +42,16 @@ function sameKeyEntry(old: KeyEntry, fresh: AliasState): KeyEntry | null {
 }
 
 /**
- * 3.6, login: the fresh entry of the same channel whose stored list equals the old one's. A channel without
+ * 3.6, login: the fresh entry of the same channel, readable (2.5), whose stored list equals the old one's. A channel without
  * an entry has an empty list, on either side.
  */
 function sameLoginEntry(old: LoginEntry, fresh: AliasState): string | null {
+  // 2.5: only a readable channel of a readable map.
+  if (loginMapUnread(fresh)) return null;
   const found = fresh.entries.find(
     (entry): entry is LoginEntry => entry.store === 'login' && entry.channel === old.channel
   );
+  if (found?.unread) return null;
   return sameConfig(found ? found.storedList : [], old.storedList) ? `login/${old.channel}` : null;
 }
 
