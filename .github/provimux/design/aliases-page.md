@@ -212,6 +212,8 @@ export interface LoginEntry {
   service: ServiceId;
   /** The stored lists of the spellings, concatenated, untouched. */
   storedList: readonly unknown[];
+  /** 2.5: the map, or a spelling's list, is present and not readable: nothing can be added, never written. */
+  unread: boolean;
 }
 
 export type AliasEntry = KeyEntry | LoginEntry;
@@ -240,6 +242,8 @@ export interface AliasState {
   forceModelPrefix: boolean;
   /** ETag of the read; null when the browser could not read the header (writes are then unconditional). */
   etag: string | null;
+  /** 2.5: the parts the page cannot read, by path (such as `api-keys.claude[2]`). */
+  unread: string[];
 }
 ```
 
@@ -257,7 +261,7 @@ export interface AliasState {
 
 `readAliasState(document, files)` in `rows.ts`, pure:
 
-1. For each family: `groups = readProviderGroups(document, family)` and `normalizeProviderGroups(groups, family
+1. For each family: `groups = familyGroups(document, family)` and `normalizeProviderGroups(groups, family
    === 'openai-compatibility')` for the effective display values (key, base URL, prefix, exclusions). One
    `KeyEntry` per normalized entry, ordered by family (the order of 1.2), `groupIndex`, `keyIndex`;
    `storedGroup = groups[groupIndex]`. `authIndex` and `authIndexes` are read from the stored key (entry), as
@@ -299,6 +303,30 @@ written exactly as it was read; a changed row is its stored object with only the
 
 A new row is `{ name, alias }` (store B: plus the optional keys above). This is the whole mapping; no field the
 page does not show can be lost, because the page never builds a row from its own fields.
+
+### 2.5 What the page cannot read
+
+The file can be edited by hand, so any part can have a shape this design does not describe. One rule, at every
+level and in both stores: **a part the page cannot read gives no entry and no row, is named in `AliasState.unread`
+by its path, stays in the file exactly as it is, and never stops the page from reading or writing the rest.** No
+function of the data layer throws on the document's shape.
+
+| Part | Not readable when | What follows |
+| --- | --- | --- |
+| `api-keys.<family>` | present and not a list | no entries, so it is never written |
+| a group | not an object with a `keys` list | no entry; sent back in its place |
+| a key (OpenAI-compatible: the entry) | upstream's normalizer gives nothing for it | the same |
+| a model list, a channel's list | present, not null, not a list | no rows; nothing can be added (`listSource: 'none'`, `LoginEntry.unread`) |
+| an element of a list | store A: not an object with a name; store B: not an object | no row; sent back in its place |
+| `oauth.model-alias` | present and not a map | every login entry is `unread`; the map is never written |
+
+`api-keys` or `oauth` itself present and not a map is named by that path, and is the same as every family, or the
+map, not readable.
+
+`familyGroups(document, family)` (`rows.ts`) is the family's list as stored, or `[]` when absent or not a list. If
+upstream's normalizer throws on a family, the whole family is unread. The commit uses the same readers on its fresh
+read: a family that is no longer a list gives `locate` nothing to find, and a map or channel no longer readable is
+not `sameChannel`. Both are a `conflict`, without a request.
 
 ## 3. The operations
 
@@ -347,7 +375,7 @@ upstream name makes it null.
 
   ```ts
   const read = await apiClient.getRaw('/config');                  // the fresh document and its ETag
-  const groups = readProviderGroups(read.data, family);            // upstream's reader
+  const groups = familyGroups(read.data, family);
   for (const entry of changedEntriesOf(family)) {
     const g = locate(groups, entry);                               // -1: this entry is a conflict, left out
     if (g >= 0) groups[g] = withModels(groups[g], entry, draftRowsOf(entry));
@@ -381,7 +409,8 @@ on purpose and each tested:
 ### 3.3 Store B: add, remove, the request
 
 - **Add** (`addLoginAlias`): a new row for a channel (an existing `LoginEntry`, or a new one for a channel name
-  the user gives). **Remove**: the row is deleted; the upstream name is then served under its own name again.
+  the user gives). It returns the draft unchanged for an `unread` entry, and for every channel when the map is
+  not readable (2.5). **Remove**: the row is deleted; the upstream name is then served under its own name again.
 - **Request**: one for all changed channels:
 
   ```ts
@@ -396,7 +425,8 @@ on purpose and each tested:
   ```
 
   `sameChannel`: the fresh lists of the channel's spellings, concatenated, deep-equal `entry.storedList`, compared
-  with `auth_index` and `auth-index` stripped as in `locate`.
+  with `auth_index` and `auth-index` stripped as in `locate`. It is false when the map or a spelling's value is not
+  readable (2.5).
   `replaceChannel` removes every spelling of the channel and, when rows remain, sets the list under the
   normalized key: the old editor's rule (`updateOauthProviderMap`). When no channel remains the body is `{}`, as
   the old editor sends.
@@ -710,7 +740,8 @@ Fixtures: `config-full.json` (a `GET /config` answer: every family; a group with
 key with its own list; rows with every option and one unknown field; a Vertex key with a name-only row, a
 same-name row and an aliased row; a prefix; a disabled entry; a key without list; `oauth.model-alias` with two
 channels, one written in two spellings, rows with `display-name`, `openapi`, an unknown field, and one row of
-each ignored kind), `config-empty.json` (no `api-keys`, no `oauth`), `credentials.json`, `model-routes.json`.
+each ignored kind), `config-empty.json` (no `api-keys`, no `oauth`), `config-unreadable.json` (config-full with
+one part of each kind of 2.5 that the page cannot read), `credentials.json`, `model-routes.json`.
 
 **Data layer**
 

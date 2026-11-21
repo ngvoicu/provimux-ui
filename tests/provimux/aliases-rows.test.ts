@@ -321,6 +321,7 @@ describe('R-1 rows', () => {
         spellings: [],
         loginCount: 1,
         service: 'login:antigravity',
+        unread: false,
       },
       {
         store: 'login',
@@ -329,6 +330,7 @@ describe('R-1 rows', () => {
         spellings: ['claude'],
         loginCount: 2,
         service: 'login:claude',
+        unread: false,
       },
       {
         store: 'login',
@@ -337,6 +339,7 @@ describe('R-1 rows', () => {
         spellings: ['codex', 'CODEX'],
         loginCount: 1,
         service: 'login:codex',
+        unread: false,
       },
       {
         store: 'login',
@@ -345,6 +348,7 @@ describe('R-1 rows', () => {
         spellings: [],
         loginCount: 1,
         service: 'login:kimi',
+        unread: false,
       },
     ]);
     const codex = loginEntries.find((entry) => entry.channel === 'codex')!;
@@ -405,6 +409,14 @@ describe('R-1 rows', () => {
     ]);
   });
 
+  test('2.5: the parts of config-full the page cannot read are named', () => {
+    expect(state.unread).toEqual([
+      'api-keys.claude[1].keys[0].models[1]',
+      'api-keys.claude[1].keys[0].models[2]',
+      'oauth.model-alias.claude[4]',
+    ]);
+  });
+
   test('force-model-prefix and etag', () => {
     expect(state.forceModelPrefix).toBe(false);
     expect(state.etag).toBeNull();
@@ -428,6 +440,7 @@ describe('R-1 rows', () => {
       rows: [],
       forceModelPrefix: false,
       etag: null,
+      unread: [],
     });
     expect(readAliasState(null, null).entries).toEqual([]);
   });

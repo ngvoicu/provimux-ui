@@ -185,6 +185,7 @@ describe('O operations', () => {
       loginCount: null,
       service: 'login:gemini-cli',
       storedList: [],
+      unread: false,
     });
     expect(addLoginAlias(draft, '  ', { upstream: 'a', alias: 'b' })).toBe(draft);
   });
@@ -265,6 +266,7 @@ const loginEntry = (channel: string): LoginEntry => ({
   loginCount: 1,
   service: `login:${channel}`,
   storedList: [],
+  unread: false,
 });
 
 describe('N-1 client names', () => {
@@ -310,6 +312,7 @@ function stateOf(
     }),
     forceModelPrefix,
     etag: null,
+    unread: [],
   };
 }
 

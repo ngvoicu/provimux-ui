@@ -55,6 +55,11 @@ export interface LoginEntry {
   service: ServiceId;
   /** The stored lists of the spellings, concatenated, untouched. */
   storedList: readonly unknown[];
+  /**
+   * 2.5: the alias map, or one of the spellings' lists, is present and not readable. Nothing can be added,
+   * and a commit of this channel is a conflict (`sameChannel` is false): the file keeps it as it is.
+   */
+  unread: boolean;
 }
 
 export type AliasEntry = KeyEntry | LoginEntry;
@@ -83,6 +88,11 @@ export interface AliasState {
   forceModelPrefix: boolean;
   /** ETag of the read; null when the browser could not read the header (writes are then unconditional). */
   etag: string | null;
+  /**
+   * 2.5: the parts of the file the page cannot read, by path (`api-keys.claude[2]`,
+   * `oauth.model-alias.kimi`). They give no entry and no row and stay in the file as they are.
+   */
+  unread: string[];
 }
 
 // --- Section 3: the draft and its commit -------------------------------------------------------
