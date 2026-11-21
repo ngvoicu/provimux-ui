@@ -62,3 +62,14 @@ export function IconSavings({ size = 20, ...props }: IconProps) {
     </svg>
   );
 }
+
+/** A name tag leading to a model: the names clients send, and what they stand for. */
+export function IconAliases({ size = 20, ...props }: IconProps) {
+  return (
+    <svg {...base} width={size} height={size} {...props}>
+      <path d="M3 4.5h11l3 3-3 3H3z" />
+      <path d="M7 10.5v5a2.5 2.5 0 0 0 2.5 2.5H20" />
+      <path d="M17 15l3 3-3 3" />
+    </svg>
+  );
+}
