@@ -11,7 +11,7 @@
         "keys": [
           {
             "api-key": "fixture-key-gemini-1",
-            "auth-index": "ai-gemini-1",
+            "auth_index": "ai-gemini-1",
             "models": [{ "name": "gemini-2.5-pro", "alias": "g-pro" }]
           }
         ]
@@ -20,7 +20,7 @@
     "interactions": [
       {
         "name": "interactions-1",
-        "keys": [{ "api-key": "fixture-key-interactions-1", "auth-index": "ai-interactions-1" }]
+        "keys": [{ "api-key": "fixture-key-interactions-1", "auth_index": "ai-interactions-1" }]
       }
     ],
     "codex": [
@@ -29,7 +29,7 @@
         "keys": [
           {
             "api-key": "fixture-key-codex-1",
-            "auth-index": "ai-codex-1",
+            "auth_index": "ai-codex-1",
             "base-url": "https://User:pw@Relay.Example.invalid:8443/v1",
             "prefix": "relay",
             "models": [
@@ -61,8 +61,8 @@
           { "name": "claude-haiku-5" }
         ],
         "keys": [
-          { "api-key": "fixture-key-claude-1", "auth-index": "ai-claude-1" },
-          { "api-key": "fixture-key-claude-2", "auth-index": "ai-claude-2", "models": null }
+          { "api-key": "fixture-key-claude-1", "auth_index": "ai-claude-1" },
+          { "api-key": "fixture-key-claude-2", "auth_index": "ai-claude-2", "models": null }
         ]
       },
       {
@@ -70,7 +70,7 @@
         "keys": [
           {
             "api-key": "fixture-key-claude-3",
-            "auth-index": "ai-claude-3",
+            "auth_index": "ai-claude-3",
             "models": [
               { "name": "claude-opus-5-5", "alias": "opus" },
               "stray-string",
@@ -80,7 +80,7 @@
           },
           {
             "api-key": "fixture-key-claude-4",
-            "auth-index": "ai-claude-4",
+            "auth_index": "ai-claude-4",
             "excluded-models": ["*"],
             "models": [{ "name": "claude-opus-5-5", "alias": "opus" }]
           }
@@ -105,7 +105,7 @@
         "keys": [
           {
             "api-key": "fixture-key-meta-1",
-            "auth-index": "ai-meta-1",
+            "auth_index": "ai-meta-1",
             "models": [{ "name": "muse-spark", "alias": "spark" }]
           }
         ]
@@ -118,7 +118,7 @@
         "keys": [
           {
             "api-key": "fixture-key-vertex-1",
-            "auth-index": "ai-vertex-1",
+            "auth_index": "ai-vertex-1",
             "models": [
               { "name": "gemini-x" },
               { "name": "gemini-s", "alias": "gemini-s", "openapi": true },
@@ -133,11 +133,10 @@
         "name": "openrouter",
         "base-url": "https://openrouter.ai/api/v1",
         "prefix": "or",
-        "auth-index": "ai-openrouter",
         "test-model": "anthropic/claude-opus-5.5",
         "keys": [
-          { "api-key": "fixture-key-openrouter-1", "auth-index": "ai-openrouter-1" },
-          { "api-key": "fixture-key-openrouter-2", "auth-index": "ai-openrouter-2" }
+          { "api-key": "fixture-key-openrouter-1", "auth_index": "ai-openrouter-1" },
+          { "api-key": "fixture-key-openrouter-2", "auth_index": "ai-openrouter-2" }
         ],
         "models": [
           {
@@ -154,9 +153,15 @@
         "name": "local-off",
         "base-url": "http://localhost:4000/v1",
         "disabled": true,
-        "auth-index": "ai-local-off",
-        "keys": [{ "api-key": "fixture-key-local-1" }],
+        "keys": [{ "api-key": "fixture-key-local-1", "auth_index": "ai-local-off-1" }],
         "models": [{ "name": "llama-5", "alias": "opus" }]
+      },
+      {
+        "name": "local-nokeys",
+        "base-url": "http://127.0.0.1:4100/v1",
+        "auth_index": "ai-local-nokeys",
+        "keys": [],
+        "models": [{ "name": "qwen-4", "alias": "qwen" }]
       }
     ]
   },

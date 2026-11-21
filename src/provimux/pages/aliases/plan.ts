@@ -30,6 +30,24 @@ export function deepEqual(a: unknown, b: unknown): boolean {
   return false;
 }
 
+/** Fields the proxy injects at read time; never configuration, so never a conflict. */
+const INJECTED = new Set(['auth_index', 'auth-index']);
+
+/** A JSON value without the injected fields, at any depth. */
+export function withoutInjected(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(withoutInjected);
+  if (!isRecord(value)) return value;
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([key]) => !INJECTED.has(key))
+      .map(([key, v]) => [key, withoutInjected(v)])
+  );
+}
+
+/** Equal as configuration: `deepEqual` with the injected fields stripped from both sides. */
+export const sameConfig = (a: unknown, b: unknown): boolean =>
+  deepEqual(withoutInjected(a), withoutInjected(b));
+
 const text = (value: string | null): string => (value ?? '').trim();
 
 /** Whether a draft row says something else than its base row (compared as they would be written). */
@@ -88,12 +106,13 @@ export function planCommit(draft: AliasDraft): CommitUnit[] {
 
 /**
  * 3.2: the index of the entry's group in a fresh read: `groupIndex` when the group there deep-equals
- * the stored group, otherwise the single index whose group does, otherwise -1 (a conflict).
+ * the stored group, otherwise the single index whose group does, otherwise -1 (a conflict). Compared
+ * without the auth indexes the proxy injects at read time.
  */
 export function locate(groups: readonly unknown[], entry: KeyEntry): number {
-  if (deepEqual(groups[entry.groupIndex], entry.storedGroup)) return entry.groupIndex;
+  if (sameConfig(groups[entry.groupIndex], entry.storedGroup)) return entry.groupIndex;
   const matches = groups.flatMap((group, index) =>
-    deepEqual(group, entry.storedGroup) ? [index] : []
+    sameConfig(group, entry.storedGroup) ? [index] : []
   );
   return matches.length === 1 ? matches[0] : -1;
 }
@@ -220,12 +239,15 @@ export function writtenRowsOf(
 const spellingsOf = (map: Record<string, unknown>, channel: string) =>
   Object.keys(map).filter((key) => normalizeOAuthProviderKey(key) === channel);
 
-/** 3.3: the fresh lists of the channel's spellings, concatenated, deep-equal the stored list. */
+/**
+ * 3.3: the fresh lists of the channel's spellings, concatenated, deep-equal the stored list (without
+ * injected auth indexes).
+ */
 export function sameChannel(map: Record<string, unknown>, entry: LoginEntry): boolean {
   const fresh = spellingsOf(map, entry.channel).flatMap((key) =>
     Array.isArray(map[key]) ? (map[key] as unknown[]) : []
   );
-  return deepEqual(fresh, entry.storedList);
+  return sameConfig(fresh, entry.storedList);
 }
 
 /**

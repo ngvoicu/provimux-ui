@@ -260,6 +260,7 @@ const keyEntry = (over: Partial<KeyEntry>): KeyEntry => ({
   keyPreview: null,
   keyCount: 1,
   authIndex: null,
+  authIndexes: [],
   host: null,
   prefix: null,
   disabled: false,
