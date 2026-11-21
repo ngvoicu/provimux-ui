@@ -13,7 +13,7 @@ import type { ProviderFamily } from '@/services/api/providers';
 import { same, sameFamily } from './support/injected';
 
 /*
- * ALP live test (T-265, rebuilt in W7 for design 3.4): the page's data layer and `apiClient` against a
+ * ALP live test (rebuilt in W7 for design 3.4): the page's data layer and `apiClient` against a
  * real proxy built from source. Skipped unless ALIASES_LIVE_BASE (http://127.0.0.1:<port>) and
  * ALIASES_LIVE_KEY are set. It writes only to a proxy on 127.0.0.1 whose touched families each hold an
  * `alp-live-` group, and for a login write a file whose every group is `alp-live-`. Optional:
