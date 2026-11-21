@@ -232,7 +232,8 @@ Provimux layer on top:
 The original's README, in [English](https://github.com/router-for-me/Cli-Proxy-API-Management-Center/blob/main/README.md) and [Chinese](https://github.com/router-for-me/Cli-Proxy-API-Management-Center/blob/main/README_CN.md), describes the
 console's features.
 
-A GitHub **Sponsor** button for providers.dev's own GitHub Sponsors will come later.
+This repository's GitHub **Sponsor** button goes to [the owner's GitHub Sponsors](https://github.com/sponsors/ngvoicu).
+Sponsorships support Provimux and the owner's other open-source tools.
 
 ## License
 
