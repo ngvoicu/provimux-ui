@@ -552,7 +552,8 @@ for (const write of planWrites(draft)) {
 - **What a save never does**: send a `PUT` without `If-Match`; send a `GET`; use the tag a 412 answered; try a
   unit a second time; write an entry anywhere but at its own position in the read.
 - `putWithTag(path, body, tag)` sends `apiClient.put` with `If-Match: tag` and resolves with the `ETag` of the 200,
-  or null when it has none. `apiClient.put` returns the body alone and `client.ts` is upstream's, so the header
+  or null when it has none. Any other success (a 202, a 204) rejects with its status and ends the save as `error`:
+  it is not confirmed, and it may have landed. `apiClient.put` returns the body alone and `client.ts` is upstream's, so the header
   is read in the request's own `transformResponse`, placed after axios's default transforms (axios hands a
   transform the answer's headers and status; error bodies are still parsed for `apiClient`'s messages). It is the
   only place that reads a write's answer.

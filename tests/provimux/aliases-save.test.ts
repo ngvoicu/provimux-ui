@@ -4,6 +4,7 @@ import {
   aliasesApi,
   BLOCKED_MESSAGE,
   NO_TAG_MESSAGE,
+  notConfirmedMessage,
   putWithTag,
 } from '@/provimux/pages/aliases/aliasesApi';
 import {
@@ -184,6 +185,29 @@ describe('C-2 the first unit not confirmed ends the save', () => {
         failure: { reason: 'error', message: 'server exploded' },
       },
       puts: 3,
+      written: [0, 1],
+    },
+    {
+      // Only a 200 confirms (3.4; the third review's finding 10).
+      label: 'a 202 on the first unit, not landed: error; nothing confirmed, the next not sent',
+      arrange: (p) => p.failPut(1, { accepted: 202, lands: false }),
+      outcome: {
+        confirmed: [],
+        unconfirmed: ALL,
+        failure: { reason: 'error', message: notConfirmedMessage(202) },
+      },
+      puts: 1,
+      written: [],
+    },
+    {
+      label: 'a 204 on the second unit that landed: error; not confirmed, the next not sent',
+      arrange: (p) => p.failPut(2, { accepted: 204, lands: true }),
+      outcome: {
+        confirmed: ['gemini/0/0'],
+        unconfirmed: ['claude/0/0', 'claude/1/0', 'login/codex'],
+        failure: { reason: 'error', message: notConfirmedMessage(204) },
+      },
+      puts: 2,
       written: [0, 1],
     },
     {
@@ -705,9 +729,9 @@ describe('editsOf and discardEntry', () => {
 // --- putWithTag through axios ------------------------------------------------------------------
 
 describe('putWithTag through axios and apiClient', () => {
-  test('a 200’s tag is read, a 200 without one gives null, a 412 rejects and gives no tag', async () => {
+  test('a 200’s tag is read, a 200 without one gives null, a 412 rejects, a 202 or 204 rejects as not confirmed', async () => {
     const seen: { ifMatch: string | null; body: unknown }[] = [];
-    let answer: 'tag' | 'none' | '412' = 'tag';
+    let answer: 'tag' | 'none' | '412' | '202' | '204' = 'tag';
     const server = Bun.serve({
       hostname: '127.0.0.1',
       port: 0,
@@ -719,6 +743,11 @@ describe('putWithTag through axios and apiClient', () => {
             { status: 412, headers: { ETag: '"current"' } }
           );
         }
+        // Successes that are not a 200, each with a tag: neither confirms (3.4).
+        if (answer === '202') {
+          return Response.json({ status: 'accepted' }, { status: 202, headers: { ETag: '"x"' } });
+        }
+        if (answer === '204') return new Response(null, { status: 204, headers: { ETag: '"y"' } });
         return Response.json(
           { status: 'ok', 'config-version': 8 },
           answer === 'tag' ? { headers: { ETag: '"after"' } } : {}
@@ -739,7 +768,20 @@ describe('putWithTag through axios and apiClient', () => {
         status: 412,
         message: 'precondition_failed',
       });
-      expect(seen.map((s) => s.ifMatch)).toEqual(['"before"', '"after"', '"stale"']);
+      for (const status of [202, 204] as const) {
+        answer = `${status}`;
+        await expect(putWithTag('/config/api-keys/claude', [], '"after"')).rejects.toMatchObject({
+          status,
+          message: notConfirmedMessage(status),
+        });
+      }
+      expect(seen.map((s) => s.ifMatch)).toEqual([
+        '"before"',
+        '"after"',
+        '"stale"',
+        '"after"',
+        '"after"',
+      ]);
       expect(seen[0].body).toEqual([{ name: 'g' }]);
     } finally {
       apiClient.setConfig({ apiBase: '', managementKey: '' });
