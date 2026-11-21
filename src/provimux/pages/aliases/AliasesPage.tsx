@@ -146,8 +146,9 @@ export function AliasesPage() {
   useHeaderRefresh(refresh);
 
   // The list of edits not saved is the only copy of what was typed: leaving asks first, as with edits.
+  const guarded = leaveGuarded(page);
   useUnsavedChangesGuard({
-    shouldBlock: leaveGuarded(page),
+    shouldBlock: guarded,
     dialog: dirty
       ? {
           title: t('provimux.aliases.unsaved_title'),
@@ -164,6 +165,19 @@ export function AliasesPage() {
           variant: 'danger',
         },
   });
+
+  // The browser's own reload, address bar or tab close leaves without React Router, so the guard above
+  // never sees it: the browser's own dialog asks then, on the same condition. Upstream's hook stays as is.
+  useEffect(() => {
+    if (!guarded) return;
+    const ask = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      // Browsers that predate preventDefault here ask only when returnValue is set; its text is not shown.
+      event.returnValue = true;
+    };
+    window.addEventListener('beforeunload', ask);
+    return () => window.removeEventListener('beforeunload', ask);
+  }, [guarded]);
 
   const save = useCallback(async () => {
     const before = pageRef.current;
