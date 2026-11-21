@@ -1229,6 +1229,8 @@ Known limits, accepted:
 - The `ETag` is of the whole file, so a change that has nothing to do with aliases refuses the save too (D6).
 - After `error` the page cannot tell whether its last write landed. The edits are listed as not confirmed, and
   the page shows the file as it is, where the user sees which of them are there.
+- A 401 during a save (the management key changed between the edit and the save) signs the console out, and the
+  page goes with its list of edits not saved, as every form of the console loses its state then.
 - A family, or the login map, holding an integer beyond ±(2^53 − 1) is not on the page (2.5). The alternative
   keeps the digits (`JSON.parse` with source text, `JSON.rawJSON`) but only in browsers that have both, so the
   refusal would be needed beside it anyway.
