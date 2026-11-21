@@ -123,7 +123,32 @@
       "unsaved_cancel": "Ở lại",
       "reload_title": "Tải lại và bỏ các thay đổi?",
       "reload_message": "Tải lại sẽ đọc lại cấu hình; các thay đổi bí danh chưa lưu sẽ bị mất.",
-      "reload_confirm": "Tải lại"
+      "reload_confirm": "Tải lại",
+      "stale": "Đã lưu xong, nhưng không đọc lại được cấu hình: {{message}}. Việc chỉnh sửa tạm dừng cho đến khi đọc được, để không có gì đã lưu bị hiển thị là chưa lưu.",
+      "stale_retry": "Đọc lại",
+      "lost_title": "{{entry}}: chưa lưu, đã bị thay đổi ở nơi khác",
+      "lost_text": "Mục này đã bị thay đổi ở tab khác, client khác hoặc trong tệp sau khi trang đọc nó, nên giờ trang hiển thị nội dung trong tệp. Các chỉnh sửa sau chưa được lưu; hãy nhập lại nếu bạn vẫn cần:",
+      "lost_changed": "đã sửa",
+      "lost_added": "đã thêm",
+      "lost_removed": "đã xóa",
+      "lost_no_alias": "không có bí danh",
+      "lost_to": "thành",
+      "lost_as": "là",
+      "lost_model_was": "model cũ {{model}}",
+      "lost_fork_on": "giữ tên model: bật",
+      "lost_fork_off": "giữ tên model: tắt",
+      "lost_force_on": "trả lời bằng bí danh: bật",
+      "lost_force_off": "trả lời bằng bí danh: tắt",
+      "lost_display": "tên hiển thị {{name}}",
+      "lost_display_none": "không có tên hiển thị",
+      "lost_dismiss": "Đóng",
+      "lost_dismiss_label": "Đóng thông báo chỉnh sửa chưa lưu của {{entry}}",
+      "unread_line_other": "Các phần sau không đọc được ở đây và được giữ nguyên trong tệp:",
+      "unread_more_other": "thêm {{count}}",
+      "unread_fewer": "thu gọn",
+      "entry_list_unread": "Không đọc được danh sách model của nó ở đây; tệp giữ nguyên danh sách đó và trang này không thể thêm gì vào.",
+      "login_unread": "Một phần bí danh của loại đăng nhập này không đọc được ở đây, nên không thể chỉnh sửa trên trang này. Tệp giữ nguyên phần đó.",
+      "login_map_unread": "Không đọc được bảng bí danh đăng nhập ở đây, nên không thể chỉnh sửa bí danh đăng nhập nào trên trang này. Tệp giữ nguyên bảng đó."
     }
   }
 }

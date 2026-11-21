@@ -123,7 +123,32 @@
       "unsaved_cancel": "머무르기",
       "reload_title": "다시 불러오고 변경을 버릴까요?",
       "reload_message": "다시 불러오면 구성을 새로 읽으며, 저장하지 않은 별칭 변경은 사라집니다.",
-      "reload_confirm": "다시 불러오기"
+      "reload_confirm": "다시 불러오기",
+      "stale": "저장은 끝났지만 구성을 다시 읽을 수 없습니다: {{message}}. 저장된 내용이 저장되지 않은 것으로 보이지 않도록, 다시 읽을 때까지 편집을 멈춥니다.",
+      "stale_retry": "다시 읽기",
+      "lost_title": "{{entry}}: 저장되지 않음, 다른 곳에서 변경됨",
+      "lost_text": "페이지가 읽은 뒤 다른 탭, 다른 클라이언트 또는 파일에서 변경되어, 지금은 파일의 내용을 보여 줍니다. 아래 편집은 저장되지 않았습니다. 여전히 필요하면 다시 입력하세요:",
+      "lost_changed": "변경",
+      "lost_added": "추가",
+      "lost_removed": "제거",
+      "lost_no_alias": "별칭 없음",
+      "lost_to": "변경 후",
+      "lost_as": "별칭",
+      "lost_model_was": "이전 모델 {{model}}",
+      "lost_fork_on": "모델 이름 유지 켬",
+      "lost_fork_off": "모델 이름 유지 끔",
+      "lost_force_on": "별칭으로 응답 켬",
+      "lost_force_off": "별칭으로 응답 끔",
+      "lost_display": "표시 이름 {{name}}",
+      "lost_display_none": "표시 이름 없음",
+      "lost_dismiss": "닫기",
+      "lost_dismiss_label": "{{entry}}의 저장되지 않은 편집 알림 닫기",
+      "unread_line_other": "다음 부분은 여기서 읽을 수 없어 파일에 그대로 남겨 둡니다:",
+      "unread_more_other": "{{count}}개 더",
+      "unread_fewer": "접기",
+      "entry_list_unread": "모델 목록을 여기서 읽을 수 없습니다. 파일은 그대로 유지되며, 이 페이지에서는 여기에 아무것도 추가할 수 없습니다.",
+      "login_unread": "이 로그인 유형의 별칭 일부를 여기서 읽을 수 없어 이 페이지에서 편집할 수 없습니다. 파일은 그대로 유지됩니다.",
+      "login_map_unread": "로그인 별칭 맵을 여기서 읽을 수 없어 이 페이지에서 로그인 별칭을 편집할 수 없습니다. 파일은 그대로 유지됩니다."
     }
   }
 }
