@@ -7,3 +7,6 @@ export { ProvimuxLinks } from './components/ProvimuxLinks';
 export { ProvimuxTagline } from './components/ProvimuxTagline';
 export { provimuxNav } from './nav';
 export { useProvimuxPages } from './presence';
+export { ProvimuxAliasesLine } from './components/ProvimuxAliasesLine';
+export { ProvimuxRowAlias } from './components/ProvimuxRowAlias';
+export { aliasFieldType } from './pages/aliases/formSeams';

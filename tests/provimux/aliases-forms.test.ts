@@ -36,12 +36,20 @@ describe('aliasFieldType', () => {
     expect(aliasFieldType(true)).toBe('text');
   });
 
-  test('not yet called from any upstream file', () => {
+  test('called from ModelEntriesEditor through four inserted lines (U3)', () => {
     const editor = readFileSync(
       'src/features/providers/sheets/forms/ModelEntriesEditor.tsx',
       'utf8'
     );
-    expect(editor).not.toContain('formSeams');
-    expect(editor).not.toContain('@/provimux');
+    expect(editor).toContain(
+      "import { ProvimuxAliasesLine, ProvimuxRowAlias, aliasFieldType } from '@/provimux';"
+    );
+    expect(editor).toContain('type={aliasFieldType(oauthAliasOnly)}');
+    expect(editor).toContain(
+      '<ProvimuxRowAlias show={!oauthAliasOnly} alias={entry.alias} name={entry.name} />'
+    );
+    expect(editor).toContain(
+      '<ProvimuxAliasesLine show={!oauthAliasOnly} models={models} family={providerBrand} />'
+    );
   });
 });
