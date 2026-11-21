@@ -38,7 +38,7 @@ import type {
  * every value of it) and compares the listed ones with them. `lost` only grows, except by `dismissed`.
  *
  * Faults it must catch (each put into a scratch copy of pageLogic.ts and shown to fail; see the U4 and
- * T-277 reports): rows of an unconfirmed entry kept in the next draft, by id, by position or by
+ * third review reports): rows of an unconfirmed entry kept in the next draft, by id, by position or by
  * content; the texts kept across a read; an edit accepted while a read is pending, or while a save
  * runs; an unconfirmed entry missing from `lost` when the fresh read has no entry left; the edits of a
  * login type the draft added missing from `lost`; a read's answer replacing the draft of a running
