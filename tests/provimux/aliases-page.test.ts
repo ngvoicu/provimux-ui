@@ -4,7 +4,7 @@ import { afterAll, describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, matchRoutes } from 'react-router-dom';
 import i18n from '../../src/i18n/index';
 import { normalizeAuthFilesResponse } from '@/services/api/authFiles';
 import type { AuthFilesResponse } from '@/types/authFile';
@@ -20,6 +20,7 @@ import {
 import { groupOfRow, nameGroups } from '@/provimux/pages/aliases/collisions';
 import {
   EMPTY_FILTER,
+  aliasesAddressFor,
   changeCount,
   initialFilter,
   keyListUnread,
@@ -35,6 +36,8 @@ import { LostEdits } from '@/provimux/pages/aliases/LostEdits';
 import { rebase } from '@/provimux/pages/aliases/rebase';
 import { AliasesPage } from '@/provimux/pages/aliases/AliasesPage';
 import { PROVIMUX_ROUTES } from '@/provimux/routes';
+import { AliasesRedirect } from '@/provimux/pages/aliases/AliasesRedirect';
+import { buildModelRulesPath } from '@/features/authFiles/modelRules/useModelRulesRoute';
 import { PROVIMUX_PAGES } from '@/provimux/nav';
 import { PROVIMUX_TRANSLATIONS, overlayStrings } from '@/provimux/i18n';
 import type { AliasDraft, ServedNames } from '@/provimux/pages/aliases/types';
@@ -433,5 +436,34 @@ describe('what the page cannot read', () => {
     const html = render(startDraft({ ...readAliasState(document, files()), etag: '"u3"' }));
     expect(html).toContain('The login alias map cannot be read here');
     expect(html).not.toContain('Aliases for another login type');
+  });
+});
+
+describe('U2: the old login alias address (F-5)', () => {
+  test("/auth-files/oauth-model-alias is the redirect, and wins over upstream's route for it", () => {
+    const route = PROVIMUX_ROUTES.find((r) => r.path === '/auth-files/oauth-model-alias');
+    expect(route!.element.type).toBe(AliasesRedirect);
+    // The table as MainRoutes builds it: Provimux's routes first, then upstream's old editor.
+    const old = { path: '/auth-files/oauth-model-alias', element: 'upstream editor' };
+    const matched = matchRoutes([...PROVIMUX_ROUTES, old], '/auth-files/oauth-model-alias');
+    expect(matched?.[0].route.element).toBe(route!.element);
+    const read = readFileSync('src/router/MainRoutes.tsx', 'utf8');
+    expect(read.indexOf('...PROVIMUX_ROUTES,')).toBeLessThan(
+      read.indexOf("{ path: '/auth-files/oauth-model-alias'")
+    );
+  });
+
+  test('?provider= becomes &channel=, and the page opens on that login type', () => {
+    expect(aliasesAddressFor('')).toBe('/provimux/aliases?store=login');
+    expect(aliasesAddressFor('?provider=claude&view=graph')).toBe(
+      '/provimux/aliases?store=login&channel=claude'
+    );
+    // The Auth Files tile's own link, through the redirect, to the page's filter.
+    const tile = buildModelRulesPath('alias', 'anti_gravity');
+    const target = aliasesAddressFor(tile.slice(tile.indexOf('?')));
+    expect(initialFilter(new URLSearchParams(target.slice(target.indexOf('?'))))).toMatchObject({
+      store: 'login',
+      provider: 'login:antigravity',
+    });
   });
 });

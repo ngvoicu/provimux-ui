@@ -319,8 +319,9 @@ describe('seams', () => {
     expect(read('src/components/layout/MainLayout.tsx')).toMatch(
       /\];\n {2}provimuxNav\(navGroups, useProvimuxPages\(\)\);\n {2}const navItems = navGroups/
     );
+    // First in the table: Provimux's route for the old login alias address wins over upstream's (U2).
     expect(read('src/router/MainRoutes.tsx')).toMatch(
-      /\{ path: '\/quota', element: <QuotaPage \/> \},\n {2}\.\.\.PROVIMUX_ROUTES,\n/
+      /const createMainRoutes = \(supportsPlugin: boolean\) => \[\n {2}\.\.\.PROVIMUX_ROUTES,\n {2}\{ path: '\/', element: <DashboardPage \/> \},\n/
     );
     expect(read('src/features/providers/components/ProviderResourceTable.tsx')).toContain(
       '<ProvimuxOpenRouterTag baseUrl={r.baseUrl} />'
