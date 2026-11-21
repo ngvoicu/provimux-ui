@@ -46,6 +46,20 @@ export function hostOf(baseUrl: string | null | undefined): string | null {
 }
 
 /**
+ * The auth index the proxy injects into a stored key or entry at read time: `auth_index` (what
+ * Provimux writes), else `auth-index`. Not configuration: writes strip both.
+ */
+export function injectedIndexOf(value: unknown): string | null {
+  if (!isRecord(value)) return null;
+  for (const field of ['auth_index', 'auth-index']) {
+    const raw = value[field];
+    const index = typeof raw === 'number' ? String(raw) : trimmed(raw);
+    if (index) return index;
+  }
+  return null;
+}
+
+/**
  * 2.2 step 2: the effective model list of a key, the key's own when present and not null, else the
  * group's; for an OpenAI-compatible entry, the group's.
  */
@@ -122,6 +136,20 @@ function readKeyEntries(document: unknown, family: ProviderFamily) {
       isModelRow(model) ? [keyRow(id, model, index)] : []
     );
     const host = hostOf(config.baseUrl);
+    const storedKeys = storedGroup.keys as unknown[];
+    const authIndex = openai
+      ? injectedIndexOf(storedGroup)
+      : injectedIndexOf(storedKeys[keyIndex as number]);
+    const keyIndexes = openai ? storedKeys.flatMap((key) => injectedIndexOf(key) ?? []) : [];
+    const authIndexes = openai
+      ? storedKeys.length
+        ? keyIndexes
+        : authIndex
+          ? [authIndex]
+          : []
+      : authIndex
+        ? [authIndex]
+        : [];
     const openaiConfig = config as OpenAIProviderConfig;
     const keyConfig = config as ProviderKeyConfig;
     entries.push({
@@ -137,7 +165,8 @@ function readKeyEntries(document: unknown, family: ProviderFamily) {
           : null,
       keyPreview: openai ? null : maskApiKey(keyConfig.apiKey),
       keyCount: openai ? openaiConfig.apiKeyEntries.length : 1,
-      authIndex: config.authIndex ?? null,
+      authIndex,
+      authIndexes,
       host,
       prefix: config.prefix ?? null,
       disabled: openai

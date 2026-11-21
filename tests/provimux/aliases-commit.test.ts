@@ -13,7 +13,7 @@ import {
   removeRow,
   startDraft,
 } from '@/provimux/pages/aliases/draft';
-import { planCommit } from '@/provimux/pages/aliases/plan';
+import { locate, planCommit, sameChannel } from '@/provimux/pages/aliases/plan';
 import type { AliasDraft } from '@/provimux/pages/aliases/types';
 import type {
   ModelAlias,
@@ -133,7 +133,7 @@ function strip(value: unknown): unknown {
   if (value && typeof value === 'object') {
     return Object.fromEntries(
       Object.entries(value as Doc)
-        .filter(([key]) => key !== 'auth-index' && key !== 'test-model')
+        .filter(([key]) => !['auth-index', 'auth_index', 'test-model'].includes(key))
         .map(([key, v]) => [key, strip(v)])
     );
   }
@@ -846,6 +846,35 @@ describe('C-2 If-Match and conflicts', () => {
     expect(((family(s.stored(), 'claude')[2].keys as Doc[])[0].models as Doc[])[0].alias).toBe(
       'o3'
     );
+  });
+
+  test('locate and sameChannel ignore the auth indexes the proxy injects', async () => {
+    const state = await aliasesApi.load();
+    const entry = state.entries.find((e) => e.id === 'claude/0/1')!;
+    if (entry.store !== 'api-key') throw new Error('not a key entry');
+    const fresh = clone(family(s.stored(), 'claude'));
+    const keys = fresh[0].keys as Doc[];
+    keys[0].auth_index = 'ai-claude-1-after-reload';
+    delete keys[1].auth_index;
+    keys[1]['auth-index'] = 'ai-claude-2';
+    expect(locate(fresh, entry)).toBe(0);
+    (keys[0] as Doc).weight = 2;
+    expect(locate(fresh, entry)).toBe(-1);
+    const codex = state.entries.find((e) => e.id === 'login/codex')!;
+    if (codex.store !== 'login') throw new Error('not a login entry');
+    const map = clone(loginMap(s.stored())) as Record<string, Doc[]>;
+    map.codex[0].auth_index = 'x';
+    expect(sameChannel(map, codex)).toBe(true);
+  });
+
+  test('a changed auth_index alone since load: no conflict, the write lands', async () => {
+    const draft = changeRow(startDraft(await aliasesApi.load()), 'claude/0/1#0', { alias: 'o2' });
+    s.edit((doc) => {
+      ((family(doc, 'claude')[0].keys as Doc[])[0] as Doc).auth_index = 'ai-claude-1-new';
+      delete ((family(doc, 'claude')[1].keys as Doc[])[1] as Doc).auth_index;
+    });
+    expect(await aliasesApi.commit(draft)).toEqual({ done: ['claude/0/1'], failed: [] });
+    expect(s.puts).toHaveLength(1);
   });
 
   test('every entry of a unit in conflict: no put', async () => {
