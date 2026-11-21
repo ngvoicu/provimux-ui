@@ -232,3 +232,41 @@ export const LOGIN_CHANNELS = [
   'xai',
   'meta',
 ] as const;
+
+/**
+ * A record keyed by row id (`<entryId>#<rest>`) after a rebase (3.6): the rows of a carried entry move to
+ * the fresh entry's id, the others are dropped (their entry took the fresh rows).
+ */
+export function rekeyRows<T>(
+  record: Readonly<Record<string, T>>,
+  carried: Readonly<Record<string, string>>
+): Record<string, T> {
+  const next: Record<string, T> = {};
+  for (const [rowId, value] of Object.entries(record)) {
+    const cut = rowId.indexOf('#');
+    const to = carried[rowId.slice(0, cut)];
+    if (to) next[`${to}${rowId.slice(cut)}`] = value;
+  }
+  return next;
+}
+
+/** A record keyed by entry id after a rebase (3.6): carried entries move, the others are dropped. */
+export function rekeyEntries<T>(
+  record: Readonly<Record<string, T>>,
+  carried: Readonly<Record<string, string>>
+): Record<string, T> {
+  const next: Record<string, T> = {};
+  for (const [entryId, value] of Object.entries(record)) {
+    if (carried[entryId]) next[carried[entryId]] = value;
+  }
+  return next;
+}
+
+/** 2.5: whether a key entry's model list is the part that could not be read (it then has no rows). */
+export function keyListUnread(entry: KeyEntry, unread: readonly string[]): boolean {
+  const group = `api-keys.${entry.family}[${entry.groupIndex}]`;
+  return (
+    unread.includes(`${group}.models`) ||
+    (entry.keyIndex !== null && unread.includes(`${group}.keys[${entry.keyIndex}].models`))
+  );
+}

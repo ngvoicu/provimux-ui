@@ -26,9 +26,17 @@ import { draftClientNames } from './collisions';
 import { blockedEntries, planCommit } from './plan';
 import { rebase } from './rebase';
 import { aliasesApi, createServedNamesSource, loadServedNames } from './aliasesApi';
-import { blockingCount, changeCount, initialFilter, type AliasFilter } from './pageLogic';
+import {
+  blockingCount,
+  changeCount,
+  initialFilter,
+  rekeyEntries,
+  rekeyRows,
+  type AliasFilter,
+} from './pageLogic';
 import { AliasesBoard, type BoardActions, type Failure } from './AliasesBoard';
-import type { AliasDraft, ServedNames } from './types';
+import { LostEdits, type LostNotice } from './LostEdits';
+import type { AliasDraft, AliasState, CommitOutcome, ServedNames } from './types';
 import shared from '../shared/Shared.module.scss';
 import styles from './AliasesPage.module.scss';
 
@@ -36,10 +44,18 @@ type Phase = 'loading' | 'ready' | 'error';
 
 const isAbort = (error: unknown) => error instanceof DOMException && error.name === 'AbortError';
 
+/** A save whose fresh read has not landed yet: the draft it committed and what it wrote. */
+interface PendingSave {
+  draft: AliasDraft;
+  outcome: CommitOutcome;
+}
+
 /**
  * Aliases (design aliases-page.md, step U1): every alias of every API-key provider and login type, edited
  * as one draft and saved with one action. A save writes only what changed, each request guarded by the
- * configuration's ETag; what could not be saved keeps its edits and says why.
+ * configuration's ETag. After it the draft is carried onto a fresh read (3.6): an entry whose save failed
+ * keeps its edits and says why; an entry changed elsewhere shows the current rows, and the edits that were
+ * not saved are listed until dismissed. Until that read lands, nothing can be edited.
  */
 export function AliasesPage() {
   const { t } = useTranslation();
@@ -60,6 +76,11 @@ export function AliasesPage() {
   const [filter, setFilter] = useState<AliasFilter>(() => initialFilter(searchParams));
   const [focusRowId, setFocusRowId] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<Record<string, string[]>>({});
+  const [lost, setLost] = useState<LostNotice[]>([]);
+  /** The message of a failed read after a save: editing waits until a read succeeds. */
+  const [stale, setStale] = useState<string | null>(null);
+  const pendingRef = useRef<PendingSave | null>(null);
+  const noticeKey = useRef(0);
   const asked = useRef<Set<string>>(new Set());
   const requestRef = useRef(0);
   const askedNamesRef = useRef<string | null>(null);
@@ -103,6 +124,50 @@ export function AliasesPage() {
     return () => window.clearTimeout(timer);
   }, [namesKey, askServed]);
 
+  /**
+   * A fresh state on screen. After a save (a pending one) the committed draft is carried onto it (3.6):
+   * texts and failures follow the carried entries to their fresh ids, and the edits of entries changed
+   * elsewhere become notices. Otherwise the state replaces the draft.
+   */
+  const applyState = useCallback(
+    (state: AliasState) => {
+      const pending = pendingRef.current;
+      pendingRef.current = null;
+      if (!pending) {
+        const next = startDraft(state);
+        setDraft(next);
+        setTexts({});
+        setFailures({});
+        return next;
+      }
+      const {
+        draft: next,
+        carried,
+        lost: gone,
+      } = rebase(pending.draft, state, pending.outcome.done);
+      setDraft(next);
+      setTexts((prev) => rekeyRows(prev, carried));
+      setFailures(
+        rekeyEntries(
+          Object.fromEntries(pending.outcome.failed.map((failure) => [failure.entryId, failure])),
+          carried
+        )
+      );
+      if (gone.length) {
+        setLost((prev) => [
+          ...prev,
+          ...gone.map((item) => ({
+            key: ++noticeKey.current,
+            entry: item.entry,
+            edits: item.edits,
+          })),
+        ]);
+      }
+      return next;
+    },
+    [setDraft]
+  );
+
   const load = useCallback(async () => {
     const id = ++requestRef.current;
     const revision = apiClient.getConnectionRevision();
@@ -112,21 +177,21 @@ export function AliasesPage() {
     try {
       const state = await aliasesApi.load(apiClient.captureConnection(isCurrent));
       if (!isCurrent()) return;
-      const next = startDraft(state);
-      setDraft(next);
-      setTexts({});
-      setFailures({});
+      const next = applyState(state);
+      setStale(null);
       setLoadError(null);
       setPhase('ready');
       askServed(next, true);
     } catch (error) {
       if (!isCurrent()) return;
-      setLoadError(getErrorMessage(error));
+      // After a save, the draft no longer matches the file: editing waits for a read that succeeds.
+      if (pendingRef.current) setStale(getErrorMessage(error));
+      else setLoadError(getErrorMessage(error));
       setPhase((prev) => (prev === 'ready' ? 'ready' : 'error'));
     } finally {
       if (isCurrent()) setReloading(false);
     }
-  }, [askServed, setDraft]);
+  }, [applyState, askServed]);
 
   useEffect(() => {
     if (connectionStatus !== 'connected') return;
@@ -142,7 +207,8 @@ export function AliasesPage() {
   const toFix = useMemo(() => (draft ? blockingCount(rowIssues(draft)) : 0), [draft]);
 
   const refresh = useCallback(() => {
-    if (!dirty) return load();
+    // After a save whose read failed, reading again finishes that save: nothing is dropped.
+    if (!dirty || pendingRef.current) return load();
     showConfirmation({
       title: t('provimux.aliases.reload_title'),
       message: t('provimux.aliases.reload_message'),
@@ -165,47 +231,29 @@ export function AliasesPage() {
     },
   });
 
-  const forgetTexts = useCallback((keepEntries: ReadonlySet<string> | null) => {
-    setTexts((prev) => {
-      if (!keepEntries) return {};
-      const next: Record<string, string> = {};
-      for (const [rowId, text] of Object.entries(prev)) {
-        if (keepEntries.has(rowId.slice(0, rowId.indexOf('#')))) next[rowId] = text;
-      }
-      return next;
-    });
-  }, []);
-
   const save = useCallback(async () => {
     const current = draftRef.current;
-    if (!current || saving) return;
+    if (!current || saving || pendingRef.current) return;
     setSaving(true);
     const revision = apiClient.getConnectionRevision();
     try {
       const outcome = await aliasesApi.commit(current);
+      if (revision !== apiClient.getConnectionRevision()) return;
       // Other pages must not show the configuration as it was (design 3.4).
       useConfigStore.getState().clearCache();
-      const state = await aliasesApi.load();
-      if (revision !== apiClient.getConnectionRevision()) return;
-      const failedIds = [...new Set(outcome.failed.map((failure) => failure.entryId))];
-      const next = rebase(current, state, outcome.done).draft;
-      setDraft(next);
-      forgetTexts(new Set(failedIds));
-      setFailures(Object.fromEntries(outcome.failed.map((failure) => [failure.entryId, failure])));
-      askServed(next, true);
-      if (outcome.failed.length === 0) {
+      pendingRef.current = { draft: current, outcome };
+      const failed = new Set(outcome.failed.map((failure) => failure.entryId)).size;
+      if (failed === 0) {
         showNotification(t('provimux.aliases.saved'), 'success');
       } else if (outcome.done.length === 0) {
         showNotification(t('provimux.aliases.saved_none'), 'warning');
       } else {
         showNotification(
-          t('provimux.aliases.saved_partly', {
-            done: outcome.done.length,
-            failed: failedIds.length,
-          }),
+          t('provimux.aliases.saved_partly', { done: outcome.done.length, failed }),
           'warning'
         );
       }
+      await load();
     } catch (error) {
       if (isAbort(error) || revision !== apiClient.getConnectionRevision()) return;
       showNotification(
@@ -215,13 +263,13 @@ export function AliasesPage() {
     } finally {
       setSaving(false);
     }
-  }, [askServed, forgetTexts, saving, setDraft, showNotification, t]);
+  }, [load, saving, showNotification, t]);
 
   const discardAll = useCallback(() => {
     update((current) => discard(current));
-    forgetTexts(null);
+    setTexts({});
     setFailures({});
-  }, [forgetTexts, update]);
+  }, [update]);
 
   // Handlers read the latest alias texts through a ref, so `actions` stays one object.
   const textsRef = useRef(texts);
@@ -376,12 +424,23 @@ export function AliasesPage() {
         />
       ) : (
         <>
-          {loadError ? (
+          {stale !== null ? (
+            <div className={styles.stale} role="alert">
+              <p>{t('provimux.aliases.stale', { message: stale })}</p>
+              <Button variant="secondary" size="sm" onClick={() => void load()} loading={reloading}>
+                {t('provimux.aliases.stale_retry')}
+              </Button>
+            </div>
+          ) : loadError ? (
             <p className={shared.inlineError} role="alert">
               {t('provimux.aliases.reload_failed', { message: loadError })}
             </p>
           ) : null}
-          <fieldset className={styles.board} disabled={saving}>
+          <LostEdits
+            notices={lost}
+            onDismiss={(key) => setLost((prev) => prev.filter((notice) => notice.key !== key))}
+          />
+          <fieldset className={styles.board} disabled={saving || stale !== null}>
             <AliasesBoard
               draft={draft}
               served={served}
@@ -395,7 +454,7 @@ export function AliasesPage() {
             />
           </fieldset>
           <FloatingSaveBar
-            visible={dirty}
+            visible={dirty && stale === null}
             statusText={statusText}
             statusTone={saving ? 'busy' : blocked ? 'error' : 'warning'}
             saving={saving}

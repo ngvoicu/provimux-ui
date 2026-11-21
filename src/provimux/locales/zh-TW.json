@@ -123,7 +123,32 @@
       "unsaved_cancel": "留下",
       "reload_title": "重新載入並捨棄修改？",
       "reload_message": "重新載入會再次讀取設定；未儲存的別名修改將會遺失。",
-      "reload_confirm": "重新載入"
+      "reload_confirm": "重新載入",
+      "stale": "儲存已完成，但無法重新讀取設定：{{message}}。在讀取成功之前暫停編輯，以免已儲存的內容被顯示為未儲存。",
+      "stale_retry": "重新讀取",
+      "lost_title": "{{entry}}：未儲存，已在其他地方被修改",
+      "lost_text": "頁面讀取之後，它在其他分頁、其他用戶端或檔案中被修改了，因此現在顯示的是檔案中的內容。以下修改沒有儲存；如果仍然需要，請重新輸入：",
+      "lost_changed": "修改",
+      "lost_added": "新增",
+      "lost_removed": "移除",
+      "lost_no_alias": "無別名",
+      "lost_to": "改為",
+      "lost_as": "作為",
+      "lost_model_was": "原模型 {{model}}",
+      "lost_fork_on": "保留模型名稱：開",
+      "lost_fork_off": "保留模型名稱：關",
+      "lost_force_on": "以別名回應：開",
+      "lost_force_off": "以別名回應：關",
+      "lost_display": "顯示名稱 {{name}}",
+      "lost_display_none": "無顯示名稱",
+      "lost_dismiss": "關閉",
+      "lost_dismiss_label": "關閉 {{entry}} 未儲存修改的提示",
+      "unread_line_other": "以下部分在此無法讀取，已原樣保留在檔案中：",
+      "unread_more_other": "還有 {{count}} 項",
+      "unread_fewer": "收合",
+      "entry_list_unread": "它的模型清單在此無法讀取；檔案會原樣保留它，本頁無法向其中新增內容。",
+      "login_unread": "此登入類型的部分別名在此無法讀取，因此不能在本頁編輯。檔案會原樣保留它。",
+      "login_map_unread": "登入別名對應在此無法讀取，因此本頁不能編輯任何登入別名。檔案會原樣保留它。"
     }
   }
 }

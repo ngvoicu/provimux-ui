@@ -22,18 +22,24 @@ import {
   EMPTY_FILTER,
   changeCount,
   initialFilter,
+  keyListUnread,
+  rekeyEntries,
+  rekeyRows,
   removedCounts,
   rowMarks,
   visibleRows,
   type AliasFilter,
 } from '@/provimux/pages/aliases/pageLogic';
 import { AliasesBoard, type BoardActions } from '@/provimux/pages/aliases/AliasesBoard';
+import { LostEdits } from '@/provimux/pages/aliases/LostEdits';
+import { rebase } from '@/provimux/pages/aliases/rebase';
 import { AliasesPage } from '@/provimux/pages/aliases/AliasesPage';
 import { PROVIMUX_ROUTES } from '@/provimux/routes';
 import { PROVIMUX_PAGES } from '@/provimux/nav';
 import { PROVIMUX_TRANSLATIONS, overlayStrings } from '@/provimux/i18n';
 import type { AliasDraft, ServedNames } from '@/provimux/pages/aliases/types';
 
+type Tree = { [key: string]: unknown };
 const fixture = (name: string): unknown =>
   JSON.parse(readFileSync(`tests/provimux/fixtures/aliases/${name}`, 'utf8'));
 const files = () =>
@@ -313,5 +319,119 @@ describe('strings in seven languages', () => {
       a: { b: 'x', c: '2' },
       d: '3',
     });
+  });
+});
+
+// T-261: what the page does with the data layer's rebase (3.6) and what it cannot read (2.5).
+describe('after a save: carried and lost', () => {
+  test('texts and failures follow a carried entry to its fresh id; the others are dropped', () => {
+    const carried = { 'codex/0/0': 'codex/1/0' };
+    expect(
+      rekeyRows({ 'codex/0/0#0': 'fast2', 'codex/0/0#new-3': 'x', 'claude/0/0#1': 'y' }, carried)
+    ).toEqual({ 'codex/1/0#0': 'fast2', 'codex/1/0#new-3': 'x' });
+    expect(rekeyEntries({ 'codex/0/0': 1, 'claude/0/0': 2 }, carried)).toEqual({ 'codex/1/0': 1 });
+  });
+
+  test('the notice names the entry and each edit in words to type again', async () => {
+    await i18n.changeLanguage('en');
+    const state = loaded();
+    let draft = changeRow(startDraft(state), 'gemini/0/0#0', { alias: 'g-pro-2' });
+    draft = addKeyAlias(draft, 'gemini/0/0', 'gemini-2.5-pro', 'second');
+    // The same entry, its group changed elsewhere: the edits cannot be carried.
+    const document = fixture('config-full.json') as {
+      'api-keys': { gemini: { name: string }[] };
+    };
+    document['api-keys'].gemini[0].name = 'renamed-elsewhere';
+    const fresh = { ...readAliasState(document, files()), etag: '"e2"' };
+    const { lost } = rebase(draft, fresh, []);
+    expect(lost).toHaveLength(1);
+    const html = renderToStaticMarkup(
+      createElement(LostEdits, {
+        notices: [{ key: 1, entry: lost[0].entry, edits: lost[0].edits }],
+        onDismiss: noop,
+      })
+    );
+    expect(html).toContain('Gemini · gemini-1');
+    expect(html).toContain('not saved, changed elsewhere');
+    expect(html).toContain('gemini-2.5-pro');
+    expect(html).toContain('g-pro');
+    expect(html).toContain('g-pro-2');
+    expect(html).toContain('second');
+    expect(html).toContain('>changed<');
+    expect(html).toContain('>added<');
+    expect(html).toContain('Dismiss');
+  });
+
+  test('a removed login row is listed as removed, with its alias', async () => {
+    await i18n.changeLanguage('en');
+    const state = loaded();
+    const row = state.rows.find((r) => r.entryId === 'login/codex')!;
+    const draft = removeRow(startDraft(state), row.id);
+    const html = renderToStaticMarkup(
+      createElement(LostEdits, {
+        notices: [
+          {
+            key: 1,
+            entry: state.entries.find((e) => e.id === 'login/codex')!,
+            edits: [{ kind: 'removed', before: row, after: null }],
+          },
+        ],
+        onDismiss: noop,
+      })
+    );
+    expect(draft.rows.some((r) => r.id === row.id)).toBe(false);
+    expect(html).toContain('>removed<');
+    expect(html).toContain(row.alias!);
+  });
+});
+
+describe('what the page cannot read', () => {
+  const unreadable = () => ({
+    ...readAliasState(fixture('config-unreadable.json'), files()),
+    etag: '"u1"',
+  });
+
+  test('one line names the parts and says they stay in the file', async () => {
+    await i18n.changeLanguage('en');
+    const state = unreadable();
+    const html = render(startDraft(state));
+    expect(html).toContain('cannot be read here and are left in it untouched');
+    expect(html).toContain(state.unread[0]);
+    expect(html).toContain(`${state.unread.length - 3} more`);
+    expect(render(startDraft({ ...loaded(), unread: [] }))).not.toContain('left in it untouched');
+  });
+
+  test('a key whose model list is unreadable says so, not "no model list"', async () => {
+    await i18n.changeLanguage('en');
+    const state = unreadable();
+    const xai = state.entries.find((e) => e.store === 'api-key' && e.family === 'xai');
+    expect(xai && keyListUnread(xai as never, state.unread)).toBe(true);
+    expect(render(startDraft(state))).toContain('Its model list cannot be read here');
+  });
+
+  test('a login type partly unreadable shows its rows, locked, without "Add an alias"', async () => {
+    await i18n.changeLanguage('en');
+    const document = fixture('config-full.json') as { oauth: { 'model-alias': Tree } };
+    document.oauth['model-alias'].CODEX = 'not-a-list';
+    const state = { ...readAliasState(document, files()), etag: '"u2"' };
+    const codex = state.entries.find((e) => e.id === 'login/codex');
+    expect(codex?.store === 'login' && codex.unread).toBe(true);
+    const html = render(startDraft(state));
+    const card = html.slice(html.indexOf('aria-label="Codex logins"'));
+    const cardEnd = card.indexOf('</article>');
+    const codexCard = card.slice(0, cardEnd);
+    expect(codexCard).toContain('cannot be read here, so it cannot be edited on this page');
+    expect(codexCard).toContain('value="g55"');
+    expect(codexCard).toMatch(/value="g55"[^>]*disabled=""|disabled=""[^>]*value="g55"/);
+    expect(codexCard).not.toContain('Add an alias');
+  });
+
+  test('an unreadable login map: no login alias can be edited or added', async () => {
+    await i18n.changeLanguage('en');
+    const document = fixture('config-full.json') as { oauth: Tree };
+    document.oauth['model-alias'] = 'junk';
+    const html = render(startDraft({ ...readAliasState(document, files()), etag: '"u3"' }));
+    expect(html).toContain('The login alias map cannot be read here');
+    expect(html).not.toContain('Aliases for another login type');
   });
 });
