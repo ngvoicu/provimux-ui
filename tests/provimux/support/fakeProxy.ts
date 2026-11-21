@@ -22,8 +22,14 @@ export interface Recorded {
   tag?: string | null;
 }
 
-/** How the n-th `put` is answered, instead of by the contract: a status, or a request that never answers. */
-export type PutFault = { status: 400 | 422 | 500 | 503; message?: string } | { reject: string };
+/**
+ * How the n-th `put` is answered, instead of by the contract: an error status, a request that never
+ * answers, or a success other than 200 (`accepted`), after which the write has landed or not (`lands`).
+ */
+export type PutFault =
+  | { status: 400 | 422 | 500 | 503; message?: string }
+  | { reject: string }
+  | { accepted: 202 | 204; lands: boolean };
 
 /** What a 200 to `PUT path` leaves in `doc`: the node replaced, as the proxy stores it. */
 export function applyBody(doc: Doc, path: string, body: unknown): Doc {
@@ -150,6 +156,17 @@ export function fakeProxy(document: unknown) {
     if (fault && 'reject' in fault) {
       record.status = -1;
       throw Object.assign(new Error(fault.reject), { name: 'ApiError', code: 'ECONNRESET' });
+    }
+    if (fault && 'accepted' in fault) {
+      // A success that is not a 200, as axios resolves it: with its status, a tag only if it landed.
+      if (fault.lands) {
+        doc = applyBody(doc, path, body);
+        version += 1;
+      }
+      record.status = fault.accepted;
+      record.tag = fault.lands ? tag() : null;
+      const text = fault.accepted === 204 ? '' : JSON.stringify({ status: 'accepted' });
+      return transform(config, text, record.tag, fault.accepted);
     }
     if (fault) {
       record.status = fault.status;
