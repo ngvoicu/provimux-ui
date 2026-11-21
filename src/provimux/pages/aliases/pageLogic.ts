@@ -270,3 +270,14 @@ export function keyListUnread(entry: KeyEntry, unread: readonly string[]): boole
     (entry.keyIndex !== null && unread.includes(`${group}.keys[${entry.keyIndex}].models`))
   );
 }
+
+/**
+ * U2: where the old login alias address leads. `?provider=<p>` becomes `&channel=<p>`; the old editor's
+ * other parameters (`view`) mean nothing here.
+ */
+export function aliasesAddressFor(search: string): string {
+  const provider = new URLSearchParams(search).get('provider')?.trim() ?? '';
+  const params = new URLSearchParams({ store: 'login' });
+  if (provider) params.set('channel', provider);
+  return `/provimux/aliases?${params.toString()}`;
+}
