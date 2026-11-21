@@ -63,22 +63,33 @@ const isAbort = (error: unknown) => error instanceof DOMException && error.name 
 const defaultTransforms = (): AxiosResponseTransformer[] =>
   [axios.defaults.transformResponse ?? []].flat() as AxiosResponseTransformer[];
 
+/** A write answered with a success other than 200: not confirmed (3.4), and it may have landed. */
+export const notConfirmedMessage = (status: number | null): string =>
+  `The proxy answered the write with ${status ?? 'no status'}, not 200, so it is not confirmed; ` +
+  'it may have landed.';
+
 /**
  * `PUT path` with `If-Match: tag`; resolves with the `ETag` of the 200, or null when it has none.
- * `apiClient.put` returns the body alone, so the tag is read in the request's own `transformResponse`,
- * placed after axios's defaults; only a 200's headers are read. Rejects as `apiClient.put` does.
+ * `apiClient.put` returns the body alone, so the status and the tag are read in the request's own
+ * `transformResponse`, placed after axios's defaults; only a 200's headers are read. Only a 200
+ * confirms: any other success (a 202, a 204) rejects with its status, which the save takes as `error`.
+ * Otherwise rejects as `apiClient.put` does.
  */
 export async function putWithTag(path: string, body: unknown, tag: string): Promise<string | null> {
-  let answered: string | null = null;
+  const answer: { status: number | null; tag: string | null } = { status: null, tag: null };
   const takeTag: AxiosResponseTransformer = function (data, headers, status) {
-    if (status === 200) answered = etagOf(headers);
+    answer.status = typeof status === 'number' ? status : null;
+    if (status === 200) answer.tag = etagOf(headers);
     return data;
   };
   await apiClient.put(path, body, {
     headers: { 'If-Match': tag },
     transformResponse: [...defaultTransforms(), takeTag],
   });
-  return answered;
+  if (answer.status !== 200) {
+    throw Object.assign(new Error(notConfirmedMessage(answer.status)), { status: answer.status });
+  }
+  return answer.tag;
 }
 
 const reasonOf = (error: unknown): SaveFailure => {
