@@ -1,5 +1,6 @@
-// The Aliases page, step U1 (design aliases-page.md, section 8): its filter, what it marks, what it renders
-// for a draft, its route and nav item (the U1 part of F-5), and its strings in the seven languages.
+// The Aliases page (design aliases-page.md, section 8). U1: its filter, what it marks, what it renders for
+// a draft, its route and nav item (the U1 part of F-5), and its strings in the seven languages. U4: the
+// page after a save (3.6), G-1 to G-4 of section 7; P-4 is in aliases-page-property.test.ts.
 import { afterAll, describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { createElement } from 'react';
@@ -21,18 +22,23 @@ import {
 import { groupOfRow, nameGroups } from '@/provimux/pages/aliases/collisions';
 import {
   EMPTY_FILTER,
+  INITIAL_PAGE,
   aliasesAddressFor,
+  canEdit,
   changeCount,
   initialFilter,
   keyListUnread,
-  rekeyEntries,
-  rekeyRows,
+  leaveGuarded,
+  pageStep,
   removedCounts,
   rowMarks,
+  saveBarShown,
   visibleRows,
   type AliasFilter,
+  type PageState,
 } from '@/provimux/pages/aliases/pageLogic';
 import { AliasesBoard, type BoardActions } from '@/provimux/pages/aliases/AliasesBoard';
+import { AliasesBody } from '@/provimux/pages/aliases/AliasesBody';
 import { LostEdits } from '@/provimux/pages/aliases/LostEdits';
 import { AliasesPage } from '@/provimux/pages/aliases/AliasesPage';
 import { PROVIMUX_ROUTES } from '@/provimux/routes';
@@ -40,7 +46,12 @@ import { AliasesRedirect } from '@/provimux/pages/aliases/AliasesRedirect';
 import { buildModelRulesPath } from '@/features/authFiles/modelRules/useModelRulesRoute';
 import { PROVIMUX_PAGES } from '@/provimux/nav';
 import { PROVIMUX_TRANSLATIONS, overlayStrings } from '@/provimux/i18n';
-import type { AliasDraft, ServedNames } from '@/provimux/pages/aliases/types';
+import type {
+  AliasDraft,
+  AliasState,
+  SaveFailure,
+  ServedNames,
+} from '@/provimux/pages/aliases/types';
 
 type Tree = { [key: string]: unknown };
 const fixture = (name: string): unknown =>
@@ -111,7 +122,6 @@ describe('visible rows', () => {
       groups,
       groupOfRow: groupOfRow(groups),
       marks: rowMarks(draft),
-      failedEntries: new Set(),
       haystacks: {},
       texts,
     });
@@ -184,9 +194,9 @@ function render(
         filter: EMPTY_FILTER,
         onFilter: noop,
         texts: {},
-        failures: {},
         suggestions: {},
         focusRowId: null,
+        locked: false,
         actions,
         ...extra,
       })
@@ -217,33 +227,11 @@ describe('the board', () => {
     expect(html).toContain('Never answers: an earlier row of this key has the same name.');
   });
 
-  test('without an ETag, says saves are not protected; with one, does not', async () => {
-    await i18n.changeLanguage('en');
-    expect(render(startDraft(loaded(null)))).toContain(
-      'Saves are not protected against a change made elsewhere'
-    );
-    expect(render(startDraft(loaded()))).not.toContain('Saves are not protected');
-  });
-
   test('on a proxy without /provimux/model-routes, one line says native names were not checked', async () => {
     await i18n.changeLanguage('en');
     const line = 'were not checked: this proxy does not report them';
     expect(render(startDraft(loaded()), { known: false, byName: {} })).toContain(line);
     expect(render(startDraft(loaded()))).not.toContain(line);
-  });
-
-  test('a failed entry says why, and keeps its edits', async () => {
-    await i18n.changeLanguage('en');
-    const draft = changeRow(startDraft(loaded()), 'gemini/0/0#0', { alias: 'mine' });
-    const html = render(draft, undefined, {
-      texts: { 'gemini/0/0#0': 'mine' },
-      failures: {
-        'gemini/0/0': { entryId: 'gemini/0/0', reason: 'conflict', message: 'x' },
-      },
-    });
-    expect(html).toContain('Not saved: this changed elsewhere');
-    expect(html).toContain('value="mine"');
-    expect(html).toContain('Undo changes here');
   });
 });
 
@@ -328,62 +316,324 @@ describe('strings in seven languages', () => {
   });
 });
 
-// T-261: what the page does with the data layer's rebase (3.6) and what it cannot read (2.5).
-describe('after a save: carried and lost', () => {
-  test('texts and failures follow a carried entry to its fresh id; the others are dropped', () => {
-    const carried = { 'codex/0/0': 'codex/1/0' };
-    expect(
-      rekeyRows({ 'codex/0/0#0': 'fast2', 'codex/0/0#new-3': 'x', 'claude/0/0#1': 'y' }, carried)
-    ).toEqual({ 'codex/1/0#0': 'fast2', 'codex/1/0#new-3': 'x' });
-    expect(rekeyEntries({ 'codex/0/0': 1, 'claude/0/0': 2 }, carried)).toEqual({ 'codex/1/0': 1 });
-  });
+// --- U4: the page after a save (3.6), G-1 to G-4 of section 7 ------------------------------------
 
-  test('the notice names the entry and each edit in words to type again', async () => {
-    await i18n.changeLanguage('en');
-    const state = loaded();
-    let draft = changeRow(startDraft(state), 'gemini/0/0#0', { alias: 'g-pro-2' });
-    draft = addKeyAlias(draft, 'gemini/0/0', 'gemini-2.5-pro', 'second');
-    // W7: the edits of an entry a save did not confirm (3.6), from the dropped draft.
-    const edits = editsOf(draft, 'gemini/0/0');
-    expect(edits).toHaveLength(2);
-    const entry = state.entries.find((e) => e.id === 'gemini/0/0')!;
-    const html = renderToStaticMarkup(
-      createElement(LostEdits, {
-        notices: [{ key: 1, entry, edits }],
+/** The page holding one read, as `read-answered` leaves it. */
+const pageWith = (state: AliasState, patch: Partial<PageState> = {}): PageState => ({
+  ...pageStep(INITIAL_PAGE, { type: 'read-answered', state }),
+  ...patch,
+});
+
+const emptyRead = (etag: string | null = '"e2"'): AliasState => ({
+  ...readAliasState(fixture('config-empty.json'), []),
+  etag,
+});
+
+function renderBody(
+  page: PageState,
+  served: ServedNames | undefined = { known: true, byName: {} }
+) {
+  return renderToStaticMarkup(
+    createElement(
+      MemoryRouter,
+      null,
+      createElement(AliasesBody, {
+        page,
+        served,
+        filter: EMPTY_FILTER,
+        onFilter: noop,
+        suggestions: {},
+        focusRowId: null,
+        actions,
+        onRetry: noop,
         onDismiss: noop,
       })
-    );
+    )
+  );
+}
+
+/** A typed alias on Gemini's only row, a removed Codex login alias, a save that confirms neither. */
+function afterSave(reason: SaveFailure, message = '', page: PageState = pageWith(loaded())) {
+  let next = pageStep(page, { type: 'alias-typed', rowId: 'gemini/0/0#0', text: 'g-pro-2' });
+  const codex = next.draft!.rows.find((row) => row.entryId === 'login/codex')!;
+  next = pageStep(next, { type: 'row-removed', rowId: codex.id });
+  next = pageStep(next, { type: 'save-started' });
+  expect(next.saving).toBe(true);
+  return pageStep(next, {
+    type: 'save-answered',
+    outcome: {
+      confirmed: [],
+      unconfirmed: ['gemini/0/0', 'login/codex'],
+      failure: { reason, message },
+    },
+  });
+}
+
+const count = (html: string, text: string) => html.split(text).length - 1;
+
+describe('U4 the page after a save (3.6)', () => {
+  test('a save drops the draft and its texts, and lists each unconfirmed entry with its edits', () => {
+    const page = afterSave('changed');
+    expect(page.draft).toBeNull();
+    expect(page.texts).toEqual({});
+    expect(page.saving).toBe(false);
+    expect(page.lost.map((notice) => notice.entry.id)).toEqual(['gemini/0/0', 'login/codex']);
+    expect(new Set(page.lost.map((notice) => notice.save)).size).toBe(1);
+    expect(page.lost[0].edits).toMatchObject([
+      { kind: 'changed', before: { alias: 'g-pro' }, after: { alias: 'g-pro-2' } },
+    ]);
+    expect(page.lost[1].edits.map((edit) => edit.kind)).toEqual(['removed']);
+    // The next read starts a draft of its own: nothing of the dropped one is in it.
+    const fresh = loaded('"e9"');
+    const next = pageStep(pageStep(page, { type: 'read-started' }), {
+      type: 'read-answered',
+      state: fresh,
+    });
+    expect(next.draft).toEqual(startDraft(fresh));
+    expect(next.texts).toEqual({});
+    expect(next.lost).toBe(page.lost);
+  });
+
+  test('leaving asks first while the draft has edits or the list has an item', () => {
+    const clean = pageWith(loaded());
+    expect(leaveGuarded(clean)).toBe(false);
+    expect(
+      leaveGuarded(pageStep(clean, { type: 'alias-typed', rowId: 'gemini/0/0#0', text: 'x' }))
+    ).toBe(true);
+    const lost = pageStep(afterSave('changed'), { type: 'read-answered', state: loaded('"e9"') });
+    expect(leaveGuarded(lost)).toBe(true);
+    let dismissed = lost;
+    for (const notice of lost.lost) {
+      dismissed = pageStep(dismissed, { type: 'dismissed', key: notice.key });
+    }
+    expect(dismissed.lost).toEqual([]);
+    expect(leaveGuarded(dismissed)).toBe(false);
+  });
+});
+
+describe('G-1 the frame: the notices stand above the body, whatever the body is', () => {
+  test('a read with no entry and an item in the list: the item, then the empty state', async () => {
+    await i18n.changeLanguage('en');
+    // The review's fifth finding: the last entry removed elsewhere, the save refused.
+    const page = pageStep(afterSave('changed'), { type: 'read-answered', state: emptyRead() });
+    expect(page.draft?.base.entries).toEqual([]);
+    const html = renderBody(page);
+    expect(html).toContain('Not saved: type these edits again');
     expect(html).toContain('Gemini · gemini-1');
-    expect(html).toContain('not saved, changed elsewhere');
-    expect(html).toContain('gemini-2.5-pro');
-    expect(html).toContain('g-pro');
     expect(html).toContain('g-pro-2');
-    expect(html).toContain('second');
+    expect(html).toContain('Codex logins');
+    expect(html).toContain('No API key or login yet');
+    expect(html.indexOf('g-pro-2')).toBeLessThan(html.indexOf('No API key or login yet'));
+  });
+
+  test('a read with no entry and a path it cannot read: the path, then the empty state', async () => {
+    await i18n.changeLanguage('en');
+    const state: AliasState = {
+      ...readAliasState({ 'config-version': 8, 'api-keys': { claude: ['junk-group'] } }, []),
+      etag: '"e3"',
+    };
+    expect(state.entries).toEqual([]);
+    expect(state.unread.length).toBeGreaterThan(0);
+    const html = renderBody(pageWith(state));
+    expect(html).toContain(state.unread[0]);
+    expect(html).toContain('left in it untouched');
+    expect(html).toContain('No API key or login this page can read');
+    expect(html.indexOf(state.unread[0])).toBeLessThan(html.indexOf('this page can read'));
+  });
+
+  test('a load error and an item: both, the item first', async () => {
+    await i18n.changeLanguage('en');
+    let page = pageStep(afterSave('error', 'Network Error'), { type: 'read-started' });
+    page = pageStep(page, { type: 'read-failed', message: 'Network Error 2' });
+    expect(page.draft).toBeNull();
+    const html = renderBody(page);
+    expect(html).toContain('g-pro-2');
+    expect(html).toContain('Could not read the configuration');
+    expect(html).toContain('Network Error 2');
+    expect(html.indexOf('g-pro-2')).toBeLessThan(html.indexOf('Could not read the configuration'));
+  });
+
+  test('while reading: the item, and the skeleton', async () => {
+    await i18n.changeLanguage('en');
+    const html = renderBody(pageStep(afterSave('changed'), { type: 'read-started' }));
+    expect(html).toContain('g-pro-2');
+    expect(html).toContain('aria-busy="true"');
+    expect(html.indexOf('g-pro-2')).toBeLessThan(html.indexOf('aria-busy="true"'));
+  });
+
+  test('with a board: the item above it', async () => {
+    await i18n.changeLanguage('en');
+    const page = pageStep(afterSave('changed'), { type: 'read-answered', state: loaded('"e9"') });
+    const html = renderBody(page);
+    expect(html.indexOf('g-pro-2')).toBeGreaterThan(-1);
+    expect(html.indexOf('g-pro-2')).toBeLessThan(html.indexOf('<fieldset'));
+  });
+});
+
+describe('G-2 not editable', () => {
+  test('while a read is pending: the fieldset is disabled, no save bar, and typing changes nothing', async () => {
+    await i18n.changeLanguage('en');
+    const typed = pageStep(pageWith(loaded()), {
+      type: 'alias-typed',
+      rowId: 'gemini/0/0#0',
+      text: 'mine',
+    });
+    expect(canEdit(typed)).toBe(true);
+    expect(saveBarShown(typed)).toBe(true);
+    expect(renderBody(typed)).not.toMatch(/<fieldset[^>]*disabled/);
+    // The reload's confirmation was accepted: the read starts, the draft is still on screen.
+    const reading = pageStep(typed, { type: 'read-started' });
+    expect(canEdit(reading)).toBe(false);
+    expect(saveBarShown(reading)).toBe(false);
+    const html = renderBody(reading);
+    expect(html).toMatch(/<fieldset[^>]*disabled=""/);
+    expect(html).toContain('Reading the configuration');
+    for (const event of [
+      { type: 'alias-typed', rowId: 'gemini/0/0#0', text: 'later' },
+      { type: 'row-removed', rowId: 'gemini/0/0#0' },
+      { type: 'edited', change: (d: AliasDraft) => changeRow(d, 'gemini/0/0#0', { alias: 'z' }) },
+      { type: 'entry-undone', entryId: 'gemini/0/0' },
+      { type: 'discarded' },
+      { type: 'save-started' },
+    ] as const) {
+      expect(pageStep(reading, event)).toBe(reading);
+    }
+  });
+
+  test('a read without a tag: the line that the page cannot save, and nothing editable', async () => {
+    await i18n.changeLanguage('en');
+    const page = pageWith(loaded(null));
+    expect(canEdit(page)).toBe(false);
+    const html = renderBody(page);
+    expect(html).toContain('This page cannot save');
+    expect(html).toMatch(/<fieldset[^>]*disabled=""/);
+    expect(pageStep(page, { type: 'alias-typed', rowId: 'gemini/0/0#0', text: 'x' })).toBe(page);
+    expect(saveBarShown(page)).toBe(false);
+    expect(renderBody(pageWith(loaded()))).not.toContain('This page cannot save');
+  });
+
+  test('while a save runs: nothing editable; the bar stays only to say so', () => {
+    const typed = pageStep(pageWith(loaded()), {
+      type: 'alias-typed',
+      rowId: 'gemini/0/0#0',
+      text: 'mine',
+    });
+    const saving = pageStep(typed, { type: 'save-started' });
+    expect(canEdit(saving)).toBe(false);
+    expect(renderBody(saving)).toMatch(/<fieldset[^>]*disabled=""/);
+    expect(pageStep(saving, { type: 'alias-typed', rowId: 'gemini/0/0#0', text: 'x' })).toBe(
+      saving
+    );
+    expect(saveBarShown(saving)).toBe(true);
+  });
+});
+
+describe('G-3 the reasons: one per save', () => {
+  const lostHtml = (page: PageState) =>
+    renderToStaticMarkup(
+      createElement(
+        MemoryRouter,
+        null,
+        createElement(LostEdits, { notices: page.lost, onDismiss: noop })
+      )
+    );
+  const UNKNOWN =
+    'yaml: unmarshal errors:\n  line 54: field x-unknown not found in type config.ClaudeModel';
+
+  test('refused: the proxy’s message, then to correct the named field first', async () => {
+    await i18n.changeLanguage('en');
+    const html = lostHtml(afterSave('refused', UNKNOWN));
+    expect(html).toContain('The proxy refused the configuration');
+    expect(html).toContain('field x-unknown not found in type config.ClaudeModel');
+    expect(html).toContain('correct that field in the configuration first');
+    expect(html).toContain('the proxy refuses every save');
+    expect(html).toContain('href="/config"');
+    // One reason for the save, though two entries are listed.
+    expect(count(html, 'The proxy refused the configuration')).toBe(1);
+    expect(count(html, 'Dismiss</span>')).toBe(2);
+  });
+
+  test('error: the message, and that the last write may have landed', async () => {
+    await i18n.changeLanguage('en');
+    const html = lostHtml(afterSave('error', 'Request failed with status code 503'));
+    expect(html).toContain('Request failed with status code 503');
+    expect(html).toContain('last write may have landed');
+    expect(html).toContain('check each edit against what the page now shows');
+  });
+
+  test('changed and no-tag: their lines', async () => {
+    await i18n.changeLanguage('en');
+    expect(lostHtml(afterSave('changed'))).toContain('The file was changed elsewhere');
+    expect(lostHtml(afterSave('no-tag', 'x'))).toContain('carried no version (ETag)');
+  });
+
+  test('two saves: two cards, each with its own reason', async () => {
+    await i18n.changeLanguage('en');
+    const first = pageStep(afterSave('changed'), { type: 'read-answered', state: loaded('"e9"') });
+    const second = afterSave('refused', UNKNOWN, first);
+    expect(new Set(second.lost.map((notice) => notice.save)).size).toBe(2);
+    const html = lostHtml(second);
+    expect(count(html, 'Not saved: type these edits again')).toBe(2);
+    expect(count(html, 'The file was changed elsewhere')).toBe(1);
+    expect(count(html, 'The proxy refused the configuration')).toBe(1);
+    expect(html.indexOf('changed elsewhere')).toBeLessThan(html.indexOf('The proxy refused'));
+  });
+
+  test('each edit in words to type again: model, alias before and after, options', async () => {
+    await i18n.changeLanguage('en');
+    let page = pageWith(loaded());
+    page = pageStep(page, { type: 'alias-typed', rowId: 'gemini/0/0#0', text: 'g-pro-2' });
+    page = pageStep(page, {
+      type: 'edited',
+      change: (d) => addKeyAlias(d, 'gemini/0/0', 'gemini-2.5-pro', 'second'),
+    });
+    page = pageStep(page, { type: 'save-started' });
+    page = pageStep(page, {
+      type: 'save-answered',
+      outcome: {
+        confirmed: [],
+        unconfirmed: ['gemini/0/0'],
+        failure: { reason: 'changed', message: '' },
+      },
+    });
+    expect(page.lost[0].edits).toEqual(editsOf(addKeyAliasDraft(), 'gemini/0/0'));
+    const html = lostHtml(page);
+    for (const text of ['Gemini · gemini-1', 'gemini-2.5-pro', 'g-pro', 'g-pro-2', 'second']) {
+      expect(html).toContain(text);
+    }
     expect(html).toContain('>changed<');
     expect(html).toContain('>added<');
-    expect(html).toContain('Dismiss');
   });
+});
 
-  test('a removed login row is listed as removed, with its alias', async () => {
+/** The draft `G-3 each edit` builds, through the draft functions alone. */
+function addKeyAliasDraft(): AliasDraft {
+  const draft = changeRow(startDraft(loaded()), 'gemini/0/0#0', { alias: 'g-pro-2' });
+  return addKeyAlias(draft, 'gemini/0/0', 'gemini-2.5-pro', 'second');
+}
+
+describe('G-4 the remove control', () => {
+  test('after typing then removing a model’s only row, no text is kept and the box shows the draft, empty', async () => {
     await i18n.changeLanguage('en');
-    const state = loaded();
-    const row = state.rows.find((r) => r.entryId === 'login/codex')!;
-    const draft = removeRow(startDraft(state), row.id);
-    const html = renderToStaticMarkup(
-      createElement(LostEdits, {
-        notices: [
-          {
-            key: 1,
-            entry: state.entries.find((e) => e.id === 'login/codex')!,
-            edits: [{ kind: 'removed', before: row, after: null }],
-          },
-        ],
-        onDismiss: noop,
-      })
-    );
-    expect(draft.rows.some((r) => r.id === row.id)).toBe(false);
-    expect(html).toContain('>removed<');
-    expect(html).toContain(row.alias!);
+    // The alias box of the row, wherever React puts its `value` among the attributes.
+    const box = (html: string) =>
+      html
+        .match(/<input[^>]*aria-label="Alias for gemini-2\.5-pro[^>]*>/)?.[0]
+        .match(/ value="([^"]*)"/)?.[1];
+    let page = pageWith(loaded());
+    expect(box(renderBody(page))).toBe('g-pro');
+    page = pageStep(page, {
+      type: 'alias-typed',
+      rowId: 'gemini/0/0#0',
+      text: 'typed-then-removed',
+    });
+    expect(page.texts['gemini/0/0#0']).toBe('typed-then-removed');
+    expect(box(renderBody(page))).toBe('typed-then-removed');
+    page = pageStep(page, { type: 'row-removed', rowId: 'gemini/0/0#0' });
+    expect('gemini/0/0#0' in page.texts).toBe(false);
+    // The model's only row stays, with no alias (3.2): the box shows that.
+    expect(page.draft!.rows.find((row) => row.id === 'gemini/0/0#0')?.alias).toBeNull();
+    expect(box(renderBody(page))).toBe('');
   });
 });
 
@@ -396,11 +646,12 @@ describe('what the page cannot read', () => {
   test('one line names the parts and says they stay in the file', async () => {
     await i18n.changeLanguage('en');
     const state = unreadable();
-    const html = render(startDraft(state));
+    // The line is the frame's (3.6), above the board.
+    const html = renderBody(pageWith(state));
     expect(html).toContain('cannot be read here and are left in it untouched');
     expect(html).toContain(state.unread[0]);
     expect(html).toContain(`${state.unread.length - 3} more`);
-    expect(render(startDraft({ ...loaded(), unread: [] }))).not.toContain('left in it untouched');
+    expect(renderBody(pageWith({ ...loaded(), unread: [] }))).not.toContain('left in it untouched');
   });
 
   test('a key whose model list is unreadable says so, not "no model list"', async () => {

@@ -1,10 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
-import { EmptyState } from '@/components/ui/EmptyState';
 import { IconRefreshCw } from '@/components/ui/icons';
-import { Skeleton } from '@/components/ui/Skeleton';
 import { FloatingSaveBar } from '@/features/config/components/FloatingSaveBar';
 import { useHeaderRefresh } from '@/hooks/useHeaderRefresh';
 import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
@@ -12,43 +10,36 @@ import { apiClient } from '@/services/api/client';
 import { authFilesApi } from '@/services/api/authFiles';
 import { useAuthStore, useConfigStore, useNotificationStore } from '@/stores';
 import { getErrorMessage } from '@/utils/helpers';
-import {
-  addKeyAlias,
-  addLoginAlias,
-  changeRow,
-  discard,
-  discardEntry,
-  draftEntries,
-  editsOf,
-  removeRow,
-  rowIssues,
-  startDraft,
-} from './draft';
+import { addKeyAlias, addLoginAlias, changeRow, draftEntries, rowIssues } from './draft';
 import { draftClientNames } from './collisions';
 import { blockedEntries, planCommit } from './plan';
 import { aliasesApi, createServedNamesSource, loadServedNames } from './aliasesApi';
-import { blockingCount, changeCount, initialFilter, type AliasFilter } from './pageLogic';
-import { AliasesBoard, type BoardActions, type Failure } from './AliasesBoard';
-import { LostEdits, type LostNotice } from './LostEdits';
-import type { AliasDraft, AliasState, ServedNames } from './types';
+import {
+  INITIAL_PAGE,
+  blockingCount,
+  canEdit,
+  changeCount,
+  initialFilter,
+  isDirty,
+  leaveGuarded,
+  pageStep,
+  saveBarShown,
+  type AliasFilter,
+  type PageEvent,
+  type PageState,
+} from './pageLogic';
+import { AliasesBody } from './AliasesBody';
+import type { BoardActions } from './AliasesBoard';
+import type { AliasDraft, CommitOutcome, ServedNames } from './types';
 import shared from '../shared/Shared.module.scss';
 import styles from './AliasesPage.module.scss';
 
-type Phase = 'loading' | 'ready' | 'error';
-
-const isAbort = (error: unknown) => error instanceof DOMException && error.name === 'AbortError';
-
-/** A save whose fresh read has not landed yet (W7: its unconfirmed edits are already listed). */
-interface PendingSave {
-  draft: AliasDraft;
-}
-
 /**
- * Aliases (design aliases-page.md, step U1): every alias of every API-key provider and login type, edited
- * as one draft and saved with one action. A save writes only what changed, each request guarded by the
- * configuration's ETag. After it the draft is carried onto a fresh read (3.6): an entry whose save failed
- * keeps its edits and says why; an entry changed elsewhere shows the current rows, and the edits that were
- * not saved are listed until dismissed. Until that read lands, nothing can be edited.
+ * Aliases (design aliases-page.md): every alias of every API-key provider and login type, edited as one
+ * draft over one read and saved with one action (3.4). The page's state is one `PageState`, changed only
+ * by `pageStep` (3.6): nothing is editable while a read or a save is pending, or on a read without a tag.
+ * After any save the draft is dropped, the edits the save did not confirm are listed with its reason, to
+ * be typed again, and the file is read and shown as it is. Nothing is carried onto that read.
  */
 export function AliasesPage() {
   const { t } = useTranslation();
@@ -57,45 +48,29 @@ export function AliasesPage() {
   const showNotification = useNotificationStore((state) => state.showNotification);
   const showConfirmation = useNotificationStore((state) => state.showConfirmation);
 
-  const [phase, setPhase] = useState<Phase>('loading');
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [reloading, setReloading] = useState(false);
-  const [draft, setDraftState] = useState<AliasDraft | null>(null);
-  const draftRef = useRef<AliasDraft | null>(null);
-  const [texts, setTexts] = useState<Record<string, string>>({});
-  const [failures, setFailures] = useState<Record<string, Failure>>({});
+  const [page, setPage] = useState<PageState>(INITIAL_PAGE);
+  /** The state handlers act on: every event goes through `send`, so one tick's events compose. */
+  const pageRef = useRef<PageState>(INITIAL_PAGE);
+  const send = useCallback((event: PageEvent): PageState => {
+    const next = pageStep(pageRef.current, event);
+    if (next !== pageRef.current) {
+      pageRef.current = next;
+      setPage(next);
+    }
+    return next;
+  }, []);
+
   const [served, setServed] = useState<ServedNames | undefined>(undefined);
-  const [saving, setSaving] = useState(false);
   const [filter, setFilter] = useState<AliasFilter>(() => initialFilter(searchParams));
   const [focusRowId, setFocusRowId] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<Record<string, string[]>>({});
-  const [lost, setLost] = useState<LostNotice[]>([]);
-  /** The message of a failed read after a save: editing waits until a read succeeds. */
-  const [stale, setStale] = useState<string | null>(null);
-  const pendingRef = useRef<PendingSave | null>(null);
-  const noticeKey = useRef(0);
   const asked = useRef<Set<string>>(new Set());
   const requestRef = useRef(0);
   const askedNamesRef = useRef<string | null>(null);
   const sourceRef = useRef(createServedNamesSource((names) => loadServedNames(names)));
 
-  /** Every draft change goes through here, so handlers in one tick see each other's result. */
-  const setDraft = useCallback((next: AliasDraft | null) => {
-    draftRef.current = next;
-    setDraftState(next);
-  }, []);
-  const update = useCallback(
-    (change: (current: AliasDraft) => AliasDraft) => {
-      const current = draftRef.current;
-      if (!current) return;
-      const next = change(current);
-      if (next !== current) setDraft(next);
-    },
-    [setDraft]
-  );
-
-  // Names served natively (design 4.4): asked at load and after a commit (forced), and, debounced, when
-  // the draft's set of client names changes. An answer for an older ask comes back null and is dropped.
+  // Names served natively (design 4.4): asked at each read (forced), and, debounced, when the draft's
+  // set of client names changes. An answer for an older ask comes back null and is dropped.
   const askServed = useCallback((current: AliasDraft, force: boolean) => {
     const names = draftClientNames(current);
     askedNamesRef.current = [...names].sort().join('\n');
@@ -105,6 +80,7 @@ export function AliasesPage() {
     });
   }, []);
 
+  const { draft } = page;
   const namesKey = useMemo(
     () => (draft ? [...draftClientNames(draft)].sort().join('\n') : null),
     [draft]
@@ -112,148 +88,108 @@ export function AliasesPage() {
   useEffect(() => {
     if (namesKey === null || namesKey === askedNamesRef.current) return;
     const timer = window.setTimeout(() => {
-      if (draftRef.current) askServed(draftRef.current, false);
+      if (pageRef.current.draft) askServed(pageRef.current.draft, false);
     }, 450);
     return () => window.clearTimeout(timer);
   }, [namesKey, askServed]);
 
-  /**
-   * A fresh state on screen; it replaces the draft. Nothing is carried onto it (3.6): after a save, the
-   * edits it did not confirm were listed when it answered.
-   */
-  const applyState = useCallback(
-    (state: AliasState) => {
-      pendingRef.current = null;
-      const next = startDraft(state);
-      setDraft(next);
-      setTexts({});
-      setFailures({});
-      return next;
-    },
-    [setDraft]
-  );
-
-  const load = useCallback(async () => {
+  /** The page's one read (3.4). Nothing can be edited from its start to its answer. */
+  const read = useCallback(async () => {
     const id = ++requestRef.current;
     const revision = apiClient.getConnectionRevision();
     const isCurrent = () =>
       id === requestRef.current && revision === apiClient.getConnectionRevision();
-    setReloading(true);
+    send({ type: 'read-started' });
     try {
       const state = await aliasesApi.load(apiClient.captureConnection(isCurrent));
       if (!isCurrent()) return;
-      const next = applyState(state);
-      setStale(null);
-      setLoadError(null);
-      setPhase('ready');
-      askServed(next, true);
+      const next = send({ type: 'read-answered', state });
+      if (next.draft?.base === state) {
+        setFocusRowId(null);
+        askServed(next.draft, true);
+      }
     } catch (error) {
       if (!isCurrent()) return;
-      // After a save, the draft no longer matches the file: editing waits for a read that succeeds.
-      if (pendingRef.current) setStale(getErrorMessage(error));
-      else setLoadError(getErrorMessage(error));
-      setPhase((prev) => (prev === 'ready' ? 'ready' : 'error'));
-    } finally {
-      if (isCurrent()) setReloading(false);
+      send({ type: 'read-failed', message: getErrorMessage(error) });
     }
-  }, [applyState, askServed]);
+  }, [askServed, send]);
 
   useEffect(() => {
     if (connectionStatus !== 'connected') return;
-    void load();
+    void read();
     return () => {
       requestRef.current += 1;
     };
-  }, [connectionStatus, load]);
+  }, [connectionStatus, read]);
 
-  const dirty = useMemo(() => (draft ? planCommit(draft).length > 0 : false), [draft]);
+  const dirty = isDirty(page);
+  const editable = canEdit(page);
   const changes = useMemo(() => (draft ? changeCount(draft) : 0), [draft]);
   const blocked = useMemo(() => (draft ? blockedEntries(draft).length > 0 : false), [draft]);
   const toFix = useMemo(() => (draft ? blockingCount(rowIssues(draft)) : 0), [draft]);
 
   const refresh = useCallback(() => {
-    // After a save whose read failed, reading again finishes that save: nothing is dropped.
-    if (!dirty || pendingRef.current) return load();
+    const current = pageRef.current;
+    if (current.saving || current.reading) return;
+    if (!isDirty(current)) return read();
     showConfirmation({
       title: t('provimux.aliases.reload_title'),
       message: t('provimux.aliases.reload_message'),
       confirmText: t('provimux.aliases.reload_confirm'),
       cancelText: t('provimux.aliases.unsaved_cancel'),
       variant: 'danger',
-      onConfirm: () => load(),
+      onConfirm: () => {
+        void read();
+      },
     });
-  }, [dirty, load, showConfirmation, t]);
+  }, [read, showConfirmation, t]);
   useHeaderRefresh(refresh);
 
+  // The list of edits not saved is the only copy of what was typed: leaving asks first, as with edits.
   useUnsavedChangesGuard({
-    shouldBlock: dirty,
-    dialog: {
-      title: t('provimux.aliases.unsaved_title'),
-      message: t('provimux.aliases.unsaved_message'),
-      confirmText: t('provimux.aliases.unsaved_confirm'),
-      cancelText: t('provimux.aliases.unsaved_cancel'),
-      variant: 'danger',
-    },
+    shouldBlock: leaveGuarded(page),
+    dialog: dirty
+      ? {
+          title: t('provimux.aliases.unsaved_title'),
+          message: t('provimux.aliases.unsaved_message'),
+          confirmText: t('provimux.aliases.unsaved_confirm'),
+          cancelText: t('provimux.aliases.unsaved_cancel'),
+          variant: 'danger',
+        }
+      : {
+          title: t('provimux.aliases.leave_lost_title'),
+          message: t('provimux.aliases.leave_lost_message'),
+          confirmText: t('provimux.aliases.unsaved_confirm'),
+          cancelText: t('provimux.aliases.unsaved_cancel'),
+          variant: 'danger',
+        },
   });
 
   const save = useCallback(async () => {
-    const current = draftRef.current;
-    if (!current || saving || pendingRef.current) return;
-    setSaving(true);
-    const revision = apiClient.getConnectionRevision();
+    const before = pageRef.current;
+    if (!before.draft || !isDirty(before) || blockedEntries(before.draft).length) return;
+    const started = send({ type: 'save-started' });
+    if (started === before || !started.draft) return;
+    const sent = started.draft;
+    let outcome: CommitOutcome;
     try {
-      const outcome = await aliasesApi.commit(current);
-      if (revision !== apiClient.getConnectionRevision()) return;
-      // Other pages must not show the configuration as it was (design 3.4).
-      useConfigStore.getState().clearCache();
-      pendingRef.current = { draft: current };
-      // 3.6: every edit of an entry not confirmed is listed, to be typed again; none is carried.
-      const entries = draftEntries(current);
-      const gone = outcome.unconfirmed.flatMap((entryId) => {
-        const entry = entries.find((e) => e.id === entryId);
-        const edits = editsOf(current, entryId);
-        return entry && edits.length ? [{ entry, edits }] : [];
-      });
-      if (gone.length) {
-        setLost((prev) => [
-          ...prev,
-          ...gone.map((item) => ({ key: ++noticeKey.current, ...item })),
-        ]);
-      }
-      const failed = outcome.unconfirmed.length;
-      if (outcome.failure === null) {
-        showNotification(t('provimux.aliases.saved'), 'success');
-      } else if (outcome.confirmed.length === 0) {
-        showNotification(t('provimux.aliases.saved_none'), 'warning');
-      } else {
-        showNotification(
-          t('provimux.aliases.saved_partly', { done: outcome.confirmed.length, failed }),
-          'warning'
-        );
-      }
-      await load();
+      outcome = await aliasesApi.commit(sent);
     } catch (error) {
-      if (isAbort(error) || revision !== apiClient.getConnectionRevision()) return;
-      showNotification(
-        t('provimux.aliases.failed_error', { message: getErrorMessage(error) }),
-        'error'
-      );
-    } finally {
-      setSaving(false);
+      // A change of the management connection aborts the save before a write (3.4). Which writes
+      // landed before it is not known here: every entry is listed, as after an answer that never came.
+      outcome = {
+        confirmed: [],
+        unconfirmed: planCommit(sent).flatMap((unit) => unit.entryIds),
+        failure: { reason: 'error', message: getErrorMessage(error) },
+      };
     }
-  }, [load, saving, showNotification, t]);
-
-  const discardAll = useCallback(() => {
-    update((current) => discard(current));
-    setTexts({});
-    setFailures({});
-  }, [update]);
-
-  // Handlers read the latest alias texts through a ref, so `actions` stays one object.
-  const textsRef = useRef(texts);
-  useEffect(() => {
-    textsRef.current = texts;
-  }, [texts]);
+    send({ type: 'save-answered', outcome });
+    // Other pages must not show the configuration as it was (3.4).
+    useConfigStore.getState().clearCache();
+    if (outcome.failure === null) showNotification(t('provimux.aliases.saved'), 'success');
+    else showNotification(t('provimux.aliases.save_not_whole'), 'warning');
+    await read();
+  }, [read, send, showNotification, t]);
 
   /** A login type's built-in model names, offered when a model is typed; asked once per type. */
   const wantSuggestions = useCallback((channel: string) => {
@@ -272,77 +208,50 @@ export function AliasesPage() {
       });
   }, []);
 
-  const actions: BoardActions = useMemo(
-    () => ({
-      setAlias: (rowId, text) => {
-        setTexts((prev) => ({ ...prev, [rowId]: text }));
-        update((current) => changeRow(current, rowId, { alias: text }));
-      },
+  const actions: BoardActions = useMemo(() => {
+    const edit = (change: (current: AliasDraft) => AliasDraft) => send({ type: 'edited', change });
+    return {
+      setAlias: (rowId, text) => send({ type: 'alias-typed', rowId, text }),
       setUpstream: (rowId, text) => {
-        update((current) => {
-          const row = current.rows.find((r) => r.id === rowId);
-          // The alias is set again from its own text: a name equal to the old model was dropped.
-          const alias = textsRef.current[rowId] ?? row?.alias ?? '';
-          return changeRow(current, rowId, { upstream: text, alias });
-        });
+        const current = pageRef.current;
+        // The alias is set again from its own text: a name equal to the old model was dropped.
+        const alias =
+          current.texts[rowId] ?? current.draft?.rows.find((r) => r.id === rowId)?.alias ?? '';
+        edit((d) => changeRow(d, rowId, { upstream: text, alias }));
       },
-      setDisplayName: (rowId, text) =>
-        update((current) => changeRow(current, rowId, { displayName: text })),
-      setFork: (rowId, value) => update((current) => changeRow(current, rowId, { fork: value })),
-      setForceMapping: (rowId, value) =>
-        update((current) => changeRow(current, rowId, { forceMapping: value })),
+      setDisplayName: (rowId, text) => edit((d) => changeRow(d, rowId, { displayName: text })),
+      setFork: (rowId, value) => edit((d) => changeRow(d, rowId, { fork: value })),
+      setForceMapping: (rowId, value) => edit((d) => changeRow(d, rowId, { forceMapping: value })),
       addKeyAlias: (entryId, upstream) => {
-        const current = draftRef.current;
-        if (!current) return;
-        const next = addKeyAlias(current, entryId, upstream, '');
-        if (next === current) return;
-        setDraft(next);
-        setFocusRowId(`${entryId}#new-${current.nextNew}`);
-      },
-      addLoginAlias: (channel) => {
-        const current = draftRef.current;
-        if (!current) return;
-        const next = addLoginAlias(current, channel, { upstream: '', alias: '' });
-        if (next === current) return;
-        const added = next.rows.find((row) => row.id.endsWith(`#new-${current.nextNew}`));
-        setDraft(next);
-        if (added) {
-          setFocusRowId(added.id);
-          const entry = draftEntries(next).find((e) => e.id === added.entryId);
-          if (entry?.store === 'login') wantSuggestions(entry.channel);
+        const before = pageRef.current;
+        const next = edit((d) => addKeyAlias(d, entryId, upstream, ''));
+        if (next !== before && before.draft) {
+          setFocusRowId(`${entryId}#new-${before.draft.nextNew}`);
         }
       },
-      removeRow: (rowId) => update((current) => removeRow(current, rowId)),
-      undoEntry: (entryId) => {
-        update((current) => discardEntry(current, entryId));
-        setTexts((prev) =>
-          Object.fromEntries(Object.entries(prev).filter(([id]) => !id.startsWith(`${entryId}#`)))
+      addLoginAlias: (channel) => {
+        const before = pageRef.current;
+        const next = edit((d) => addLoginAlias(d, channel, { upstream: '', alias: '' }));
+        if (next === before || !before.draft || !next.draft) return;
+        const added = next.draft.rows.find((row) =>
+          row.id.endsWith(`#new-${before.draft!.nextNew}`)
         );
-        setFailures((prev) => {
-          const next = { ...prev };
-          delete next[entryId];
-          return next;
-        });
+        if (!added) return;
+        setFocusRowId(added.id);
+        const entry = draftEntries(next.draft).find((e) => e.id === added.entryId);
+        if (entry?.store === 'login') wantSuggestions(entry.channel);
       },
+      removeRow: (rowId) => send({ type: 'row-removed', rowId }),
+      undoEntry: (entryId) => send({ type: 'entry-undone', entryId }),
       wantSuggestions,
-    }),
-    [setDraft, update, wantSuggestions]
-  );
+    };
+  }, [send, wantSuggestions]);
 
-  const failedCount = Object.keys(failures).length;
-  const statusText = saving
+  const statusText = page.saving
     ? t('provimux.aliases.saving')
     : blocked
       ? t('provimux.aliases.blocked', { count: toFix })
-      : failedCount
-        ? `${t('provimux.aliases.unsaved', { count: Math.max(changes, 1) })} · ${t(
-            'provimux.aliases.not_saved',
-            { count: failedCount }
-          )}`
-        : t('provimux.aliases.unsaved', { count: Math.max(changes, 1) });
-
-  const firstLoad = phase === 'loading';
-  const empty = draft !== null && draft.base.entries.length === 0 && draft.rows.length === 0;
+      : t('provimux.aliases.unsaved', { count: Math.max(changes, 1) });
 
   return (
     <div className={`${shared.page} ${styles.page}`}>
@@ -356,8 +265,8 @@ export function AliasesPage() {
             variant="secondary"
             size="sm"
             onClick={() => void refresh()}
-            loading={reloading && draft !== null}
-            disabled={saving}
+            loading={page.reading && draft !== null}
+            disabled={page.saving || page.reading}
           >
             <IconRefreshCw size={14} />
             {t('provimux.common.reload')}
@@ -365,84 +274,28 @@ export function AliasesPage() {
         </div>
       </header>
 
-      {firstLoad ? (
-        <div
-          className={shared.skeletons}
-          aria-busy="true"
-          aria-label={t('provimux.common.loading')}
-        >
-          <Skeleton height={44} />
-          <Skeleton height={120} />
-          <Skeleton height={260} />
-        </div>
-      ) : phase === 'error' || draft === null ? (
-        <EmptyState
-          title={t('provimux.aliases.load_failed')}
-          description={loadError ?? undefined}
-          action={
-            <Button variant="secondary" onClick={() => void load()}>
-              {t('provimux.common.retry')}
-            </Button>
-          }
-        />
-      ) : empty ? (
-        <EmptyState
-          title={t('provimux.aliases.empty_title')}
-          description={t('provimux.aliases.empty_text')}
-          action={
-            <div className={styles.emptyLinks}>
-              <Link to="/ai-providers" className={styles.link}>
-                {t('provimux.aliases.empty_link_providers')}
-              </Link>
-              <Link to="/oauth" className={styles.link}>
-                {t('provimux.aliases.empty_link_logins')}
-              </Link>
-            </div>
-          }
-        />
-      ) : (
-        <>
-          {stale !== null ? (
-            <div className={styles.stale} role="alert">
-              <p>{t('provimux.aliases.stale', { message: stale })}</p>
-              <Button variant="secondary" size="sm" onClick={() => void load()} loading={reloading}>
-                {t('provimux.aliases.stale_retry')}
-              </Button>
-            </div>
-          ) : loadError ? (
-            <p className={shared.inlineError} role="alert">
-              {t('provimux.aliases.reload_failed', { message: loadError })}
-            </p>
-          ) : null}
-          <LostEdits
-            notices={lost}
-            onDismiss={(key) => setLost((prev) => prev.filter((notice) => notice.key !== key))}
-          />
-          <fieldset className={styles.board} disabled={saving || stale !== null}>
-            <AliasesBoard
-              draft={draft}
-              served={served}
-              filter={filter}
-              onFilter={setFilter}
-              texts={texts}
-              failures={failures}
-              suggestions={suggestions}
-              focusRowId={focusRowId}
-              actions={actions}
-            />
-          </fieldset>
-          <FloatingSaveBar
-            visible={dirty && stale === null}
-            statusText={statusText}
-            statusTone={saving ? 'busy' : blocked ? 'error' : 'warning'}
-            saving={saving}
-            saveDisabled={!dirty || blocked || saving}
-            discardDisabled={saving}
-            onSave={() => void save()}
-            onDiscard={discardAll}
-          />
-        </>
-      )}
+      <AliasesBody
+        page={page}
+        served={served}
+        filter={filter}
+        onFilter={setFilter}
+        suggestions={suggestions}
+        focusRowId={focusRowId}
+        actions={actions}
+        onRetry={() => void read()}
+        onDismiss={(key) => send({ type: 'dismissed', key })}
+      />
+
+      <FloatingSaveBar
+        visible={saveBarShown(page)}
+        statusText={statusText}
+        statusTone={page.saving ? 'busy' : blocked ? 'error' : 'warning'}
+        saving={page.saving}
+        saveDisabled={!editable || !dirty || blocked}
+        discardDisabled={!editable}
+        onSave={() => void save()}
+        onDiscard={() => send({ type: 'discarded' })}
+      />
     </div>
   );
 }

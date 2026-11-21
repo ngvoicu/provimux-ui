@@ -38,13 +38,6 @@ import type {
 import shared from '../shared/Shared.module.scss';
 import styles from './AliasesPage.module.scss';
 
-/** An entry's failure mark. W7: no longer produced by the save (the page passes none); U4 removes it. */
-export interface Failure {
-  entryId: string;
-  reason: 'conflict' | 'invalid' | 'error';
-  message: string;
-}
-
 export interface BoardActions extends RowActions {
   addLoginAlias: (channel: string) => void;
   undoEntry: (entryId: string) => void;
@@ -57,17 +50,19 @@ export interface AliasesBoardProps {
   filter: AliasFilter;
   onFilter: (next: AliasFilter) => void;
   texts: Record<string, string>;
-  failures: Record<string, Failure>;
   suggestions: Record<string, string[]>;
   focusRowId: string | null;
+  /** Nothing can be edited (3.6: `!canEdit`): the entries' fieldset is disabled; filters still work. */
+  locked: boolean;
   actions: BoardActions;
 }
 
 const suggestionsIdOf = (channel: string) => `pmx-alias-models-${channel}`;
 
 /**
- * The page's body for one draft: summary, name check, notes, filters and the entries with their rows.
- * Exported for static rendering in tests; the page (AliasesPage) owns the state and the requests.
+ * The board for one draft: summary, name check, filters, and the entries with their rows inside one
+ * fieldset, disabled while `locked`. The notes about the read (no tag, unread parts) are the frame's
+ * (AliasesBody). Exported for static rendering in tests; the page (AliasesPage) owns the state.
  */
 export function AliasesBoard({
   draft,
@@ -75,9 +70,9 @@ export function AliasesBoard({
   filter,
   onFilter,
   texts,
-  failures,
   suggestions,
   focusRowId,
+  locked,
   actions,
 }: AliasesBoardProps) {
   const { t } = useTranslation();
@@ -97,7 +92,6 @@ export function AliasesBoard({
     () => Object.fromEntries(entries.map((e) => [e.id, entryHaystack(e, providerLabelOf(t, e))])),
     [entries, t]
   );
-  const failedEntries = useMemo(() => new Set(Object.keys(failures)), [failures]);
   const visible = useMemo(
     () =>
       visibleRows({
@@ -107,11 +101,10 @@ export function AliasesBoard({
         groups,
         groupOfRow: groupOf,
         marks,
-        failedEntries,
         haystacks,
         texts,
       }),
-    [draft, filter, issues, groups, groupOf, marks, failedEntries, haystacks, texts]
+    [draft, filter, issues, groups, groupOf, marks, haystacks, texts]
   );
 
   // Per name, the services only the proxy reports: no row of the name is in them.
@@ -217,27 +210,10 @@ export function AliasesBoard({
   );
 
   const entryNotes = (entry: AliasEntry) => {
-    const failure = failures[entry.id];
     const gone = removed[entry.id] ?? 0;
-    return (
-      <>
-        {failure ? (
-          <p className={styles.entryFailure} role="alert">
-            <IconAlertTriangle size={14} />
-            <span>
-              {failure.reason === 'conflict'
-                ? t('provimux.aliases.failed_conflict')
-                : failure.reason === 'invalid'
-                  ? t('provimux.aliases.failed_invalid', { message: failure.message })
-                  : t('provimux.aliases.failed_error', { message: failure.message })}
-            </span>
-          </p>
-        ) : null}
-        {gone ? (
-          <p className={styles.entryNote}>{t('provimux.aliases.removed', { count: gone })}</p>
-        ) : null}
-      </>
-    );
+    return gone ? (
+      <p className={styles.entryNote}>{t('provimux.aliases.removed', { count: gone })}</p>
+    ) : null;
   };
 
   const undoButton = (entry: AliasEntry) =>
@@ -257,7 +233,6 @@ export function AliasesBoard({
         className={styles.entry}
         data-off={entry.disabled || undefined}
         data-changed={changed || undefined}
-        data-failed={failures[entry.id] ? true : undefined}
         aria-label={entryLabelOf(t, entry)}
       >
         <header className={styles.entryHead}>
@@ -332,7 +307,6 @@ export function AliasesBoard({
         key={entry.id}
         className={styles.entry}
         data-changed={changed || undefined}
-        data-failed={failures[entry.id] ? true : undefined}
         aria-label={entryLabelOf(t, entry)}
       >
         <header className={styles.entryHead}>
@@ -483,15 +457,6 @@ export function AliasesBoard({
         ) : null}
       </section>
 
-      {draft.base.etag === null ? (
-        <p className={styles.unprotected} role="note">
-          <IconAlertTriangle size={14} />
-          <span>{t('provimux.aliases.etag_missing')}</span>
-        </p>
-      ) : null}
-
-      <UnreadLine paths={draft.base.unread} />
-
       <div className={shared.toolbar}>
         <label className={shared.search}>
           <IconSearch size={15} className={shared.searchIcon} />
@@ -577,84 +542,86 @@ export function AliasesBoard({
         <p className={styles.noMatch}>{t('provimux.aliases.no_match')}</p>
       ) : null}
 
-      {showKeys && families.length ? (
-        <section className={styles.section} aria-labelledby="pmx-aliases-keys">
-          <h2 id="pmx-aliases-keys" className={styles.sectionTitle}>
-            {t('provimux.aliases.section_keys')}
-          </h2>
-          {families.map(({ family, entries: familyEntries }) => (
-            <div key={family} className={styles.family}>
-              <h3 className={styles.familyTitle}>
-                <ProviderLogo family={family} />
-                {familyLabel(t, family)}
-              </h3>
-              <div className={styles.entries}>{familyEntries.map((entry) => keyCard(entry))}</div>
-            </div>
-          ))}
-        </section>
-      ) : null}
-
-      {showLogins && (loginEntries.length || !filtered) ? (
-        <section className={styles.section} aria-labelledby="pmx-aliases-logins">
-          <h2 id="pmx-aliases-logins" className={styles.sectionTitle}>
-            {t('provimux.aliases.section_logins')}
-          </h2>
-          {mapUnread ? (
-            <div className={styles.entryEmpty}>
-              <IconInfo size={14} />
-              <p>{t('provimux.aliases.login_map_unread')}</p>
-            </div>
-          ) : null}
-          {anyLogin ? (
-            <p className={shared.note}>
-              <IconInfo size={13} />
-              <span>
-                {t('provimux.aliases.login_file_note')}{' '}
-                <Link to="/auth-files" className={styles.link}>
-                  {t('provimux.aliases.login_file_link')}
-                </Link>
-              </span>
-            </p>
-          ) : null}
-          <div className={styles.entries}>
-            {loginEntries.map((entry) => (
-              <Fragment key={entry.id}>{loginCard(entry)}</Fragment>
+      <fieldset className={styles.entriesBox} disabled={locked}>
+        {showKeys && families.length ? (
+          <section className={styles.section} aria-labelledby="pmx-aliases-keys">
+            <h2 id="pmx-aliases-keys" className={styles.sectionTitle}>
+              {t('provimux.aliases.section_keys')}
+            </h2>
+            {families.map(({ family, entries: familyEntries }) => (
+              <div key={family} className={styles.family}>
+                <h3 className={styles.familyTitle}>
+                  <ProviderLogo family={family} />
+                  {familyLabel(t, family)}
+                </h3>
+                <div className={styles.entries}>{familyEntries.map((entry) => keyCard(entry))}</div>
+              </div>
             ))}
-          </div>
-          {!filtered && !mapUnread ? (
-            <form
-              className={styles.addChannel}
-              onSubmit={(event) => {
-                event.preventDefault();
-                addChannel();
-              }}
-            >
-              <label htmlFor="pmx-aliases-channel">{t('provimux.aliases.add_channel')}</label>
-              <input
-                id="pmx-aliases-channel"
-                className={styles.input}
-                value={channelText}
-                list="pmx-aliases-channels"
-                placeholder={t('provimux.aliases.add_channel_placeholder')}
-                spellCheck={false}
-                autoComplete="off"
-                onChange={(event) => setChannelText(event.target.value)}
-              />
-              <datalist id="pmx-aliases-channels">
-                {channelChoices.map((channel) => (
-                  <option key={channel} value={channel}>
-                    {channelLabel(t, channel)}
-                  </option>
-                ))}
-              </datalist>
-              <button type="submit" className={styles.add} disabled={!channelText.trim()}>
-                <IconPlus size={14} />
-                {t('provimux.aliases.add_channel_button')}
-              </button>
-            </form>
-          ) : null}
-        </section>
-      ) : null}
+          </section>
+        ) : null}
+
+        {showLogins && (loginEntries.length || !filtered) ? (
+          <section className={styles.section} aria-labelledby="pmx-aliases-logins">
+            <h2 id="pmx-aliases-logins" className={styles.sectionTitle}>
+              {t('provimux.aliases.section_logins')}
+            </h2>
+            {mapUnread ? (
+              <div className={styles.entryEmpty}>
+                <IconInfo size={14} />
+                <p>{t('provimux.aliases.login_map_unread')}</p>
+              </div>
+            ) : null}
+            {anyLogin ? (
+              <p className={shared.note}>
+                <IconInfo size={13} />
+                <span>
+                  {t('provimux.aliases.login_file_note')}{' '}
+                  <Link to="/auth-files" className={styles.link}>
+                    {t('provimux.aliases.login_file_link')}
+                  </Link>
+                </span>
+              </p>
+            ) : null}
+            <div className={styles.entries}>
+              {loginEntries.map((entry) => (
+                <Fragment key={entry.id}>{loginCard(entry)}</Fragment>
+              ))}
+            </div>
+            {!filtered && !mapUnread ? (
+              <form
+                className={styles.addChannel}
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  addChannel();
+                }}
+              >
+                <label htmlFor="pmx-aliases-channel">{t('provimux.aliases.add_channel')}</label>
+                <input
+                  id="pmx-aliases-channel"
+                  className={styles.input}
+                  value={channelText}
+                  list="pmx-aliases-channels"
+                  placeholder={t('provimux.aliases.add_channel_placeholder')}
+                  spellCheck={false}
+                  autoComplete="off"
+                  onChange={(event) => setChannelText(event.target.value)}
+                />
+                <datalist id="pmx-aliases-channels">
+                  {channelChoices.map((channel) => (
+                    <option key={channel} value={channel}>
+                      {channelLabel(t, channel)}
+                    </option>
+                  ))}
+                </datalist>
+                <button type="submit" className={styles.add} disabled={!channelText.trim()}>
+                  <IconPlus size={14} />
+                  {t('provimux.aliases.add_channel_button')}
+                </button>
+              </form>
+            ) : null}
+          </section>
+        ) : null}
+      </fieldset>
     </>
   );
 }
@@ -698,49 +665,5 @@ function ClashLine({
         {active ? t('provimux.aliases.name_filter_clear') : t('provimux.aliases.check_show')}
       </button>
     </li>
-  );
-}
-
-/** How many unread paths the line names before "N more". */
-const UNREAD_SHOWN = 3;
-
-/**
- * 2.5: the parts of the file the page cannot read, in one line. They give no entry or row here and are
- * left in the file as they are.
- */
-function UnreadLine({ paths }: { paths: readonly string[] }) {
-  const { t } = useTranslation();
-  const [all, setAll] = useState(false);
-  if (!paths.length) return null;
-  const shown = all ? paths : paths.slice(0, UNREAD_SHOWN);
-  const more = paths.length - shown.length;
-  return (
-    <p className={`${shared.note} ${styles.unread}`}>
-      <IconInfo size={13} />
-      <span>
-        {t('provimux.aliases.unread_line', { count: paths.length })}{' '}
-        {shown.map((path, index) => (
-          <Fragment key={path}>
-            {index ? ', ' : null}
-            <code className={styles.unreadPath}>{path}</code>
-          </Fragment>
-        ))}
-        {more > 0 || all ? (
-          <>
-            {' '}
-            <button
-              type="button"
-              className={styles.unreadMore}
-              aria-expanded={all}
-              onClick={() => setAll((prev) => !prev)}
-            >
-              {all
-                ? t('provimux.aliases.unread_fewer')
-                : t('provimux.aliases.unread_more', { count: more })}
-            </button>
-          </>
-        ) : null}
-      </span>
-    </p>
   );
 }
