@@ -5,6 +5,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { expect } from 'bun:test';
+import { AxiosHeaders } from 'axios';
 import { apiClient } from '@/services/api/client';
 
 export type Doc = Record<string, unknown>;
@@ -35,10 +36,28 @@ export interface Put {
   ifMatch: string | undefined;
 }
 
+type Transform = (this: unknown, data: unknown, headers: AxiosHeaders, status?: number) => unknown;
+
+/** A request's response transforms, run as axios runs them: raw text, headers, status. */
+function runTransforms(
+  config: { transformResponse?: unknown } | undefined,
+  answer: unknown,
+  etag: string | null,
+  status: number
+) {
+  let data: unknown = JSON.stringify(answer);
+  const headers = new AxiosHeaders(etag ? { etag } : {});
+  for (const fn of [config?.transformResponse ?? []].flat() as Transform[]) {
+    data = fn.call(config ?? {}, data, headers, status);
+  }
+  return config?.transformResponse ? data : answer;
+}
+
 /**
  * A canned management API over one document: GET /config (and its paths), GET /credentials,
- * PUT /config/api-keys/<family> and /config/oauth/model-alias. Every write moves the ETag; a write
- * whose If-Match is not the current ETag is a 412 and writes nothing, as the proxy does.
+ * PUT /config/api-keys/<family> and /config/oauth/model-alias. Every write moves the ETag, and its answer
+ * hands the new one to the request's `transformResponse`; a write whose If-Match is not the current ETag
+ * is a 412 and writes nothing, as the proxy does.
  */
 export function server(doc: Doc) {
   const stored = clone(doc);
@@ -81,7 +100,11 @@ export function server(doc: Doc) {
     if (value === undefined) throw httpError(404, 'not_found', 'not_found');
     return clone(value);
   }) as typeof apiClient.get;
-  apiClient.put = (async (path: string, body: unknown, config?: { headers?: Doc }) => {
+  apiClient.put = (async (
+    path: string,
+    body: unknown,
+    config?: { headers?: Doc; transformResponse?: unknown }
+  ) => {
     const put: Put = {
       path,
       body: clone(body),
@@ -94,6 +117,7 @@ export function server(doc: Doc) {
     s.failPut?.(put);
     if (put.ifMatch !== undefined && put.ifMatch !== s.etag()) {
       log.push(`put ${path} 412`);
+      runTransforms(config, { error: 'precondition_failed' }, s.etag(), 412);
       throw httpError(412, 'precondition_failed', 'precondition_failed');
     }
     if (path.startsWith('/config/api-keys/')) {
@@ -106,7 +130,12 @@ export function server(doc: Doc) {
     }
     version += 1;
     log.push(`put ${path} end`);
-    return { status: 'ok', 'config-version': 8 };
+    return runTransforms(
+      config,
+      { status: 'ok', 'config-version': 8 },
+      s.sendEtag ? s.etag() : null,
+      200
+    );
   }) as typeof apiClient.put;
   return s;
 }

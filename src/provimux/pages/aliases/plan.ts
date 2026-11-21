@@ -1,66 +1,42 @@
 /**
- * From the draft to the requests (design aliases-page.md, 2.4, 3.2, 3.3, 3.4). Pure. The writers work on
- * the stored objects as read: a row that did not change is written exactly as it was read; a changed row
- * is its stored object with only the keys of 2.4 touched; a new row is `{ name, alias }`.
+ * From the draft to the requests (design aliases-page.md, 2.4, 3.2, 3.3, 3.4). Pure. Every body is built
+ * from the page's own read, `draft.base.document`: each entry is written at its own position in that
+ * read, and nothing is looked up or compared by content (the proxy's `If-Match` check says whether the
+ * file still is that read). The writers work on the stored objects as read: a row that did not change is
+ * written exactly as it was read; in a changed row only the fields the user changed are touched (2.4).
  */
 import { isRecord } from '@/utils/helpers';
 import { normalizeOAuthProviderKey } from '@/utils/providerKeys';
-import { draftEntries, entryOf, isBlankNewRow, isBlocking, rowIssues } from './draft';
-import { ALIAS_FAMILIES, effectiveModels, isModelRow } from './rows';
-import type { AliasDraft, AliasRow, CommitUnit, KeyEntry, LoginEntry } from './types';
+import {
+  draftEntries,
+  entryOf,
+  isBlankNewRow,
+  isBlocking,
+  loginMapUnread,
+  rowChanged,
+  rowIssues,
+} from './draft';
+import { ALIAS_FAMILIES, effectiveModels, familyGroups, isModelRow, loginMapIn } from './rows';
+import type {
+  AliasDraft,
+  AliasEntry,
+  AliasRow,
+  CommitUnit,
+  KeyEntry,
+  LoginEntry,
+  PlannedWrite,
+} from './types';
 
-/** Structural equality of JSON values; object keys in any order. */
-export function deepEqual(a: unknown, b: unknown): boolean {
-  if (a === b) return true;
-  if (Array.isArray(a) || Array.isArray(b)) {
-    return (
-      Array.isArray(a) &&
-      Array.isArray(b) &&
-      a.length === b.length &&
-      a.every((value, i) => deepEqual(value, b[i]))
-    );
-  }
-  if (isRecord(a) && isRecord(b)) {
-    const keys = Object.keys(a);
-    return (
-      keys.length === Object.keys(b).length &&
-      keys.every((key) => Object.prototype.hasOwnProperty.call(b, key) && deepEqual(a[key], b[key]))
-    );
-  }
-  return false;
-}
+export { rowChanged } from './draft';
 
-/** Fields the proxy injects at read time; never configuration, so never a conflict. */
-const INJECTED = new Set(['auth_index', 'auth-index']);
-
-/** A JSON value without the injected fields, at any depth. */
-export function withoutInjected(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(withoutInjected);
-  if (!isRecord(value)) return value;
-  return Object.fromEntries(
-    Object.entries(value)
-      .filter(([key]) => !INJECTED.has(key))
-      .map(([key, v]) => [key, withoutInjected(v)])
-  );
-}
-
-/** Equal as configuration: `deepEqual` with the injected fields stripped from both sides. */
-export const sameConfig = (a: unknown, b: unknown): boolean =>
-  deepEqual(withoutInjected(a), withoutInjected(b));
+export const ALIAS_PATHS = {
+  config: '/config',
+  credentials: '/credentials',
+  loginAliases: '/config/oauth/model-alias',
+  family: (family: string) => `/config/api-keys/${family}`,
+} as const;
 
 const text = (value: string | null): string => (value ?? '').trim();
-
-/** Whether a draft row says something else than its base row (compared as they would be written). */
-export function rowChanged(row: AliasRow, base: AliasRow | undefined): boolean {
-  if (!base) return true;
-  return (
-    row.upstream.trim() !== base.upstream.trim() ||
-    text(row.alias) !== text(base.alias) ||
-    row.forceMapping !== base.forceMapping ||
-    (row.store === 'login' &&
-      (row.fork !== base.fork || text(row.displayName) !== text(base.displayName)))
-  );
-}
 
 /** The draft rows of an entry that are rows (a blank new row is not one yet). */
 const draftRowsOf = (draft: AliasDraft, entryId: string) =>
@@ -86,12 +62,18 @@ export function blockedEntries(draft: AliasDraft): string[] {
   return [...blocked];
 }
 
+/** 2.5: an entry the page cannot write whole. The operations give it no edit; never planned. */
+const unwritable = (draft: AliasDraft, entry: AliasEntry) =>
+  entry.store === 'login' && (entry.unread || loginMapUnread(draft.base));
+
 /**
  * 3.4: one unit per family with a changed entry, in the family order of 1.2, then one unit for the
  * logins when a channel changed.
  */
 export function planCommit(draft: AliasDraft): CommitUnit[] {
-  const changed = draftEntries(draft).filter((entry) => entryChanged(draft, entry.id));
+  const changed = draftEntries(draft).filter(
+    (entry) => entryChanged(draft, entry.id) && !unwritable(draft, entry)
+  );
   const units: CommitUnit[] = [];
   for (const family of ALIAS_FAMILIES) {
     const entryIds = changed
@@ -105,74 +87,89 @@ export function planCommit(draft: AliasDraft): CommitUnit[] {
 }
 
 /**
- * 3.2: the index of the entry's group in a fresh read: `groupIndex` when the group there deep-equals
- * the stored group, otherwise the single index whose group does, otherwise -1 (a conflict). Compared
- * without the auth indexes the proxy injects at read time.
+ * 2.4: `force-mapping` changed by the user: true is set; false is written when the row stored a value,
+ * else the key is removed; null removes it.
  */
-export function locate(groups: readonly unknown[], entry: KeyEntry): number {
-  if (sameConfig(groups[entry.groupIndex], entry.storedGroup)) return entry.groupIndex;
-  const matches = groups.flatMap((group, index) =>
-    sameConfig(group, entry.storedGroup) ? [index] : []
-  );
-  return matches.length === 1 ? matches[0] : -1;
-}
-
-/** 2.4: `force-mapping` true is set; false is written when the row stored a value; else removed. */
-function setForceMapping(next: Record<string, unknown>, value: boolean | null, stored: boolean) {
+function setForceMapping(next: Record<string, unknown>, value: boolean | null) {
   if (value === true) next['force-mapping'] = true;
-  else if (value === false && stored) next['force-mapping'] = false;
-  else delete next['force-mapping'];
+  else if (value === false && typeof next['force-mapping'] === 'boolean') {
+    next['force-mapping'] = false;
+  } else delete next['force-mapping'];
 }
 
-/** 2.4, store A: a changed row is its stored object with `alias` and `force-mapping` touched. */
-function writeKeyRow(
+type RowWriter = (
   row: AliasRow,
+  base: AliasRow | null,
   stored: Record<string, unknown> | null
-): Record<string, unknown> {
-  const next: Record<string, unknown> = stored ? { ...stored } : { name: row.upstream.trim() };
-  const alias = text(row.alias);
-  if (alias && alias !== row.upstream.trim()) next.alias = alias;
-  else delete next.alias;
-  setForceMapping(
-    next,
-    row.forceMapping,
-    stored !== null && typeof stored['force-mapping'] === 'boolean'
-  );
-  return next;
-}
-
-/** 2.4, store B: also `name`, `fork` and `display-name`. */
-function writeLoginRow(
-  row: AliasRow,
-  stored: Record<string, unknown> | null
-): Record<string, unknown> {
-  const next: Record<string, unknown> = stored ? { ...stored } : {};
-  next.name = row.upstream.trim();
-  next.alias = text(row.alias);
-  if (row.fork === true) next.fork = true;
-  else delete next.fork;
-  setForceMapping(
-    next,
-    row.forceMapping,
-    stored !== null && typeof stored['force-mapping'] === 'boolean'
-  );
-  const displayName = text(row.displayName);
-  if (displayName) next['display-name'] = displayName;
-  else delete next['display-name'];
-  return next;
-}
+) => Record<string, unknown>;
 
 /**
- * A stored list rewritten from the draft rows: elements that are not rows stay where they were; a
- * stored row the draft no longer has is taken out; an unchanged row is written as read; new rows follow
- * the draft row before them (or open the list when none is stored before them).
+ * 2.4, store A. A new row is `{ name, alias }` (and `force-mapping: true` when set). A changed row is its
+ * stored object with only the fields that differ from its base row touched: `alias` set (trimmed) or
+ * removed when the row now has no alias; `force-mapping` as `setForceMapping`.
+ */
+export const writeKeyRow: RowWriter = (row, base, stored) => {
+  const upstream = row.upstream.trim();
+  const alias = text(row.alias);
+  if (!stored || !base) {
+    const next: Record<string, unknown> = { name: upstream };
+    if (alias && alias !== upstream) next.alias = alias;
+    if (row.forceMapping === true) next['force-mapping'] = true;
+    return next;
+  }
+  const next: Record<string, unknown> = { ...stored };
+  if (alias !== text(base.alias)) {
+    if (alias && alias !== upstream) next.alias = alias;
+    else delete next.alias;
+  }
+  if (row.forceMapping !== base.forceMapping) setForceMapping(next, row.forceMapping);
+  return next;
+};
+
+/**
+ * 2.4, store B. A new row is `{ name, alias }` with the optional keys that are set. A changed row is its
+ * stored object with only the fields that differ from its base row touched: `name`, `alias` (trimmed);
+ * `fork: true` set, turned off removed; `force-mapping` as `setForceMapping`; `display-name` set
+ * (trimmed) or removed when empty.
+ */
+export const writeLoginRow: RowWriter = (row, base, stored) => {
+  const upstream = row.upstream.trim();
+  const alias = text(row.alias);
+  const displayName = text(row.displayName);
+  if (!stored || !base) {
+    const next: Record<string, unknown> = { name: upstream, alias };
+    if (row.fork === true) next.fork = true;
+    if (row.forceMapping === true) next['force-mapping'] = true;
+    if (displayName) next['display-name'] = displayName;
+    return next;
+  }
+  const next: Record<string, unknown> = { ...stored };
+  if (upstream !== base.upstream.trim()) next.name = upstream;
+  if (alias !== text(base.alias)) next.alias = alias;
+  if (row.fork !== base.fork) {
+    if (row.fork === true) next.fork = true;
+    else delete next.fork;
+  }
+  if (row.forceMapping !== base.forceMapping) setForceMapping(next, row.forceMapping);
+  if (displayName !== text(base.displayName)) {
+    if (displayName) next['display-name'] = displayName;
+    else delete next['display-name'];
+  }
+  return next;
+};
+
+/**
+ * A stored list rewritten from the draft rows (2.4): elements that are not rows stay where they were; a
+ * stored row the draft no longer has is taken out; an unchanged row is written as read; a changed row is
+ * written over its own stored object, found by its position (`sourceIndex`); new rows follow the draft
+ * row before them (or open the list when none is stored before them).
  */
 function rewriteList(
   list: readonly unknown[],
   rows: readonly AliasRow[],
   base: readonly AliasRow[],
   isRow: (value: unknown) => boolean,
-  write: (row: AliasRow, stored: Record<string, unknown> | null) => Record<string, unknown>
+  write: RowWriter
 ): unknown[] {
   const baseById = new Map(base.map((row) => [row.id, row]));
   const bySource = new Map<number, AliasRow>();
@@ -186,7 +183,7 @@ function rewriteList(
       after.set(anchor, [...(after.get(anchor) ?? []), row]);
     }
   }
-  const out: unknown[] = (after.get('start') ?? []).map((row) => write(row, null));
+  const out: unknown[] = (after.get('start') ?? []).map((row) => write(row, null, null));
   list.forEach((element, index) => {
     if (!isRow(element)) {
       out.push(element);
@@ -195,9 +192,10 @@ function rewriteList(
     const row = bySource.get(index);
     if (row) {
       const stored = element as Record<string, unknown>;
-      out.push(rowChanged(row, baseById.get(row.id)) ? write(row, stored) : stored);
+      const before = baseById.get(row.id) ?? null;
+      out.push(before && !rowChanged(row, before) ? stored : write(row, before, stored));
     }
-    for (const added of after.get(index) ?? []) out.push(write(added, null));
+    for (const added of after.get(index) ?? []) out.push(write(added, null, null));
   });
   return out;
 }
@@ -235,28 +233,10 @@ export function writtenRowsOf(
   return rewriteList(entry.storedList, rows, base, isRecord, writeLoginRow);
 }
 
-/** The stored keys of a map that spell a channel, in file order. */
-const spellingsOf = (map: Record<string, unknown>, channel: string) =>
-  Object.keys(map).filter((key) => normalizeOAuthProviderKey(key) === channel);
-
 /**
- * 3.3: the fresh lists of the channel's spellings, concatenated, deep-equal the stored list (without
- * injected auth indexes). False when the map is not readable or a spelling's value is present and not a
- * list (2.5): such a channel is never written.
- */
-export function sameChannel(map: unknown, entry: LoginEntry): boolean {
-  if (!isRecord(map)) return false;
-  const spellings = spellingsOf(map, entry.channel);
-  if (spellings.some((key) => map[key] !== null && !Array.isArray(map[key]))) return false;
-  const fresh = spellings.flatMap((key) =>
-    Array.isArray(map[key]) ? (map[key] as unknown[]) : []
-  );
-  return sameConfig(fresh, entry.storedList);
-}
-
-/**
- * 3.3: every spelling of the channel removed and, when rows remain, the list set under the normalized
- * key (the old editor's rule, `updateOauthProviderMap`). Every other key untouched.
+ * 3.3: every spelling of the channel removed and, when the written list is not empty, the list set under
+ * the normalized key (the old editor's rule, `updateOauthProviderMap`, except that an element the page
+ * cannot read counts and stays: `[null]` is kept). Every other key untouched.
  */
 export function replaceChannel(
   map: Record<string, unknown>,
@@ -267,13 +247,46 @@ export function replaceChannel(
   for (const [key, value] of Object.entries(map)) {
     if (normalizeOAuthProviderKey(key) !== entry.channel) next[key] = value;
   }
-  if (list.some(isRecord)) next[entry.channel] = [...list];
+  if (list.length) next[entry.channel] = [...list];
   return next;
 }
 
-/** The entry of a unit's id; throws when the draft has none (a programming error, not a conflict). */
+/** The entry of a unit's id; throws when the draft has none (a programming error). */
 export function unitEntry(draft: AliasDraft, entryId: string) {
   const entry = entryOf(draft, entryId);
   if (!entry) throw new Error(`Unknown alias entry ${entryId}`);
   return entry;
+}
+
+/**
+ * 3.4: each unit with its request, built from the page's own read alone (3.2, 3.3). Each entry is written
+ * at its own position in that read: two entries are two positions, never one key.
+ */
+export function planWrites(draft: AliasDraft): PlannedWrite[] {
+  const document = draft.base.document;
+  return planCommit(draft).map((unit): PlannedWrite => {
+    if (unit.store === 'api-key') {
+      const groups = [...familyGroups(document, unit.family)];
+      for (const entryId of unit.entryIds) {
+        const entry = unitEntry(draft, entryId) as KeyEntry;
+        const { rows, base } = rowsForWrite(draft, entryId);
+        groups[entry.groupIndex] = withModels(
+          groups[entry.groupIndex] as Record<string, unknown>,
+          entry,
+          rows,
+          base
+        );
+      }
+      return { unit, path: ALIAS_PATHS.family(unit.family), body: groups };
+    }
+    const stored = loginMapIn(document);
+    // planCommit plans no login unit unless the map is a map (2.5).
+    let map: Record<string, unknown> = isRecord(stored) ? { ...stored } : {};
+    for (const entryId of unit.entryIds) {
+      const entry = unitEntry(draft, entryId) as LoginEntry;
+      const { rows, base } = rowsForWrite(draft, entryId);
+      map = replaceChannel(map, entry, writtenRowsOf(entry, rows, base));
+    }
+    return { unit, path: ALIAS_PATHS.loginAliases, body: map };
+  });
 }

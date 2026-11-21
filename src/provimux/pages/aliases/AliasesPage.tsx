@@ -17,26 +17,20 @@ import {
   addLoginAlias,
   changeRow,
   discard,
+  discardEntry,
   draftEntries,
+  editsOf,
   removeRow,
   rowIssues,
   startDraft,
 } from './draft';
 import { draftClientNames } from './collisions';
 import { blockedEntries, planCommit } from './plan';
-import { rebase } from './rebase';
 import { aliasesApi, createServedNamesSource, loadServedNames } from './aliasesApi';
-import {
-  blockingCount,
-  changeCount,
-  initialFilter,
-  rekeyEntries,
-  rekeyRows,
-  type AliasFilter,
-} from './pageLogic';
+import { blockingCount, changeCount, initialFilter, type AliasFilter } from './pageLogic';
 import { AliasesBoard, type BoardActions, type Failure } from './AliasesBoard';
 import { LostEdits, type LostNotice } from './LostEdits';
-import type { AliasDraft, AliasState, CommitOutcome, ServedNames } from './types';
+import type { AliasDraft, AliasState, ServedNames } from './types';
 import shared from '../shared/Shared.module.scss';
 import styles from './AliasesPage.module.scss';
 
@@ -44,10 +38,9 @@ type Phase = 'loading' | 'ready' | 'error';
 
 const isAbort = (error: unknown) => error instanceof DOMException && error.name === 'AbortError';
 
-/** A save whose fresh read has not landed yet: the draft it committed and what it wrote. */
+/** A save whose fresh read has not landed yet (W7: its unconfirmed edits are already listed). */
 interface PendingSave {
   draft: AliasDraft;
-  outcome: CommitOutcome;
 }
 
 /**
@@ -125,44 +118,16 @@ export function AliasesPage() {
   }, [namesKey, askServed]);
 
   /**
-   * A fresh state on screen. After a save (a pending one) the committed draft is carried onto it (3.6):
-   * texts and failures follow the carried entries to their fresh ids, and the edits of entries changed
-   * elsewhere become notices. Otherwise the state replaces the draft.
+   * A fresh state on screen; it replaces the draft. Nothing is carried onto it (3.6): after a save, the
+   * edits it did not confirm were listed when it answered.
    */
   const applyState = useCallback(
     (state: AliasState) => {
-      const pending = pendingRef.current;
       pendingRef.current = null;
-      if (!pending) {
-        const next = startDraft(state);
-        setDraft(next);
-        setTexts({});
-        setFailures({});
-        return next;
-      }
-      const {
-        draft: next,
-        carried,
-        lost: gone,
-      } = rebase(pending.draft, state, pending.outcome.done);
+      const next = startDraft(state);
       setDraft(next);
-      setTexts((prev) => rekeyRows(prev, carried));
-      setFailures(
-        rekeyEntries(
-          Object.fromEntries(pending.outcome.failed.map((failure) => [failure.entryId, failure])),
-          carried
-        )
-      );
-      if (gone.length) {
-        setLost((prev) => [
-          ...prev,
-          ...gone.map((item) => ({
-            key: ++noticeKey.current,
-            entry: item.entry,
-            edits: item.edits,
-          })),
-        ]);
-      }
+      setTexts({});
+      setFailures({});
       return next;
     },
     [setDraft]
@@ -241,15 +206,28 @@ export function AliasesPage() {
       if (revision !== apiClient.getConnectionRevision()) return;
       // Other pages must not show the configuration as it was (design 3.4).
       useConfigStore.getState().clearCache();
-      pendingRef.current = { draft: current, outcome };
-      const failed = new Set(outcome.failed.map((failure) => failure.entryId)).size;
-      if (failed === 0) {
+      pendingRef.current = { draft: current };
+      // 3.6: every edit of an entry not confirmed is listed, to be typed again; none is carried.
+      const entries = draftEntries(current);
+      const gone = outcome.unconfirmed.flatMap((entryId) => {
+        const entry = entries.find((e) => e.id === entryId);
+        const edits = editsOf(current, entryId);
+        return entry && edits.length ? [{ entry, edits }] : [];
+      });
+      if (gone.length) {
+        setLost((prev) => [
+          ...prev,
+          ...gone.map((item) => ({ key: ++noticeKey.current, ...item })),
+        ]);
+      }
+      const failed = outcome.unconfirmed.length;
+      if (outcome.failure === null) {
         showNotification(t('provimux.aliases.saved'), 'success');
-      } else if (outcome.done.length === 0) {
+      } else if (outcome.confirmed.length === 0) {
         showNotification(t('provimux.aliases.saved_none'), 'warning');
       } else {
         showNotification(
-          t('provimux.aliases.saved_partly', { done: outcome.done.length, failed }),
+          t('provimux.aliases.saved_partly', { done: outcome.confirmed.length, failed }),
           'warning'
         );
       }
@@ -336,7 +314,7 @@ export function AliasesPage() {
       },
       removeRow: (rowId) => update((current) => removeRow(current, rowId)),
       undoEntry: (entryId) => {
-        update((current) => rebase(current, current.base, [entryId]).draft);
+        update((current) => discardEntry(current, entryId));
         setTexts((prev) =>
           Object.fromEntries(Object.entries(prev).filter(([id]) => !id.startsWith(`${entryId}#`)))
         );

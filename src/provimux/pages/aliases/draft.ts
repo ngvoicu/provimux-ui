@@ -4,6 +4,7 @@
  * allowed returns the draft it was given, unchanged.
  */
 import { normalizeOAuthProviderKey } from '@/utils/providerKeys';
+import { loginMapWritable } from './rows';
 import type {
   AliasDraft,
   AliasEntry,
@@ -37,12 +38,20 @@ export function entryOf(draft: AliasDraft, entryId: string): AliasEntry | null {
   };
 }
 
-/** 2.5: the paths that make every login entry unreadable when named in `AliasState.unread`. */
-export const LOGIN_MAP_PATHS = ['oauth', 'oauth.model-alias'] as const;
+/**
+ * Whether the state's login alias map cannot be written whole (2.5): not a map, or holding a number the
+ * browser cannot hold. Then no channel takes an edit and the map is never written.
+ */
+export const loginMapUnread = (state: Pick<AliasState, 'document'>): boolean =>
+  !loginMapWritable(state.document);
 
-/** Whether the state's login alias map could not be read (2.5): then no channel can be written. */
-export const loginMapUnread = (state: Pick<AliasState, 'unread'>): boolean =>
-  LOGIN_MAP_PATHS.some((path) => state.unread.includes(path));
+/** 2.5: whether a row belongs to something the page cannot write whole: it then takes no edit. */
+const rowLocked = (draft: AliasDraft, row: AliasRow): boolean => {
+  if (row.store !== 'login') return false;
+  if (loginMapUnread(draft.base)) return true;
+  const entry = entryOf(draft, row.entryId);
+  return entry?.store === 'login' && entry.unread;
+};
 
 /**
  * The loaded entries, then the login channels the draft added (they have rows of the draft only).
@@ -81,6 +90,7 @@ export function changeRow(draft: AliasDraft, rowId: string, patch: AliasRowPatch
   const index = draft.rows.findIndex((row) => row.id === rowId);
   if (index < 0) return draft;
   const row = draft.rows[index];
+  if (rowLocked(draft, row)) return draft;
   const next: AliasRow = { ...row };
   if (patch.forceMapping !== undefined) next.forceMapping = patch.forceMapping;
   if (row.store === 'login') {
@@ -188,7 +198,7 @@ export function addLoginAlias(
  */
 export function removeRow(draft: AliasDraft, rowId: string): AliasDraft {
   const row = draft.rows.find((r) => r.id === rowId);
-  if (!row) return draft;
+  if (!row || rowLocked(draft, row)) return draft;
   if (row.store === 'api-key') {
     const another = draft.rows.some(
       (r) =>
@@ -207,6 +217,67 @@ export function removeRow(draft: AliasDraft, rowId: string): AliasDraft {
 /** Every edit dropped. New-row numbers go on, so ids stay unique within the page's life. */
 export function discard(draft: AliasDraft): AliasDraft {
   return { ...startDraft(draft.base), nextNew: draft.nextNew };
+}
+
+/**
+ * "Undo this entry" (3.6): the entry's rows are its base rows again, where its rows were; every other
+ * entry as it is. The same base, so nothing moves to another read.
+ */
+export function discardEntry(draft: AliasDraft, entryId: string): AliasDraft {
+  const baseRows = draft.base.rows.filter((row) => row.entryId === entryId).map((r) => ({ ...r }));
+  const order = new Map(draft.base.entries.map((entry, index) => [entry.id, index]));
+  const at = order.get(entryId) ?? Number.POSITIVE_INFINITY;
+  const rows: AliasRow[] = [];
+  let placed = false;
+  for (const row of draft.rows) {
+    if (!placed && (row.entryId === entryId || (order.get(row.entryId) ?? Infinity) > at)) {
+      rows.push(...baseRows);
+      placed = true;
+    }
+    if (row.entryId !== entryId) rows.push(row);
+  }
+  if (!placed) rows.push(...baseRows);
+  return { ...draft, rows };
+}
+
+const text = (value: string | null): string => (value ?? '').trim();
+
+/** Whether a draft row says something else than its base row (compared as they would be written). */
+export function rowChanged(row: AliasRow, base: AliasRow | undefined): boolean {
+  if (!base) return true;
+  return (
+    row.upstream.trim() !== base.upstream.trim() ||
+    text(row.alias) !== text(base.alias) ||
+    row.forceMapping !== base.forceMapping ||
+    (row.store === 'login' &&
+      (row.fork !== base.fork || text(row.displayName) !== text(base.displayName)))
+  );
+}
+
+/** One edit of the draft, as the base row and the draft row (`changed`: both; `added`: the draft row;
+ *  `removed`: the base row). */
+export interface LostEdit {
+  kind: 'changed' | 'added' | 'removed';
+  before: AliasRow | null;
+  after: AliasRow | null;
+}
+
+/** The edits of one entry: its draft rows against its base rows. A blank new row is not an edit. */
+export function editsOf(draft: AliasDraft, entryId: string): LostEdit[] {
+  const rows = draft.rows.filter((row) => row.entryId === entryId && !isBlankNewRow(row));
+  const base = draft.base.rows.filter((row) => row.entryId === entryId);
+  const baseById = new Map(base.map((row) => [row.id, row]));
+  const kept = new Set(rows.map((row) => row.id));
+  const edits: LostEdit[] = [];
+  for (const row of rows) {
+    const before = baseById.get(row.id);
+    if (!before) edits.push({ kind: 'added', before: null, after: row });
+    else if (rowChanged(row, before)) edits.push({ kind: 'changed', before, after: row });
+  }
+  for (const row of base) {
+    if (!kept.has(row.id)) edits.push({ kind: 'removed', before: row, after: null });
+  }
+  return edits;
 }
 
 /** 3.5, by row id. The login rules are the old editor's (`getAliasRowIssues`), the proxy's drop rules. */
