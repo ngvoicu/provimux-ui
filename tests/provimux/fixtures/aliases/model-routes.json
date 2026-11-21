@@ -1,0 +1,247 @@
+{
+  "observed_at": "2026-11-20T22:00:00.000Z",
+  "models": [
+    {
+      "id": "claude-opus-5-5",
+      "display_name": null,
+      "owned_by": null,
+      "limits": {
+        "context": null,
+        "output": null
+      },
+      "routes": [
+        {
+          "auth_index": "li-claude-1",
+          "provider": "claude",
+          "kind": "oauth",
+          "priority": 0,
+          "host": null,
+          "login": {
+            "name": "claude-login-1.json",
+            "email": null,
+            "label": "claude-login-1"
+          },
+          "limits": {
+            "context": null,
+            "output": null
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        },
+        {
+          "auth_index": "ai-claude-3",
+          "provider": "claude",
+          "kind": "apikey",
+          "priority": 0,
+          "host": null,
+          "login": {
+            "name": null,
+            "email": null,
+            "label": "claude-apikey"
+          },
+          "limits": {
+            "context": null,
+            "output": null
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        }
+      ]
+    },
+    {
+      "id": "opus",
+      "display_name": null,
+      "owned_by": null,
+      "limits": {
+        "context": null,
+        "output": null
+      },
+      "routes": [
+        {
+          "auth_index": "ai-openrouter-1",
+          "provider": "openai-compatible-openrouter",
+          "kind": "apikey",
+          "priority": 0,
+          "host": "openrouter.ai",
+          "login": {
+            "name": null,
+            "email": null,
+            "label": "openrouter"
+          },
+          "limits": {
+            "context": null,
+            "output": null
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        },
+        {
+          "auth_index": "ai-openrouter-2",
+          "provider": "openai-compatible-openrouter",
+          "kind": "apikey",
+          "priority": 0,
+          "host": "openrouter.ai",
+          "login": {
+            "name": null,
+            "email": null,
+            "label": "openrouter"
+          },
+          "limits": {
+            "context": null,
+            "output": null
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        },
+        {
+          "auth_index": "ai-claude-1",
+          "provider": "claude",
+          "kind": "apikey",
+          "priority": 0,
+          "host": "claude.example.invalid",
+          "login": {
+            "name": null,
+            "email": null,
+            "label": "claude-apikey"
+          },
+          "limits": {
+            "context": null,
+            "output": null
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        },
+        {
+          "auth_index": "ai-claude-2",
+          "provider": "claude",
+          "kind": "apikey",
+          "priority": 0,
+          "host": "claude.example.invalid",
+          "login": {
+            "name": null,
+            "email": null,
+            "label": "claude-apikey"
+          },
+          "limits": {
+            "context": null,
+            "output": null
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        },
+        {
+          "auth_index": "ai-claude-3",
+          "provider": "claude",
+          "kind": "apikey",
+          "priority": 0,
+          "host": null,
+          "login": {
+            "name": null,
+            "email": null,
+            "label": "claude-apikey"
+          },
+          "limits": {
+            "context": null,
+            "output": null
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        }
+      ]
+    },
+    {
+      "id": "or/opus",
+      "display_name": null,
+      "owned_by": null,
+      "limits": {
+        "context": null,
+        "output": null
+      },
+      "routes": [
+        {
+          "auth_index": "ai-openrouter-1",
+          "provider": "openai-compatible-openrouter",
+          "kind": "apikey",
+          "priority": 0,
+          "host": "openrouter.ai",
+          "login": {
+            "name": null,
+            "email": null,
+            "label": "openrouter"
+          },
+          "limits": {
+            "context": null,
+            "output": null
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        },
+        {
+          "auth_index": "ai-openrouter-2",
+          "provider": "openai-compatible-openrouter",
+          "kind": "apikey",
+          "priority": 0,
+          "host": "openrouter.ai",
+          "login": {
+            "name": null,
+            "email": null,
+            "label": "openrouter"
+          },
+          "limits": {
+            "context": null,
+            "output": null
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        }
+      ]
+    },
+    {
+      "id": "gemini-2.5-flash",
+      "display_name": null,
+      "owned_by": null,
+      "limits": {
+        "context": null,
+        "output": null
+      },
+      "routes": [
+        {
+          "auth_index": "ai-interactions-1",
+          "provider": "interactions",
+          "kind": "apikey",
+          "priority": 0,
+          "host": null,
+          "login": {
+            "name": null,
+            "email": null,
+            "label": "interactions-apikey"
+          },
+          "limits": {
+            "context": null,
+            "output": null
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        },
+        {
+          "auth_index": "rt-1",
+          "provider": "mystery",
+          "kind": null,
+          "priority": 0,
+          "host": null,
+          "login": {
+            "name": null,
+            "email": null,
+            "label": null
+          },
+          "limits": {
+            "context": null,
+            "output": null
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        }
+      ]
+    }
+  ]
+}

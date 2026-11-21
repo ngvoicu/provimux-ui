@@ -9,6 +9,9 @@ import { normalizeAuthFilesResponse } from '@/services/api/authFiles';
 import { readProviderGroups } from '@/services/api/providers';
 import type { AuthFilesResponse } from '@/types/authFile';
 import { isRecord } from '@/utils/helpers';
+import { provimuxApi } from '@/provimux/api/provimuxApi';
+import { useProvimuxPresence } from '@/provimux/presence';
+import { nameKey } from './collisions';
 import { readAliasState } from './rows';
 import {
   blockedEntries,
@@ -28,6 +31,8 @@ import type {
   CommitUnit,
   KeyEntry,
   LoginEntry,
+  ServedNames,
+  ServedRoute,
 } from './types';
 
 type Client = Pick<typeof apiClient, 'get' | 'getRaw' | 'put'>;
@@ -204,3 +209,77 @@ export const aliasesApi = {
     return outcome;
   },
 };
+
+/** Names served natively are unknown: the verdicts cover the configuration's rows only. */
+export const UNKNOWN_SERVED: ServedNames = { known: false, byName: {} };
+
+type RoutesClient = Pick<typeof apiClient, 'get' | 'post' | 'put'>;
+
+const distinctNames = (names: readonly string[]) => [
+  ...new Set(names.map((name) => name.trim()).filter(Boolean)),
+];
+
+/**
+ * 4.4: per client name (by `nameKey`), the routes that serve it now, from Provimux's
+ * `/provimux/model-routes`. No names: no request. When the presence store already says the endpoint is
+ * absent, no request either; that, a 404 or any failure gives `UNKNOWN_SERVED`. The names are sent as
+ * written: the endpoint matches model ids exactly.
+ */
+export async function loadServedNames(
+  names: readonly string[],
+  client: RoutesClient = apiClient
+): Promise<ServedNames> {
+  const wanted = distinctNames(names);
+  if (!wanted.length) return { known: true, byName: {} };
+  if (useProvimuxPresence.getState().modelRoutes.status === 'unsupported') return UNKNOWN_SERVED;
+  try {
+    const answer = await provimuxApi.modelRoutes(client, wanted);
+    const byName: Record<string, ServedRoute[]> = {};
+    for (const model of answer.models) {
+      const key = nameKey(model.id);
+      if (!key) continue;
+      byName[key] = [
+        ...(byName[key] ?? []),
+        ...model.routes.map((route): ServedRoute => ({
+          authIndex: route.auth_index,
+          kind: route.kind === 'oauth' ? 'oauth' : route.kind === 'apikey' ? 'apikey' : null,
+          provider: route.provider,
+          host: route.host,
+        })),
+      ];
+    }
+    return { known: true, byName };
+  } catch {
+    return UNKNOWN_SERVED;
+  }
+}
+
+/** A set of names, independent of order and repetition. */
+const setKey = (names: readonly string[]) => distinctNames(names).sort().join('\n');
+
+/**
+ * The page's source of served names (4.4): asked at load, after each commit (`force`), and when the
+ * draft's set of client names changes. The same set is not asked twice unless forced; an answer for an
+ * older request resolves to null and is to be dropped. Debouncing the asks is the page's.
+ */
+export function createServedNamesSource(load: (names: readonly string[]) => Promise<ServedNames>) {
+  let latest = 0;
+  let lastKey: string | null = null;
+  let last: ServedNames | null = null;
+  return {
+    async ask(
+      names: readonly string[],
+      options: { force?: boolean } = {}
+    ): Promise<ServedNames | null> {
+      const key = setKey(names);
+      if (!options.force && key === lastKey && last) return last;
+      const ticket = ++latest;
+      lastKey = key;
+      last = null;
+      const answer = await load(names);
+      if (ticket !== latest) return null;
+      last = answer;
+      return answer;
+    },
+  };
+}
