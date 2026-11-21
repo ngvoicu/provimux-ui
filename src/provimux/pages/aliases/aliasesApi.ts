@@ -6,13 +6,12 @@
 import { apiClient } from '@/services/api/client';
 import { guardConfigConnection } from '@/services/api/configValue';
 import { normalizeAuthFilesResponse } from '@/services/api/authFiles';
-import { readProviderGroups } from '@/services/api/providers';
 import type { AuthFilesResponse } from '@/types/authFile';
 import { isRecord } from '@/utils/helpers';
 import { provimuxApi } from '@/provimux/api/provimuxApi';
 import { useProvimuxPresence } from '@/provimux/presence';
 import { nameKey } from './collisions';
-import { readAliasState } from './rows';
+import { familyGroups, loginMapIn, readAliasState } from './rows';
 import {
   blockedEntries,
   locate,
@@ -93,7 +92,8 @@ async function runUnit(
   let body: unknown;
 
   if (unit.store === 'api-key') {
-    const groups = readProviderGroups(document, unit.family);
+    // 2.5: a family no longer a list gives locate nothing to find: a conflict, without a request.
+    const groups = [...familyGroups(document, unit.family)];
     const located = unit.entryIds.map((entryId) => {
       const entry = unitEntry(draft, entryId) as KeyEntry;
       return { entry, index: locate(groups, entry) };
@@ -104,19 +104,18 @@ async function runUnit(
         continue;
       }
       const { rows, base } = rowsForWrite(draft, entry.id);
-      groups[index] = withModels(groups[index], entry, rows, base);
+      groups[index] = withModels(groups[index] as Record<string, unknown>, entry, rows, base);
       written.push(entry.id);
     }
     path = ALIAS_PATHS.family(unit.family);
     body = groups;
   } else {
-    const oauth = isRecord(document) ? document.oauth : undefined;
-    let map: Record<string, unknown> = {
-      ...(isRecord(oauth) && isRecord(oauth['model-alias']) ? oauth['model-alias'] : {}),
-    };
+    // 2.5: a map no longer readable is not sameChannel for any entry: a conflict, without a request.
+    const stored = loginMapIn(document);
+    let map: Record<string, unknown> = isRecord(stored) ? { ...stored } : {};
     for (const entryId of unit.entryIds) {
       const entry = unitEntry(draft, entryId) as LoginEntry;
-      if (!sameChannel(map, entry)) {
+      if (!sameChannel(isRecord(stored) ? map : stored, entry)) {
         failed.push({ entryId, reason: 'conflict', message: CONFLICT_MESSAGE });
         continue;
       }
