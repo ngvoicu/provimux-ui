@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { IconChevronDown, IconPlus, IconX } from '@/components/ui/icons';
 import { CheckboxField } from './CheckboxField';
 import { ModelAdvancedFields } from './ModelAdvancedFields';
+import { ProvimuxAliasesLine, ProvimuxRowAlias, aliasFieldType } from '@/provimux';
 import type { ModelEntryInput, ProviderBrand } from '../../types';
 import styles from './sharedForm.module.scss';
 
@@ -60,6 +61,7 @@ export function ModelEntriesEditor({
 
   return (
     <>
+      <ProvimuxAliasesLine show={!oauthAliasOnly} models={models} family={providerBrand} />
       {visible.map((entry, idx) => {
         const expanded = expandedIdx === idx;
         const hasThinking = entry.thinkingEnabled ?? Boolean(entry.thinkingJson?.trim());
@@ -76,6 +78,7 @@ export function ModelEntriesEditor({
               />
               <input
                 className={styles.input}
+                type={aliasFieldType(oauthAliasOnly)}
                 placeholder={t(
                   oauthAliasOnly
                     ? 'auth_files.policy_alias_name'
@@ -91,6 +94,7 @@ export function ModelEntriesEditor({
                 onChange={(e) => onUpdate(idx, { alias: e.target.value })}
                 disabled={mutating}
               />
+              <ProvimuxRowAlias show={!oauthAliasOnly} alias={entry.alias} name={entry.name} />
               <div className={styles.modelEntryActions}>
                 {!oauthAliasOnly && supportsImage && !expanded && entry.image === true ? (
                   <span className={styles.entryBadge}>
