@@ -17,6 +17,7 @@ import { useAuthStore } from '@/stores';
 import { PROVIMUX_ROUTES } from '@/provimux/routes';
 
 const createMainRoutes = (supportsPlugin: boolean) => [
+  ...PROVIMUX_ROUTES,
   { path: '/', element: <DashboardPage /> },
   { path: '/dashboard', element: <DashboardPage /> },
   { path: '/settings', element: <Navigate to="/config" replace /> },
@@ -31,7 +32,6 @@ const createMainRoutes = (supportsPlugin: boolean) => [
   { path: '/oauth', element: <OAuthPage /> },
   { path: '/routing', element: <RoutingPage /> },
   { path: '/quota', element: <QuotaPage /> },
-  ...PROVIMUX_ROUTES,
   ...(supportsPlugin
     ? [
         { path: '/plugin-pages/:pluginId/:menuIndex', element: <PluginResourcePage /> },
