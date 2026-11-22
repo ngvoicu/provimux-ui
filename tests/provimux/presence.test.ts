@@ -326,8 +326,9 @@ describe('seams', () => {
     expect(read('src/router/MainRoutes.tsx')).toMatch(
       /const createMainRoutes = \(supportsPlugin: boolean\) => \[\n {2}\.\.\.PROVIMUX_ROUTES,\n {2}\{ path: '\/', element: <DashboardPage \/> \},\n/
     );
-    expect(read('src/features/providers/components/ProviderResourceTable.tsx')).toContain(
-      '<ProvimuxOpenRouterTag baseUrl={r.baseUrl} />'
+    // An OpenAI-compatible entry's card, under its key (upstream 1.29.0's ResourceCard).
+    expect(read('src/features/providers/components/ResourceCard.tsx')).toMatch(
+      /<div className=\{styles\.sub\}>\{subParts\.join\(' · '\)\}<\/div> : null\}\n\s*\{resource\.brand === 'openaiCompatibility' \? \(\n\s*<ProvimuxOpenRouterTag baseUrl=\{resource\.baseUrl\} \/>\n\s*\) : null\}/
     );
   });
 });

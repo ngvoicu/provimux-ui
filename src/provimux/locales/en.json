@@ -61,9 +61,6 @@
       "model_lists": "Which list decides each login's models, and how old it is",
       "savings": "What prompt caching was worth, and what each account kind served"
     },
-    "providers": {
-      "sponsor_empty": "No keys match the search or filters. To add a key for this service, choose Codex or OpenAI Compatible in the provider list and click \"New\" there, with the service's base URL."
-    },
     "access": {
       "sub": "Subscription",
       "api": "API key",

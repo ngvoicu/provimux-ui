@@ -50,10 +50,10 @@
 }
 
 // providers.dev's primary button is the text colour on the page colour; the brand indigo stays for selection,
-// toggles, focus and active states (components.scss .btn.btn-primary; AI Providers' "New",
-// ProviderHeaderCard.module.scss .btnPrimary; the provider sheet's "Save", sharedForm.module.scss .footerBtnPrimary)
+// toggles, focus and active states (components.scss .btn.btn-primary; the provider sheet's "Save",
+// sharedForm.module.scss .footerBtnPrimary). AI Providers' "Add provider" (ProvidersHeader.module.scss
+// .primaryAction, upstream 1.29.0) is already drawn that way upstream and needs no rule.
 .btn.btn-primary,
-[class*='ProviderHeaderCard-module__btnPrimary___'],
 [class*='sharedForm-module__footerBtnPrimary___'] {
   background-color: var(--text-primary);
   border-color: var(--text-primary);

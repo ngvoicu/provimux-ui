@@ -1,5 +1,7 @@
 // Sponsors and affiliate links hidden (PUI-07, T-45, T-49): the seams, configured sponsor keys still reachable,
 // and no referral link visible on the pages that carry them.
+// Since upstream 1.29.0 AI Providers is a provider strip (BrandTabs), a panel of cards (BrandPanel) and an
+// "Add provider" catalogue (ProviderPicker).
 import { afterAll, describe, expect, test } from 'bun:test';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -12,9 +14,15 @@ import i18n from '../../src/i18n/index';
 import { OAuthPage } from '../../src/features/oauth/OAuthPage';
 import { OAuthFlowDialog } from '../../src/features/oauth/components/OAuthFlowDialog';
 import { OAUTH_PROVIDERS, isSponsor } from '../../src/features/oauth/providers';
-import { ProviderCategoryList } from '../../src/features/providers/components/ProviderCategoryList';
-import { ProviderResourcePanel } from '../../src/features/providers/components/ProviderResourcePanel';
+import { BrandPanel } from '../../src/features/providers/components/BrandPanel';
+import { BrandTabs } from '../../src/features/providers/components/BrandTabs';
+import { ProviderPicker } from '../../src/features/providers/components/ProviderPicker';
 import { PROVIDER_BRAND_ORDER } from '../../src/features/providers/descriptors';
+import {
+  QUICK_FILL_BRAND_ORDER,
+  getConnectionFormTarget,
+  partitionProviderGroups,
+} from '../../src/features/providers/resourceView';
 import {
   getSponsorProviderDefinition,
   isMultiProtocolSponsorBrand,
@@ -25,8 +33,8 @@ import { PROVIMUX_LINKS } from '../../src/provimux/brand';
 import {
   SPONSOR_GROUP_BRANDS,
   hideSponsor,
+  groupsToAdd,
   hideSponsorNav,
-  noQuickFill,
   offersCreate,
   providerGroupsWithoutOffers,
 } from '../../src/provimux/sponsors';
@@ -48,7 +56,10 @@ const sourceFiles = (dir: string, pattern: RegExp): string[] =>
         : [];
   });
 const unescape = (value: string) =>
-  value.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#x27;/g, "'");
+  value
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#x27;/g, "'");
 /** Every link a rendered page holds: href and the markup around it. */
 const links = (html: string) =>
   [...html.matchAll(/<a\b[^>]*\bhref="([^"]*)"/g)].map((m) => unescape(m[1]));
@@ -61,11 +72,78 @@ const AFFILIATE_SPONSORS = PROVIDER_BRAND_ORDER.filter(
     Boolean(getSponsorProviderDefinition(brand).affiliateUrl)
 );
 
+// The theme as the browser gets it.
+const sponsorCss = sass.compile('src/provimux/theme/_sponsors.scss').css;
+/** Whether the theme hides an element of an upstream CSS module outright. */
+const hiddenByTheme = (module: string, local: string) =>
+  new RegExp(
+    `(^|[,}]\\s*)\\[class\\*=${module}-module__${local}___\\][^{]*\\{\\s*display: none !important;`
+  ).test(sponsorCss);
+
+// AI Providers' parts, rendered as the page renders them.
+const noop = () => {};
+/** The strip, with the page's order and its quick-connect invitation (ProvidersWorkbenchPage.tsx). */
+const renderStrip = (groups: ProviderGroup[]) => {
+  const { providers, quickFill } = partitionProviderGroups(groups);
+  return renderToStaticMarkup(
+    createElement(BrandTabs, {
+      groups: [...providers, ...quickFill],
+      activeBrand: 'gemini',
+      onSelect: noop,
+      tabId: (brand: ProviderBrand) => `tab-${brand}`,
+      panelId: 'panel',
+      onAdd: noop,
+      partnerBrands: quickFill.filter((group) => group.resources.length === 0).map((g) => g.id),
+    })
+  );
+};
+const panelElement = (
+  group: ProviderGroup,
+  resources: ProviderGroup['resources'] = group.resources,
+  filter = ''
+) =>
+  createElement(BrandPanel, {
+    id: 'panel',
+    labelledBy: `tab-${group.id}`,
+    group,
+    resources,
+    nativeSections: group.nativeSections,
+    controls: {
+      filter,
+      onFilterChange: noop,
+      sortBy: 'name',
+      sortDir: 'asc',
+      onSortBy: noop,
+      onSortDir: noop,
+      availableModels: [],
+      selectedModels: new Set<string>(),
+      onSelectedModelsChange: noop,
+      onClearFilters: noop,
+    },
+    selectedId: null,
+    disableMutations: false,
+    usageByProvider: new Map(),
+    onView: noop,
+    onEdit: noop,
+    onDelete: noop,
+    onToggleDisabled: noop,
+    onCreate: noop,
+    onEditGroup: noop,
+    onToggleGroup: noop,
+  });
+const renderPanel = (...args: Parameters<typeof panelElement>) =>
+  renderToStaticMarkup(panelElement(...args));
+const renderPicker = (groups: ProviderGroup[]) =>
+  renderToStaticMarkup(createElement(ProviderPicker, { groups, variant: 'page', onPick: noop }));
+
 describe('seams', () => {
   test('Quick Start leaves the sidebar, wherever upstream puts it', () => {
     const groups = [
       { id: 'operate', items: [{ path: '/' }, { path: '/quick-start' }] },
-      { id: 'gateway', items: [{ path: '/ai-providers' }, { kind: 'drawer', id: 'x', children: [] }] },
+      {
+        id: 'gateway',
+        items: [{ path: '/ai-providers' }, { kind: 'drawer', id: 'x', children: [] }],
+      },
     ];
     hideSponsorNav(groups);
     expect(groups[0].items).toEqual([{ path: '/' }]);
@@ -89,7 +167,7 @@ describe('seams', () => {
   test('the Quick Start route goes to AI Providers', () => {
     const routes = read('src/router/MainRoutes.tsx');
     expect(routes).toContain(
-      "{ path: '/quick-start', element: <Navigate to=\"/ai-providers\" replace /> },"
+      '{ path: \'/quick-start\', element: <Navigate to="/ai-providers" replace /> },'
     );
     expect(routes).not.toContain('fixedBrand="apikeyFun"');
   });
@@ -101,23 +179,35 @@ describe('seams', () => {
     );
   });
 
-  test('AI Providers builds its groups without offers, and draws no Quick Fill list', () => {
-    expect(read('src/features/providers/ProvidersWorkbenchPage.tsx')).toContain(
-      ': providerGroupsWithoutOffers(allGroups),'
+  test('AI Providers builds its groups without offers; strip, panel and catalogue draw from them', () => {
+    const page = read('src/features/providers/ProvidersWorkbenchPage.tsx');
+    expect(page).toContain(': providerGroupsWithoutOffers(allGroups),');
+    // The strip, its invitation, the panel and both catalogues use those groups, never allGroups.
+    expect(page.match(/\ballGroups\b/g) ?? []).toHaveLength(4); // its definition, the fixedBrand and Provimux filters, the deps
+    expect(page).toContain('const { providers, quickFill } = partitionProviderGroups(groups);');
+    expect(page).toMatch(/partitionProviderGroups\(groups\)\s*\.quickFill\.filter/);
+    // The catalogues list only groups that offer "New": no sponsor, configured or not.
+    expect(page).toContain('pickerGroups={groupsToAdd(groups)}');
+    expect(page).toMatch(/<ProviderPicker\s+groups=\{groupsToAdd\(groups\)\}/);
+  });
+
+  test('the theme hides the "Quick Fill" divider and the Kimi offer', () => {
+    expect(hiddenByTheme('BrandTabs', 'divider')).toBe(true);
+    expect(hiddenByTheme('ProviderPicker', 'offer')).toBe(true);
+    // Those classes carry exactly those parts upstream.
+    const tabs = read('src/features/providers/components/BrandTabs.tsx');
+    expect(tabs).toMatch(
+      /className=\{styles\.divider\} aria-hidden="true">\s*\{t\('providersPage\.categories\.quickFill'\)\}/
     );
-    expect(read('src/features/providers/components/ProviderCategoryList.tsx')).toContain(
-      'const QUICK_FILL_BRANDS: ReadonlySet<ProviderBrand> = new Set(noQuickFill(QUICK_FILL_BRAND_ORDER));'
+    const picker = read('src/features/providers/components/ProviderPicker.tsx');
+    expect(picker).toMatch(
+      /<span className=\{styles\.offer\}>\s*<span className=\{styles\.offerTag\}>\{t\('providersPage\.picker\.offer'\)\}<\/span>\s*\{t\('providersPage\.sponsor\.kimiPromo'\)\}/
     );
-    expect(noQuickFill(['fennoAI', 'qiniuCloud'])).toEqual([]);
   });
 });
 
 describe('AI Providers sponsor groups', () => {
   const groupsFor = (config: Config) => providerGroupsWithoutOffers(buildProviderGroups(config));
-  const renderList = (groups: ProviderGroup[]) =>
-    renderToStaticMarkup(
-      createElement(ProviderCategoryList, { groups, activeBrand: 'gemini', onSelect: () => {} })
-    );
   const name = (brand: ProviderBrand) => `>${i18n.t(`providersPage.providerNames.${brand}`)}<`;
   const codexUrl = (brand: ProviderBrand) =>
     getSponsorProviderDefinition(brand as Parameters<typeof getSponsorProviderDefinition>[0])
@@ -137,24 +227,30 @@ describe('AI Providers sponsor groups', () => {
   test('every sponsor with an affiliate sign-up is a group the layer knows', () => {
     expect(AFFILIATE_SPONSORS.length).toBeGreaterThan(0);
     expect(AFFILIATE_SPONSORS.filter((brand) => !SPONSOR_GROUP_BRANDS.includes(brand))).toEqual([]);
-    const quickFill = read('src/features/providers/components/ProviderCategoryList.tsx').match(
-      /QUICK_FILL_BRAND_ORDER[^=]*=\s*\[([^\]]*)\]/
-    )?.[1];
-    const brands = [...(quickFill ?? '').matchAll(/'(\w+)'/g)].map((m) => m[1]);
-    expect(brands.length).toBeGreaterThan(0);
-    expect(brands.filter((brand) => !SPONSOR_GROUP_BRANDS.includes(brand))).toEqual([]);
-  });
-
-  test('with nothing configured, no sponsor is offered and there is one list', async () => {
-    await i18n.changeLanguage('en');
-    const groups = groupsFor({} as Config);
-    expect(groups.map((group) => group.id).filter((id) => SPONSOR_GROUP_BRANDS.includes(id))).toEqual(
+    // Upstream's quick-connect partners (strip divider, invitation, catalogue cards) are sponsor groups too.
+    expect(QUICK_FILL_BRAND_ORDER.length).toBeGreaterThan(0);
+    expect(QUICK_FILL_BRAND_ORDER.filter((brand) => !SPONSOR_GROUP_BRANDS.includes(brand))).toEqual(
       []
     );
-    const html = renderList(groups);
-    expect(html.match(/<aside\b/g) ?? []).toHaveLength(1);
-    expect(html).not.toContain(i18n.t('providersPage.categories.quickFill'));
-    for (const brand of AFFILIATE_SPONSORS) expect(html).not.toContain(name(brand));
+  });
+
+  test('with nothing configured, no sponsor is offered: strip, invitation or catalogue', async () => {
+    await i18n.changeLanguage('en');
+    const groups = groupsFor({} as Config);
+    expect(
+      groups.map((group) => group.id).filter((id) => SPONSOR_GROUP_BRANDS.includes(id))
+    ).toEqual([]);
+    const strip = renderStrip(groups);
+    expect(strip).not.toContain(i18n.t('providersPage.categories.quickFill'));
+    expect(strip).not.toContain(i18n.t('providersPage.picker.moreQuickConnect'));
+    for (const brand of AFFILIATE_SPONSORS) expect(strip).not.toContain(name(brand));
+    // The first-run catalogue (nothing connected) and the sheet's: no partner card, no sponsor.
+    const picker = renderPicker(groupsToAdd(groups));
+    expect(picker).not.toContain(`>${i18n.t('providersPage.picker.featuredBadge')}<`);
+    for (const brand of AFFILIATE_SPONSORS) expect(picker).not.toContain(name(brand));
+    // Upstream's page, unfiltered, would offer them all: the test is not vacuous.
+    const offered = renderStrip(buildProviderGroups({} as Config));
+    expect(offered).toContain(i18n.t('providersPage.picker.moreQuickConnect'));
   });
 
   test('configured sponsor keys stay reachable: every configured key is listed', async () => {
@@ -170,39 +266,37 @@ describe('AI Providers sponsor groups', () => {
     }
     expect(count(shown)).toBe(count(all));
     expect(count(shown)).toBeGreaterThanOrEqual(1 + SPONSOR_GROUP_BRANDS.length);
-    // Listed with the other providers: one list, no Quick Fill heading.
-    const html = renderList(shown);
-    expect(html.match(/<aside\b/g) ?? []).toHaveLength(1);
-    expect(html).not.toContain(i18n.t('providersPage.categories.quickFill'));
+    // Listed in the strip with the other providers (the "Quick Fill" divider is hidden by the theme), and no
+    // invitation to add another.
+    const html = renderStrip(shown);
     for (const brand of SPONSOR_GROUP_BRANDS) expect(html).toContain(name(brand as ProviderBrand));
+    expect(html).not.toContain(i18n.t('providersPage.picker.moreQuickConnect'));
+    expect(hiddenByTheme('BrandTabs', 'divider')).toBe(true);
+    // The "Add provider" catalogue neither offers nor features one: a configured sponsor is reached from its tab.
+    const picker = renderPicker(groupsToAdd(shown));
+    expect(picker).not.toContain(`>${i18n.t('providersPage.picker.featuredBadge')}<`);
+    for (const brand of SPONSOR_GROUP_BRANDS)
+      expect(picker).not.toContain(name(brand as ProviderBrand));
+    expect(picker).toContain(name('kimi'));
+    expect(picker).toContain(name('codex'));
+    // Upstream's catalogue would feature them.
+    expect(renderPicker(shown)).toContain(`>${i18n.t('providersPage.picker.featuredBadge')}<`);
   });
 
-  test('each configured sponsor key is a row with edit, delete and an on/off switch', async () => {
+  test('each configured sponsor key is a card with edit, delete and an on/off switch', async () => {
     await i18n.changeLanguage('en');
     for (const group of groupsFor(configured).filter((g) => SPONSOR_GROUP_BRANDS.includes(g.id))) {
-      const html = renderToStaticMarkup(
-        createElement(ProviderResourcePanel, {
-          group,
-          filter: '',
-          onFilterChange: () => {},
-          filteredResources: group.resources,
-          selectedId: null,
-          onView: () => {},
-          onEdit: () => {},
-          onDelete: () => {},
-          onToggleDisabled: () => {},
-          onCreate: () => {},
-        })
-      );
+      const html = renderPanel(group);
       expect(html).toContain(`aria-label="${i18n.t('providersPage.actions.edit')}"`);
       expect(html).toContain(`aria-label="${i18n.t('providersPage.actions.delete')}"`);
       expect(html).toMatch(/<input[^>]*type="checkbox"/);
     }
   });
 
-  test('a remembered sponsor selection with nothing configured falls back to the first provider', () => {
+  test('a remembered sponsor selection with nothing configured falls back as upstream does', () => {
+    // The remembered brand counts only when the listed groups hold it; otherwise upstream's own choice.
     expect(read('src/features/providers/ProvidersWorkbenchPage.tsx')).toMatch(
-      /groups\.some\(\(group\) => group\.id === uiState\.activeBrand\)\s*\? uiState\.activeBrand\s*: firstVisibleBrand/
+      /groups\.some\(\(group\) => group\.id === uiState\.activeBrand\)\s*\? uiState\.activeBrand\s*: \(connectedGroups\[0\]\?\.id/
     );
   });
 });
@@ -219,50 +313,39 @@ describe('no "New" on a sponsor group', () => {
     })),
   } as unknown as Config;
   const empty = buildProviderGroups({} as Config);
-  const renderPanel = (group: ProviderGroup, filteredResources: ProviderGroup['resources']) =>
-    renderToStaticMarkup(
-      createElement(ProviderResourcePanel, {
-        group,
-        filter: filteredResources.length ? '' : 'no-such-key',
-        onFilterChange: () => {},
-        filteredResources,
-        selectedId: null,
-        onView: () => {},
-        onEdit: () => {},
-        onDelete: () => {},
-        onToggleDisabled: () => {},
-        onCreate: () => {},
-      })
-    );
-  const newButton = () => `<span>${i18n.t('providersPage.actions.new')}</span>`;
-  const escapeHtml = (text: string) =>
-    text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#x27;');
+  const newFor = (group: ProviderGroup) =>
+    i18n.t('providersPage.actions.newFor', {
+      provider: i18n.t(`providersPage.providerNames.${group.id}`),
+    });
+  const addLabel = (group: ProviderGroup) =>
+    group.nativeSections ? i18n.t('providersPage.connections.create') : newFor(group);
 
   test('sponsor groups offer no "New"; every other provider does', () => {
     for (const brand of SPONSOR_GROUP_BRANDS) expect(offersCreate(brand)).toBe(false);
+    expect(groupsToAdd(empty).map((group) => group.id)).toEqual(
+      empty.map((group) => group.id).filter((id) => !SPONSOR_GROUP_BRANDS.includes(id))
+    );
     const others = PROVIDER_BRAND_ORDER.filter((brand) => !SPONSOR_GROUP_BRANDS.includes(brand));
     expect(others).toContain('codex');
     expect(others).toContain('openaiCompatibility');
     for (const brand of others) expect(offersCreate(brand)).toBe(true);
   });
 
-  test('the page header shows "New" only for a group that offers it', () => {
-    expect(page()).toContain('showNewAction={!fixedBrand && offersCreate(activeGroup.id)}');
-    // Every way to open the create form goes through openCreate, used by exactly the header and the panel.
-    expect(page().match(/mode: 'create'/g) ?? []).toHaveLength(1);
-    expect(page().match(/\bopenCreate\b/g) ?? []).toHaveLength(3); // its definition, the header, the panel
-    expect(page()).toContain('onNew={openCreate}');
+  test('the page opens no blank form for a sponsor group, by any route', () => {
+    // One way into a group's form, for the panel's button, the catalogue and the first-run page alike.
+    expect(page()).toMatch(
+      /const target = getConnectionFormTarget\(group\);\n\s*if \(target\.mode === 'create' && !offersCreate\(brand\)\) return;\n\s*setSheetState\(\{ open: true, brand, fromPicker, \.\.\.target \}\);/
+    );
+    expect(page().match(/\bgetConnectionFormTarget\(/g) ?? []).toHaveLength(1);
+    expect(page()).not.toContain("mode: 'create'");
+    expect(page().match(/\bopenConnectionForm\(/g) ?? []).toHaveLength(3); // the panel, both catalogues
+    expect(page()).toContain('const openCreate = () => openConnectionForm(activeBrand, false);');
     expect(page()).toContain('onCreate={openCreate}');
-    // The other header (no group listed) has a disabled "New" that does nothing.
-    expect(page()).toMatch(/onNew=\{\(\) => \{\}\}\s*isNewDisabled\s/);
+    // The header's button opens the catalogue, not a form.
+    expect(page()).toContain('onNew={openPicker}');
   });
 
-  test('a populated sponsor group: no "New" on an empty search; edit, delete and the switch stay', async () => {
+  test('a populated sponsor group: its form opens to edit; its cards keep view, edit, delete and the switch', async () => {
     await i18n.changeLanguage('en');
     const sponsors = providerGroupsWithoutOffers(buildProviderGroups(configured)).filter((group) =>
       SPONSOR_GROUP_BRANDS.includes(group.id)
@@ -270,35 +353,34 @@ describe('no "New" on a sponsor group', () => {
     expect(sponsors.map((group) => group.id).sort()).toEqual([...SPONSOR_GROUP_BRANDS].sort());
     for (const group of sponsors) {
       expect(group.resources.length).toBeGreaterThan(0);
-      const none = renderPanel(group, []);
-      expect(none).not.toContain(newButton());
-      // The empty text names no "New" that is not there: the stock text says to click it.
-      expect(none).not.toContain(escapeHtml(i18n.t('providersPage.table.empty')));
-      expect(none).toContain(escapeHtml(i18n.t('provimux.providers.sponsor_empty')));
-      const rows = renderPanel(group, group.resources);
-      expect(rows).not.toContain(newButton());
-      expect(rows).toContain(`aria-label="${i18n.t('providersPage.actions.view')}"`);
-      expect(rows).toContain(`aria-label="${i18n.t('providersPage.actions.edit')}"`);
-      expect(rows).toContain(`aria-label="${i18n.t('providersPage.actions.delete')}"`);
-      expect(rows).toMatch(/<input[^>]*type="checkbox"/);
+      expect(getConnectionFormTarget(group).mode).toBe('edit');
+      // An empty search: no "New", and the stock text names none.
+      const none = renderPanel(group, [], 'no-such-key');
+      expect(none).not.toContain(newFor(group));
+      expect(none).toContain(i18n.t('providersPage.table.noMatch'));
+      const cards = renderPanel(group);
+      expect(cards).not.toContain(newFor(group));
+      expect(cards).toContain(`aria-label="${i18n.t('providersPage.actions.view')}"`);
+      expect(cards).toContain(`aria-label="${i18n.t('providersPage.actions.edit')}"`);
+      expect(cards).toContain(`aria-label="${i18n.t('providersPage.actions.delete')}"`);
+      expect(cards).toMatch(/<input[^>]*type="checkbox"/);
     }
   });
 
-  test('Codex and OpenAI Compatible keep "New" on an empty list', async () => {
+  test('Codex and OpenAI Compatible keep their add button on an empty list', async () => {
     await i18n.changeLanguage('en');
     for (const brand of ['codex', 'openaiCompatibility']) {
       const group = empty.find((g) => g.id === brand);
       expect(group).toBeDefined();
-      const none = renderPanel(group as ProviderGroup, []);
-      expect(none).toContain(newButton());
-      expect(none).toContain(escapeHtml(i18n.t('providersPage.table.empty')));
+      expect(getConnectionFormTarget(group as ProviderGroup).mode).toBe('create');
+      expect(renderPanel(group as ProviderGroup)).toContain(addLabel(group as ProviderGroup));
     }
   });
 });
 
 describe('referral links', () => {
   // The stylesheet as the browser gets it, and its link rules as matchers.
-  const css = sass.compile('src/provimux/theme/_sponsors.scss').css;
+  const css = sponsorCss;
   const linkRule = css.slice(0, css.indexOf('{'));
   const matchers = [...linkRule.matchAll(/a\[href(\*|\^)="([^"]+)"( i)?\]/g)].map(
     ([, op, value, flag]) => ({ op, value, insensitive: Boolean(flag) })
@@ -317,7 +399,17 @@ describe('referral links', () => {
 
   test('the rule hides every referral parameter the test knows, and keeps ordinary links', () => {
     expect(matchers.length).toBeGreaterThan(20);
-    for (const param of ['aff', 'ref', 'referral', 'invite', 'invitecode', 'keyword', 'promo', 'coupon', 'via']) {
+    for (const param of [
+      'aff',
+      'ref',
+      'referral',
+      'invite',
+      'invitecode',
+      'keyword',
+      'promo',
+      'coupon',
+      'via',
+    ]) {
       expect(hidden(`https://example.com/?${param}=x`)).toBe(true);
       expect(hidden(`https://example.com/path?a=1&${param.toUpperCase()}=x`)).toBe(true);
     }
@@ -329,9 +421,14 @@ describe('referral links', () => {
       'https://github.com/router-for-me/CLIProxyAPI?tab=readme-ov-file',
     ];
     expect(ordinary.filter(hidden)).toEqual([]);
-    // The line that only introduces a hidden link goes too, and so does the Kimi offer.
+    // The line that only introduces a hidden link goes too, and so do AI Providers' note that only introduces
+    // one (Kimi's offer, a reseller's registration) and the catalogue's Kimi offer.
     expect(css).toContain('p:has(> a[href*="?aff=" i])');
-    expect(css).toContain('[class*=ProviderResourcePanel-module__kimiPromo___]');
+    expect(css).toContain('[class*=BrandPanel-module__note___]:has(> a[href*="?aff=" i])');
+    expect(css).toContain(
+      '[class*=BrandPanel-module__note___]:has(> a[href^="https://s.qiniu.com/" i])'
+    );
+    expect(hiddenByTheme('ProviderPicker', 'offer')).toBe(true);
   });
 
   // What the pages that carry sponsor links render.
@@ -339,19 +436,13 @@ describe('referral links', () => {
     await i18n.changeLanguage('en');
     const pages: ReactElement[] = [
       createElement(MemoryRouter, null, createElement(OAuthPage)),
-      ...PROVIDER_BRAND_ORDER.map((brand) =>
-        createElement(ProviderResourcePanel, {
-          group: { id: brand, resources: [] },
-          filter: '',
-          onFilterChange: () => {},
-          filteredResources: [],
-          selectedId: null,
-          onView: () => {},
-          onEdit: () => {},
-          onDelete: () => {},
-          onCreate: () => {},
-        })
-      ),
+      // Every provider's panel, and upstream's unfiltered catalogue (every partner card and Kimi's).
+      ...buildProviderGroups({} as Config).map((group) => panelElement(group)),
+      createElement(ProviderPicker, {
+        groups: buildProviderGroups({} as Config),
+        variant: 'page',
+        onPick: noop,
+      }),
       ...OAUTH_PROVIDERS.filter(isSponsor).map((card) =>
         createElement(OAuthFlowDialog, {
           open: true,

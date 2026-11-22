@@ -38,7 +38,29 @@ $pmx-referral-lines: ();
   display: none !important;
 }
 
-// The Kimi provider's sign-up offer under its hidden registration link (ProviderResourcePanel.tsx kimiPromo)
-[class*='ProviderResourcePanel-module__kimiPromo___'] {
+// AI Providers (upstream 1.29.0):
+// - the note above a provider's cards that only introduces its sign-up link: Kimi's offer and a reseller's
+//   registration link (BrandPanel.tsx, .note); a provider's own cards and controls stay;
+$pmx-referral-notes: ();
+@each $link in $pmx-referral-links {
+  $pmx-referral-notes: list.append(
+    $pmx-referral-notes,
+    "[class*='BrandPanel-module__note___']:has(> #{$link})",
+    $separator: comma
+  );
+}
+
+#{$pmx-referral-notes} {
+  display: none !important;
+}
+
+// - in the "Add provider" catalogue (ProviderPicker.tsx), Kimi's offer line (.offer; the Kimi card itself stays, a
+//   provider with an API of its own). The catalogue lists no sponsor at all (sponsors.ts, groupsToAdd), so its
+//   "Quick connect · Recommended" partner cards have nothing to show;
+// - in the provider strip (BrandTabs.tsx): the "Quick Fill" divider (.divider), so that configured resellers sit
+//   with the other providers. Its quick-connect invitation shows only resellers with nothing configured, and the
+//   page lists none of those (providerGroupsWithoutOffers).
+[class*='ProviderPicker-module__offer___'],
+[class*='BrandTabs-module__divider___'] {
   display: none !important;
 }

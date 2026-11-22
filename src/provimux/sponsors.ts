@@ -7,15 +7,18 @@
  *   to AI Providers in MainRoutes;
  * - the sponsor row under the proxy URL field: `hideSponsor` in config/components/fields/sharedFields.tsx;
  * - the AI Providers page (T-45, T-49): `providerGroupsWithoutOffers` where ProvidersWorkbenchPage.tsx builds its
- *   groups, and `noQuickFill` in ProviderCategoryList.tsx. A sponsor group with nothing configured (an offer to add
- *   one) is not listed; one that holds configured keys (keys whose base URL is the sponsor's, APIKEY.FUN included,
- *   which upstream shows only on Quick Start) is listed with the other providers, as an ordinary row with its
- *   edit, disable and delete controls;
- * - no "New" on a sponsor group (T-54): `offersCreate` gates the page header's "New" in
- *   ProvidersWorkbenchPage.tsx and the empty search result's "New" in ProviderResourcePanel.tsx. Upstream created
- *   sponsor keys only through their prefilled Quick Fill / Quick Start forms; "New" on such a group opened a blank
- *   form whose save replaced the group's saved key. A key for one of those services is added as Codex or OpenAI
- *   Compatible with its URL;
+ *   groups, which the provider strip, the panel and the "Add provider" catalogue all draw from. A sponsor group with
+ *   nothing configured (an offer to add one) is not listed, so the strip's quick-connect invitation and the
+ *   catalogue's partner cards have nothing to show; one that holds configured keys (keys whose base URL is the
+ *   sponsor's, APIKEY.FUN included, which upstream shows only on Quick Start) is listed with the other providers,
+ *   with its cards' view, edit, on/off and delete controls. The theme hides the strip's "Quick Fill" divider
+ *   (theme/_sponsors.scss). The "Add provider" catalogue (the sheet's and the first-run page) gets `groupsToAdd`:
+ *   no sponsor, configured or not;
+ * - no "New" on a sponsor group: `offersCreate` in ProvidersWorkbenchPage.tsx's `openConnectionForm`, the
+ *   page's only way into a form for a group (the panel's button, the catalogue and its first-run page): a sponsor
+ *   group never opens the blank create form, whose save replaced the group's saved key. Upstream 1.29.0 already
+ *   opens a populated sponsor group's bundle to edit instead; the seam keeps the rule if that changes. A key for one
+ *   of those services is added as Codex or OpenAI Compatible with its URL;
  * - the OAuth page's Kimi card: it is also the console's only Kimi login, and it lives under src/features/oauth/,
  *   which the guard protects; its affiliate sign-up links are hidden by the theme.
  *
@@ -51,7 +54,7 @@ export const SPONSOR_GROUP_BRANDS: readonly string[] = ['apikeyFun', 'fennoAI', 
 /**
  * The AI Providers page's groups: a sponsor group only when it holds configured keys, never as an offer to add
  * one. Kimi stays as upstream lists it: a provider with an API of its own (its registration link is hidden).
- * A remembered selection that is no longer listed falls back to the first provider.
+ * A remembered selection that is no longer listed falls back as upstream's page does (its first connected provider).
  */
 export function providerGroupsWithoutOffers<
   G extends { id: string; resources: readonly unknown[] },
@@ -61,17 +64,20 @@ export function providerGroupsWithoutOffers<
   );
 }
 
-/** No "Quick Fill" list: configured sponsor groups are listed with the other providers. */
-export function noQuickFill<T>(brands: readonly T[]): T[] {
-  void brands;
-  return [];
-}
-
 /**
- * Whether a provider group offers "New": not a sponsor group. Upstream created sponsor keys only through their
- * prefilled forms (Quick Fill, Quick Start), which Provimux hides; on a listed sponsor group "New" opened a blank
- * form whose save replaced the group's saved key (T-54). Its configured keys keep view, edit, on/off and delete.
+ * Whether a provider group offers "New" (the blank create form): not a sponsor group. Upstream created sponsor keys
+ * only through their prefilled forms (Quick Fill, Quick Start), which Provimux hides; on a listed sponsor group
+ * "New" opened a blank form whose save replaced the group's saved key. Its configured keys keep view, edit,
+ * on/off and delete.
  */
 export function offersCreate(brand: string): boolean {
   return !SPONSOR_GROUP_BRANDS.includes(brand);
+}
+
+/**
+ * The groups the "Add provider" catalogue lists: those that offer "New". A configured sponsor group is reached from
+ * its tab in the provider strip; the catalogue neither offers a sponsor nor features a configured one.
+ */
+export function groupsToAdd<G extends { id: string }>(groups: readonly G[]): G[] {
+  return groups.filter((group) => offersCreate(group.id));
 }

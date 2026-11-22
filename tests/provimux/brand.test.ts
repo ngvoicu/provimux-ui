@@ -94,7 +94,10 @@ describe('seams', () => {
     expect(layout).toContain('const fullBrandName = PROVIMUX_BRAND.fullName;');
     expect(layout).toContain('alt={PROVIMUX_BRAND.name} className="sidebar-brand-logo"');
     expect(layout).toContain('<ProvimuxTagline className="sidebar-brand-tagline" />');
-    expect(layout).toMatch(/<PageTransition[\s\S]*?\/>\s*<ProvimuxFooter \/>\s*<\/main>/);
+    // The footer is the main area's last child, after the routes (wrapped in upstream's plugin logos provider).
+    expect(layout).toMatch(
+      /<PageTransition[\s\S]*?\/>\s*<\/PluginProviderLogos\.Provider>\s*<ProvimuxFooter \/>\s*<\/main>/
+    );
     expect(layout).not.toContain('CPAMC');
   });
 
