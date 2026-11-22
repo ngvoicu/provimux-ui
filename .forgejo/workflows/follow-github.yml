@@ -6,9 +6,11 @@ name: Follow GitHub
 # folder exists, ignores .github/workflows/: on the NAS this is the only workflow (no guard, check, publish, release
 # or upstream CI, which assume GitHub, its secrets and its environment). It is a layer file: every main and -pmx tag
 # pushed from now on carries it.
-# It runs only git: no repository code. Fast-forward only, and a tag is only ever added, never moved: if the NAS
-# has a main commit that GitHub lacks (as after a sync rebases the layer onto a new upstream release), or a tag at
-# another commit, the job fails and changes nothing more: no force push, no merge commit.
+# It runs only git: no repository code. The NAS is a mirror of GitHub's main: a fast-forward when it can be one;
+# when GitHub's main is not a descendant of the NAS's (a sync rebases the layer onto each upstream release and pushes
+# it with --force-with-lease), the NAS's main is first kept as refs/nas-backup/main-<UTC time>, then set to GitHub's,
+# in one atomic push, so no commit is lost on the NAS. Never a merge commit; GitHub is only read. A tag is only ever
+# added, never moved: a tag at another commit on GitHub is reported as an error and left as it is.
 on:
   schedule:
     - cron: "27 * * * *"
@@ -26,24 +28,30 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
-      - name: Fast-forward main to GitHub's
+      - name: Bring main to GitHub's
         run: |
-          git fetch --no-tags origin main
-          git fetch --no-tags https://github.com/ngvoicu/provimux-ui.git main
-          here=$(git rev-parse origin/main)
-          github=$(git rev-parse FETCH_HEAD)
+          set -eu
+          git fetch --no-tags origin "+refs/heads/main:refs/remotes/origin/main"
+          git fetch --no-tags https://github.com/ngvoicu/provimux-ui.git "+refs/heads/main:refs/remotes/github/main"
+          here=$(git rev-parse --verify "refs/remotes/origin/main^{commit}")
+          github=$(git rev-parse --verify "refs/remotes/github/main^{commit}")
           echo "NAS main: $here"
           echo "GitHub main: $github"
           if [ "$here" = "$github" ]; then
             echo "Already equal."
             exit 0
           fi
-          if ! git merge-base --is-ancestor "$here" "$github"; then
-            echo "::error::The NAS's main has commits that GitHub's lacks: not a fast-forward. Nothing was changed."
-            exit 1
+          if git merge-base --is-ancestor "$here" "$github"; then
+            git push --force-with-lease="refs/heads/main:$here" origin "$github:refs/heads/main"
+            echo "Fast-forward: the NAS's main is now $github."
+            exit 0
           fi
-          git push origin "$github:refs/heads/main"
-          echo "The NAS's main is now $github."
+          # GitHub's main is not a descendant of the NAS's (a sync rebased it, or the NAS got a commit GitHub lacks).
+          # The NAS is a mirror: its main is kept as refs/nas-backup/main-<UTC time>, then set to GitHub's, in one
+          # atomic push that holds only while the NAS's main is still the commit read above. Only the NAS changes.
+          backup="refs/nas-backup/main-$(date -u +%Y%m%dT%H%M%SZ)"
+          git push --atomic --force-with-lease="refs/heads/main:$here" origin "$here:$backup" "$github:refs/heads/main"
+          echo "::warning::GitHub's main is not a descendant of the NAS's. The NAS's main $here is kept as $backup; main is now $github."
       - name: Add GitHub's new v<X.Y.Z> and -pmx tags
         run: |
           git fetch --no-tags https://github.com/ngvoicu/provimux-ui.git '+refs/tags/*:refs/github-tags/*'
