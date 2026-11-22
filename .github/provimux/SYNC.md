@@ -346,13 +346,12 @@ cd - && git worktree remove ../pui-publish
    and so is a README commit out of normal form: no flag accepts it.
 5. **Plan, confirmation, re-checks, one atomic push**: `main` with `--force-with-lease=refs/heads/main:<old main>` (a
    literal SHA), `v<base>` at upstream's commit (when the repository lacks it), `v<base>-pmx.1` at the candidate.
-   Right after the push it sets the release authorization (owner's credentials; "Release authorization"). GitHub
-   first, then the NAS mirror: `git push origin main v<base>-pmx.1` afterwards.
+   Right after the push it sets the release authorization (owner's credentials; "Release authorization"). Only
+   GitHub is pushed; the NAS mirror follows within the hour ("The NAS mirror").
 
-**The NAS mirror lags.** Neither the automatic publish nor `publish.sh` pushes to the NAS mirror (`origin`,
-`ssh://git@zeenas:2222/ngvoicu/provimux-ui.git`): after an automatic release its `main` and tags stay behind GitHub
-until the owner pushes them. Whoever restores from the mirror takes GitHub (`ngvoicu/provimux-ui`) as the truth for
-`main` and the `v*` tags, and checks that the mirror's `main` is an ancestor of GitHub's before using it.
+**The NAS mirror follows by itself.** Neither the automatic publish nor `publish.sh` pushes to the NAS mirror
+(`origin`, `ssh://git@zeenas:2222/ngvoicu/provimux-ui.git`): its hourly `Follow GitHub` run takes the rebased `main`
+and the new tags ("The NAS mirror"). GitHub (`ngvoicu/provimux-ui`) is the truth for `main` and the `v*` tags.
 6. **Wait and close**: until the `provimux-ui-release` run of the tag at the candidate finished and the release is
    complete (promoted); then it closes the issue.
 
@@ -441,10 +440,13 @@ The owner decided (2026-11-19, after review T-77) to accept these and not build 
 The owner's Forgejo server keeps a copy, `ssh://git@zeenas:2222/ngvoicu/provimux-ui.git`: `main`, the `v<X.Y.Z>-pmx.<n>`
 tags and the `v<X.Y.Z>` base tags of `ngvoicu/provimux-ui`, nothing else. GitHub is the truth; nobody pushes to the NAS.
 Its workflow `Follow GitHub` (`.forgejo/workflows/follow-github.yml`, a layer file) runs there every hour at minute 27
-(UTC), and by hand: it fast-forwards the NAS's `main` to GitHub's and adds GitHub's new tags, running only `git`. It
-never forces, never merges and never moves a tag: if the NAS has a `main` commit GitHub lacks, or a tag at another
-commit, the run fails and its log is at `http://zeenas:3000/ngvoicu/provimux-ui/actions`. A sync rebases the layer onto
-a new upstream release, so the run after a publish fails until the owner decides how the NAS's `main` moves. GitHub
+(UTC), and by hand: it brings the NAS's `main` to GitHub's and adds GitHub's new tags, running only `git`. The NAS is a
+mirror: a fast-forward when it can be one; when GitHub's `main` is not a descendant of the NAS's (each sync rebases the
+layer onto the new upstream release), the run first keeps the NAS's `main` as `refs/nas-backup/main-<UTC time>` (e.g.
+`main-20261122T152700Z`), then sets the NAS's `main` to GitHub's, in one atomic push with `--force-with-lease` on the
+NAS's `main`, so no commit is ever lost on the NAS. Only the NAS is written; GitHub is only read. It never merges and
+never moves a tag: a tag at another commit on GitHub is reported and left as it is, and the run fails; its log is at
+`http://zeenas:3000/ngvoicu/provimux-ui/actions`. The backups: `git ls-remote origin 'refs/nas-backup/*'`. GitHub
 never reads `.forgejo/`; Forgejo, while `.forgejo/workflows/` exists, ignores `.github/workflows/`, so none of the
 workflows above (nor upstream's `ci.yml` and `release.yml`) runs on the NAS. Keep `.forgejo/workflows/` in the layer:
 without it a push of `main` or of a tag to the NAS would start them there. It has followed when
