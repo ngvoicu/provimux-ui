@@ -74,11 +74,11 @@
           "modalities": { "input": ["text", "image"], "output": ["text"] },
           "reasoning_levels": ["medium", "high", "max"],
           "sources": {
-            "display_name": "live",
-            "context": "live",
-            "output": "live",
-            "input_modalities": "live",
-            "output_modalities": "live",
+            "display_name": "built-in",
+            "context": "built-in",
+            "output": "built-in",
+            "input_modalities": "built-in",
+            "output_modalities": "built-in",
             "reasoning_levels": "built-in"
           }
         }
