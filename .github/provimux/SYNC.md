@@ -382,6 +382,16 @@ git rm -q -f --ignore-unmatch README_CN.md
 GIT_EDITOR=true git rebase --continue
 ```
 
+### Upstream took a patch in another form
+
+The issue names the stopped commit and conflicting files. Compare the commit's effect with the new upstream tag: a
+squash or rework may implement all or only part of our change. A similar subject alone is not enough.
+
+In the scratch worktree's hand rebase above, skip a stopped commit only when upstream covers all of it
+(`git rebase --skip`). If it covers part, resolve the conflict to keep the missing behavior, stage the resolution and
+`git rebase --continue`. Keep the branding trailers. Once the rebase finishes, the guard and
+`bun install --frozen-lockfile && bun run verify` must pass before proceeding as in "The rebase stops".
+
 ### Upstream added or moved a root README
 
 Added (the guard names it, e.g. `README_JA.md`): read it (`git show v<base>:<path>`). On the old `main`, one layer
