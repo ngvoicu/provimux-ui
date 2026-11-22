@@ -27,7 +27,7 @@ import {
 import { APIKEY_FUN_DISPLAY_NAME } from './sponsor';
 import { isSponsorPartialMutationError } from './sponsorMutationRecovery';
 import { useProviderWorkbench } from './useProviderWorkbench';
-import { offersCreate, providerGroupsWithoutOffers } from '@/provimux/sponsors';
+import { groupsToAdd, offersCreate, providerGroupsWithoutOffers } from '@/provimux/sponsors';
 import {
   getProviderFilterState,
   readProvidersWorkbenchUiState,
@@ -426,7 +426,7 @@ export function ProvidersWorkbenchPage({ fixedBrand }: ProvidersWorkbenchPagePro
       onUpdated={handleUpdated}
       mutationDisabled={disableMutations}
       usageByProvider={usageByProvider}
-      pickerGroups={groups}
+      pickerGroups={groupsToAdd(groups)}
       onPick={(brand) => openConnectionForm(brand, true)}
       onBackToPicker={backToPicker}
     />
@@ -443,7 +443,7 @@ export function ProvidersWorkbenchPage({ fixedBrand }: ProvidersWorkbenchPagePro
             {t('providersPage.picker.onboardingTitle')}
           </h2>
           <ProviderPicker
-            groups={groups}
+            groups={groupsToAdd(groups)}
             variant="page"
             onPick={(brand) => openConnectionForm(brand, false)}
           />
