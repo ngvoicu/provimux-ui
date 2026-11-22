@@ -34,8 +34,8 @@
     },
     {
       "auth_index": "0b7e2a91c4d3f6e8",
-      "provider": "kimi",
-      "login": { "name": "kimi-office@providers.dev.json", "email": "office@providers.dev", "label": "office@providers.dev" },
+      "provider": "gemini",
+      "login": { "name": null, "email": null, "label": "gemini-apikey" },
       "disabled": false,
       "source": "live",
       "live": {

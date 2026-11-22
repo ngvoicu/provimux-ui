@@ -76,9 +76,10 @@ describe('reading the answer', () => {
     });
     expect(devin.learned_models).toBe(1);
     expect(devin.models).toBeNull();
-    const kimi = lists.logins[1];
-    expect(kimi.live.from_cache).toBe(true);
-    expect(kimi.live.last_failure).toEqual({
+    const geminiKey = lists.logins[1];
+    expect(geminiKey.provider).toBe('gemini');
+    expect(geminiKey.live.from_cache).toBe(true);
+    expect(geminiKey.live.last_failure).toEqual({
       at: '2026-11-22T17:58:02Z',
       category: 'http_status',
       http_status: 401,
