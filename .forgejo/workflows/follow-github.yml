@@ -1,0 +1,66 @@
+name: Follow GitHub
+
+# Runs on the owner's Forgejo server (the NAS) only, and brings the NAS's copy of provimux-ui up to GitHub's:
+# main, the release tags v<X.Y.Z>-pmx.<n> and the upstream base tags v<X.Y.Z> they sit on. The NAS holds nothing else.
+# GitHub reads .github/workflows/ only, so it never sees this file. Forgejo reads .forgejo/workflows/ and, while this
+# folder exists, ignores .github/workflows/: on the NAS this is the only workflow (no guard, check, publish, release
+# or upstream CI, which assume GitHub, its secrets and its environment). It is a layer file: every main and -pmx tag
+# pushed from now on carries it.
+# It runs only git: no repository code. Fast-forward only, and a tag is only ever added, never moved: if the NAS
+# has a main commit that GitHub lacks (as after a sync rebases the layer onto a new upstream release), or a tag at
+# another commit, the job fails and changes nothing more: no force push, no merge commit.
+on:
+  schedule:
+    - cron: "27 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  follow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Fast-forward main to GitHub's
+        run: |
+          git fetch --no-tags origin main
+          git fetch --no-tags https://github.com/ngvoicu/provimux-ui.git main
+          here=$(git rev-parse origin/main)
+          github=$(git rev-parse FETCH_HEAD)
+          echo "NAS main: $here"
+          echo "GitHub main: $github"
+          if [ "$here" = "$github" ]; then
+            echo "Already equal."
+            exit 0
+          fi
+          if ! git merge-base --is-ancestor "$here" "$github"; then
+            echo "::error::The NAS's main has commits that GitHub's lacks: not a fast-forward. Nothing was changed."
+            exit 1
+          fi
+          git push origin "$github:refs/heads/main"
+          echo "The NAS's main is now $github."
+      - name: Add GitHub's new v<X.Y.Z> and -pmx tags
+        run: |
+          git fetch --no-tags https://github.com/ngvoicu/provimux-ui.git '+refs/tags/*:refs/github-tags/*'
+          bad=0
+          for ref in $(git for-each-ref --format='%(refname)' refs/github-tags/); do
+            tag=${ref#refs/github-tags/}
+            if ! printf '%s\n' "$tag" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-pmx\.[0-9]+)?$'; then
+              continue
+            fi
+            github=$(git rev-parse "$ref")
+            here=$(git ls-remote origin "refs/tags/$tag" | cut -f1)
+            if [ -z "$here" ]; then
+              git push origin "$ref:refs/tags/$tag"
+              echo "Added $tag ($github)."
+            elif [ "$here" != "$github" ]; then
+              echo "::error::$tag is $here on the NAS and $github on GitHub. Left as it is."
+              bad=1
+            fi
+          done
+          exit "$bad"
