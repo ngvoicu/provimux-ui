@@ -59,10 +59,12 @@ describe('probes', () => {
       const state = useProvimuxPresence.getState();
       expect(state.modelRoutes.status).toBe('unsupported');
       expect(state.liveLists.status).toBe('unsupported');
+      expect(state.modelLists.status).toBe('unsupported');
       expect(state.savings.status).toBe('unsupported');
       expect(isProvimuxServer(state)).toBe(false);
       expect(get.mock.calls.map((call) => call[0]).sort()).toEqual([
         '/provimux/live-lists',
+        '/provimux/model-lists',
         '/provimux/model-routes?model=',
         '/provimux/savings?period=today',
       ]);
@@ -84,9 +86,10 @@ describe('probes', () => {
       const state = useProvimuxPresence.getState();
       expect(state.modelRoutes.status).toBe('ready');
       expect(state.liveLists).toEqual({ status: 'error', message: 'live-list status unavailable' });
+      expect(state.modelLists.status).toBe('ready');
       expect(state.savings.status).toBe('ready');
       expect(isProvimuxServer(state)).toBe(true);
-      expect(get).toHaveBeenCalledTimes(3);
+      expect(get).toHaveBeenCalledTimes(4);
     } finally {
       get.mockRestore();
     }

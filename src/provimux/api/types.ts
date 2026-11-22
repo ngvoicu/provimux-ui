@@ -118,6 +118,85 @@ export interface ProvimuxLiveListsResponse {
 }
 
 /*
+ * Model lists: GET /v8/management/provimux/model-lists. Contract: Provimux
+ * `.github/provimux/design/pui13/openapi.yaml` (ModelListsResponse) and `design/model-lists.md` section 5.5. Per
+ * login, which source decides its models (its vendor's live list, the published list, the built-in list or none).
+ * A Provimux without it answers 404, and the console shows the older live-lists page instead.
+ */
+
+/** Which source decides a login's models now; another value is unknown to this console. */
+export type ProvimuxModelListSource = 'live' | 'published' | 'built-in' | 'none' | (string & {});
+
+export interface ProvimuxModelListLive {
+  /** The vendor has a list and this login is asked. */
+  supported: boolean;
+  /** A list of this account is held and not older than 7 days. */
+  held: boolean;
+  /** A list of this account is held but was not refreshed for 7 days, so the login no longer uses it. */
+  expired: boolean;
+  fetched_at: Timestamp | null;
+  /** Read from the disk cache at start, not fetched again yet. */
+  from_cache: boolean;
+  fetching: boolean;
+  listed_models: number | null;
+  last_failure: ProvimuxLiveListFailure | null;
+}
+
+/** "live" (the vendor's list stated it), "built-in" (the catalog did), or null: no source states it. */
+export type ProvimuxFieldSource = 'live' | 'built-in' | (string & {}) | null;
+
+export interface ProvimuxModelListModel {
+  id: string;
+  display_name: string | null;
+  /** live, built-in, provimux (added by Provimux itself), other (config, plugin, alias). */
+  source: string;
+  /** The vendor's list names it and the catalog lacks it. */
+  learned: boolean;
+  limits: ProvimuxLimits;
+  modalities: { input: string[]; output: string[] };
+  reasoning_levels: string[];
+  sources: {
+    display_name: ProvimuxFieldSource;
+    context: ProvimuxFieldSource;
+    output: ProvimuxFieldSource;
+    input_modalities: ProvimuxFieldSource;
+    output_modalities: ProvimuxFieldSource;
+    reasoning_levels: ProvimuxFieldSource;
+  };
+}
+
+export interface ProvimuxModelListLogin {
+  auth_index: string | null;
+  provider: string;
+  login: ProvimuxLogin;
+  disabled: boolean;
+  source: ProvimuxModelListSource;
+  live: ProvimuxModelListLive;
+  registered_models: number | null;
+  /** Models it serves that the catalog lacks. */
+  learned_models: number | null;
+  /** Filled only when asked for this login. */
+  models: ProvimuxModelListModel[] | null;
+}
+
+export interface ProvimuxModelListsResponse {
+  observed_at: Timestamp | null;
+  options: { live_lists: boolean | null; published_lists: boolean | null };
+  built_in: { dataset_version: string | null; generated_at: Timestamp | null };
+  published: {
+    /** held, none or off; another value is unknown. */
+    state: string;
+    dataset_version: string | null;
+    generated_at: Timestamp | null;
+    fetched_at: Timestamp | null;
+    from_cache: boolean;
+    last_failure: ProvimuxLiveListFailure | null;
+  };
+  login_types: string[];
+  logins: ProvimuxModelListLogin[];
+}
+
+/*
  * Savings (T-108): GET /v8/management/provimux/savings. Contract: Provimux `.github/provimux/design/savings/`
  * (`openapi.yaml`, `04-console-page.md` section 6). Daily totals of the server's zone, valued at list prices.
  */

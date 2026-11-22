@@ -2,6 +2,7 @@ import { ProvimuxPageGate } from './components/ProvimuxPageGate';
 import { AliasesPage } from './pages/aliases/AliasesPage';
 import { AliasesRedirect } from './pages/aliases/AliasesRedirect';
 import { LiveListsPage } from './pages/liveLists/LiveListsPage';
+import { ModelListsRoute } from './pages/modelLists/ModelListsRoute';
 import { ModelRoutesPage } from './pages/modelRoutes/ModelRoutesPage';
 import { SavingsPage } from './pages/savings/SavingsPage';
 
@@ -23,11 +24,7 @@ export const PROVIMUX_ROUTES = [
   },
   {
     path: '/provimux/live-lists',
-    element: (
-      <ProvimuxPageGate endpoint="liveLists">
-        <LiveListsPage />
-      </ProvimuxPageGate>
-    ),
+    element: <ModelListsRoute fallback={<LiveListsPage />} />,
   },
   {
     path: '/provimux/savings',
