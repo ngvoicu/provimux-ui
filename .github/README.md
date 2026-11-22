@@ -36,7 +36,7 @@ repository) &nbsp;·&nbsp; **[providers.dev](https://providers.dev)**
 
 - **[Provimux's own pages](#provimuxs-own-pages)**: **Model routes**, which API keys and logins serve each model, by
   priority, with the cooldowns Provimux recorded and their reasons, and which OpenRouter entries get Provimux's cache
-  markers; and **Live model lists**, each login's own model list, with a refresh.
+  markers; and **Model lists**, which list decides each login's models and how old it is, with a refresh.
 - **[The providers.dev look](#the-providersdev-look)**: "Provimux by providers.dev" throughout, in three themes.
 - **[The Provimux version](#the-provimux-version-and-the-console-on-the-system-page)** and the console's update source
   on the System page.
@@ -71,10 +71,15 @@ the Devin cooldowns it is causing now, and **OpenRouter**: the OpenAI-compatible
 gives cache markers, a session header and OpenRouter's own limits, with a link to edit them on AI Providers, where
 such an entry carries an "OpenRouter · Provimux" tag.
 
-**Live model lists.** The `models.live-lists` switch, a refresh request (the page says what the server answered; the
-rows then show each login's state as of the latest status read), and for each Claude, Codex and Meta login: its own
-live list or the catalog, whether a fetch is running, when it was fetched, how many models the provider listed and how
-many the login serves, and the last failed fetch (when, its category and HTTP status).
+**Model lists.** The `models.live-lists` switch, a refresh request (the page says what the server answered; the
+rows then show each login's state as of the latest status read), a line saying which published (providers.dev) list
+the server holds, and for each login: the list that decides its models (its provider's live list, the published list,
+the built-in list or none), how old that list is, with a mark once it is a day old and when it no longer counts after
+7 days, whether it was read from the server's disk cache, how many models the provider listed, how many the login
+serves and how many of them the catalog does not have yet, and the last failed fetch (when, its category and HTTP
+status). **Models** opens a login's models, with where each one and each of its values came from. On a Provimux older
+than the `model-lists` endpoint the same item is the earlier **Live model lists** page, for Claude, Codex and Meta
+logins.
 
 These pages use endpoints only Provimux has (`/v8/management/provimux/…`, described in
 [Provimux's README](https://github.com/ngvoicu/provimux/blob/main/.github/README.md#model-routes-and-live-list-status-for-the-console)).
