@@ -5,6 +5,9 @@ import type {
   ProvimuxLiveListsResponse,
   ProvimuxLogin,
   ProvimuxModel,
+  ProvimuxModelListLogin,
+  ProvimuxModelListModel,
+  ProvimuxModelListsResponse,
   ProvimuxModelRoute,
   ProvimuxModelRoutesResponse,
   ProvimuxReasoning,
@@ -153,6 +156,91 @@ export const readLiveLists = (value: unknown): ProvimuxLiveListsResponse => {
     enabled: bool(rec.enabled),
     providers: list(rec.providers, str),
     logins: list(rec.logins, readLiveLogin),
+  };
+};
+
+/*
+ * Model lists (model-lists.md 5.5): a missing flag is false, a missing count or time null, a missing list empty;
+ * an unknown source or state stays as it came, so the page can call it unknown.
+ */
+
+const fieldSource = (value: unknown): string | null => str(value);
+
+export const readModelListModel = (value: unknown): ProvimuxModelListModel | null => {
+  if (!isRec(value)) return null;
+  const id = str(value.id);
+  if (id === null) return null;
+  const modalities = isRec(value.modalities) ? value.modalities : {};
+  const sources = isRec(value.sources) ? value.sources : {};
+  return {
+    id,
+    display_name: str(value.display_name),
+    source: str(value.source) ?? 'unknown',
+    learned: value.learned === true,
+    limits: readLimits(value.limits),
+    modalities: { input: list(modalities.input, str), output: list(modalities.output, str) },
+    reasoning_levels: list(value.reasoning_levels, str),
+    sources: {
+      display_name: fieldSource(sources.display_name),
+      context: fieldSource(sources.context),
+      output: fieldSource(sources.output),
+      input_modalities: fieldSource(sources.input_modalities),
+      output_modalities: fieldSource(sources.output_modalities),
+      reasoning_levels: fieldSource(sources.reasoning_levels),
+    },
+  };
+};
+
+export const readModelListLogin = (value: unknown): ProvimuxModelListLogin | null => {
+  if (!isRec(value)) return null;
+  const live = isRec(value.live) ? value.live : {};
+  return {
+    auth_index: str(value.auth_index),
+    provider: str(value.provider) ?? 'unknown',
+    login: readLogin(value.login),
+    disabled: value.disabled === true,
+    source: str(value.source) ?? 'unknown',
+    live: {
+      supported: live.supported === true,
+      held: live.held === true,
+      expired: live.expired === true,
+      fetched_at: time(live.fetched_at),
+      from_cache: live.from_cache === true,
+      fetching: live.fetching === true,
+      listed_models: num(live.listed_models),
+      last_failure: readFailure(live.last_failure),
+    },
+    registered_models: num(value.registered_models),
+    learned_models: num(value.learned_models),
+    models: Array.isArray(value.models) ? list(value.models, readModelListModel) : null,
+  };
+};
+
+export const readModelLists = (value: unknown): ProvimuxModelListsResponse => {
+  const rec = isRec(value) ? value : {};
+  const options = isRec(rec.options) ? rec.options : {};
+  const builtIn = isRec(rec.built_in) ? rec.built_in : {};
+  const published = isRec(rec.published) ? rec.published : {};
+  return {
+    observed_at: time(rec.observed_at),
+    options: {
+      live_lists: bool(options.live_lists),
+      published_lists: bool(options.published_lists),
+    },
+    built_in: {
+      dataset_version: str(builtIn.dataset_version),
+      generated_at: time(builtIn.generated_at),
+    },
+    published: {
+      state: str(published.state) ?? 'unknown',
+      dataset_version: str(published.dataset_version),
+      generated_at: time(published.generated_at),
+      fetched_at: time(published.fetched_at),
+      from_cache: published.from_cache === true,
+      last_failure: readFailure(published.last_failure),
+    },
+    login_types: list(rec.login_types, str),
+    logins: list(rec.logins, readModelListLogin),
   };
 };
 

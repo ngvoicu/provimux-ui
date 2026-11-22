@@ -1,7 +1,8 @@
 import { apiClient } from '@/services/api/client';
-import { readLiveLists, readModelRoutes, readSavings } from './normalize';
+import { readLiveLists, readModelLists, readModelRoutes, readSavings } from './normalize';
 import type {
   ProvimuxLiveListsResponse,
+  ProvimuxModelListsResponse,
   ProvimuxModelRoutesResponse,
   ProvimuxSavingsPeriod,
   ProvimuxSavingsResponse,
@@ -18,6 +19,8 @@ type Client = Pick<typeof apiClient, 'get' | 'post' | 'put'>;
 export const PROVIMUX_PATHS = {
   modelRoutes: '/provimux/model-routes',
   liveLists: '/provimux/live-lists',
+  /** Its successor: every login type, the source that decides each login's models. 404 on older servers. */
+  modelLists: '/provimux/model-lists',
   savings: '/provimux/savings',
   /** Upstream's refresh: the catalogs and, with live lists on, every login's list (in the background). */
   modelsRefresh: '/models/refresh',
@@ -98,6 +101,18 @@ export const provimuxApi = {
   /** Per Claude, Codex and Meta login, its live model list. Small: one row per login; it is its own probe. */
   async liveLists(client: Client = apiClient): Promise<ProvimuxLiveListsResponse> {
     return readLiveLists(await client.get<unknown>(PROVIMUX_PATHS.liveLists));
+  },
+
+  /**
+   * Per login, the source that decides its models and its live list. Small: one row per login; it is its own
+   * probe. With `authIndex`, only that login, with its models and the source of each value.
+   */
+  async modelLists(
+    client: Client = apiClient,
+    authIndex?: string
+  ): Promise<ProvimuxModelListsResponse> {
+    const query = authIndex ? `?auth_index=${encodeURIComponent(authIndex)}` : '';
+    return readModelLists(await client.get<unknown>(`${PROVIMUX_PATHS.modelLists}${query}`));
   },
 
   /** Savings for a period, with every breakdown the page shows. "Today" is the server's day. */

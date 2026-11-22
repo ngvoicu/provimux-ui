@@ -51,12 +51,14 @@
       "aliases": "Aliases",
       "model_routes": "Model routes",
       "live_lists": "Live model lists",
+      "model_lists": "Model lists",
       "savings": "Savings"
     },
     "nav_meta": {
       "aliases": "The model names clients send, for every key and login",
       "model_routes": "Which subscription or API key serves each model",
       "live_lists": "Each login's own model list, live or from the catalog",
+      "model_lists": "Which list decides each login's models, and how old it is",
       "savings": "What prompt caching was worth, and what each account kind served"
     },
     "providers": {
@@ -261,6 +263,84 @@
       "count_unknown": "{{count}} unknown source",
       "count_unknown_one": "{{count}} unknown source",
       "count_unknown_other": "{{count}} unknown sources"
+    },
+    "lists": {
+      "title": "Model lists",
+      "lede": "Each login offers the models its own account lists, read from its provider: retired models disappear and new ones appear the day the provider lists them. A login without a list of its own takes the published or built-in list.",
+      "load_failed": "Could not load the model lists",
+      "switch_title": "Live lists",
+      "on_text": "On: each login whose provider publishes a list asks for it at startup, every 3 hours and when you refresh. A failed or partial fetch changes nothing, lists are kept on disk for the next start, and a list not refreshed for 7 days gives way to the published or built-in list.",
+      "off_text": "Off: every login takes the published or built-in list, and no login offers a model those lists lack. It applies at once.",
+      "saved_on": "Live lists are on",
+      "saved_off": "Live lists are off; every login takes the published or built-in list",
+      "published_held": "Published lists: providers.dev dataset {{version}} of {{date}}.",
+      "published_none": "Published lists: providers.dev has not been reached yet, and nothing is cached; logins without a live list take the built-in list.",
+      "published_off": "Published lists are not used by this Provimux: logins without a live list take the built-in list.",
+      "published_unknown": "Published lists: {{state}}.",
+      "published_unreached": "providers.dev has not been reached since {{since}}.",
+      "published_from_cache": "Read from the disk cache.",
+      "count_live": "{{count}} live",
+      "count_published": "{{count}} published",
+      "count_built_in": "{{count}} built-in",
+      "count_none": "{{count}} without a list",
+      "count_learned": "{{count}} not in the catalog yet",
+      "count_old": "{{count}} getting old",
+      "empty_title": "No login yet",
+      "empty_text": "This page lists logins of {{providers}}. Sign one in on OAuth Login.",
+      "col_age": "List age",
+      "source": {
+        "live": "Live list",
+        "published": "Published list",
+        "built-in": "Built-in list",
+        "none": "No list"
+      },
+      "state": {
+        "live": "The provider's list for this account decides its models.",
+        "live_failing": "The newest fetch failed; the previous list is kept.",
+        "live_old": "The list is more than a day old: fetches have been failing. After 7 days it gives way to the published or built-in list.",
+        "fetching": "A fetch is running now.",
+        "off": "Live lists are off.",
+        "disabled": "The login is disabled; it is never fetched.",
+        "expired": "The list was not refreshed for 7 days and is no longer used.",
+        "failed": "No list yet: the latest fetch failed.",
+        "waiting": "No list yet: the first fetch has not finished.",
+        "no_vendor_list": "This provider publishes no list for a login: it takes the published or built-in list.",
+        "unknown": "A model source this console does not know."
+      },
+      "age": {
+        "old": "Getting old",
+        "expired": "Expired"
+      },
+      "age_rule": "Lists are fetched every 3 hours. One not refreshed for 7 days gives way to the published or built-in list.",
+      "from_cache": "From disk",
+      "from_cache_title": "Read from the disk cache at start; not fetched again yet.",
+      "no_vendor_list": "no list of its own",
+      "learned": "{{count}} not in the catalog yet",
+      "show_models": "Models",
+      "hide_models": "Hide models",
+      "models_failed": "Could not load this login's models: {{message}}",
+      "models_empty": "This login serves no model now.",
+      "model_col": "Model",
+      "origin_col": "From",
+      "context_col": "Context",
+      "output_col": "Output",
+      "levels_col": "Reasoning",
+      "origin": {
+        "learned": "{{provider}}'s list; not in the catalog yet",
+        "live": "Live list",
+        "built-in": "Built-in list",
+        "provimux": "Added by Provimux",
+        "other": "Config, plugin or alias",
+        "unknown": "Unknown"
+      },
+      "field": {
+        "live": "From the provider's live list",
+        "built-in": "From the built-in list"
+      },
+      "field_unknown": "From {{source}}",
+      "legend_live": "from the provider's live list",
+      "legend_built_in": "from the built-in list; a value without a mark is stated by neither",
+      "note": "Logins of {{providers}} are listed; API keys keep the built-in list, except Gemini keys on Google's own host. The reason of a failed fetch, in words, stays in the server's log."
     },
     "console": {
       "release": "Console {{version}} · provimux-ui, on the Management Center {{base}}",
