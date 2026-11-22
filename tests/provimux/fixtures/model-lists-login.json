@@ -1,0 +1,88 @@
+{
+  "observed_at": "2026-11-22T18:04:11.482Z",
+  "options": { "live_lists": true, "published_lists": false },
+  "built_in": { "dataset_version": null, "generated_at": null },
+  "published": {
+    "state": "off",
+    "dataset_version": null,
+    "generated_at": null,
+    "fetched_at": null,
+    "from_cache": false,
+    "last_failure": null
+  },
+  "login_types": ["antigravity", "aistudio", "claude", "codex", "copilot", "devin", "gemini", "kimi", "meta", "vertex", "xai"],
+  "logins": [
+    {
+      "auth_index": "a8d167b7d82c8c15",
+      "provider": "devin",
+      "login": { "name": "devin-office@providers.dev.json", "email": "office@providers.dev", "label": "office@providers.dev" },
+      "disabled": false,
+      "source": "live",
+      "live": {
+        "supported": true,
+        "held": true,
+        "expired": false,
+        "fetched_at": "2026-11-22T16:10:44Z",
+        "from_cache": false,
+        "fetching": false,
+        "listed_models": 2,
+        "last_failure": null
+      },
+      "registered_models": 3,
+      "learned_models": 1,
+      "models": [
+        {
+          "id": "devin/gemini-4-neon",
+          "display_name": "Gemini 4 Neon",
+          "source": "live",
+          "learned": true,
+          "limits": { "context": 1048576, "output": 65536 },
+          "modalities": { "input": ["text", "image"], "output": ["text"] },
+          "reasoning_levels": ["low", "medium", "high"],
+          "sources": {
+            "display_name": "live",
+            "context": "live",
+            "output": "live",
+            "input_modalities": "live",
+            "output_modalities": "live",
+            "reasoning_levels": "live"
+          }
+        },
+        {
+          "id": "devin/swe-1-6-slow",
+          "display_name": "SWE-1.6 Slow",
+          "source": "provimux",
+          "learned": false,
+          "limits": { "context": 200000, "output": 64000 },
+          "modalities": { "input": ["text", "image"], "output": ["text"] },
+          "reasoning_levels": [],
+          "sources": {
+            "display_name": null,
+            "context": null,
+            "output": null,
+            "input_modalities": null,
+            "output_modalities": null,
+            "reasoning_levels": null
+          }
+        },
+        {
+          "id": "devin/swe-2",
+          "display_name": "SWE-2",
+          "source": "live",
+          "learned": false,
+          "limits": { "context": 262000, "output": 128000 },
+          "modalities": { "input": ["text", "image"], "output": ["text"] },
+          "reasoning_levels": ["medium", "high", "max"],
+          "sources": {
+            "display_name": "live",
+            "context": "live",
+            "output": "live",
+            "input_modalities": "live",
+            "output_modalities": "live",
+            "reasoning_levels": "built-in"
+          }
+        }
+      ]
+    }
+  ]
+}

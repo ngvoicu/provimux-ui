@@ -17,7 +17,7 @@ import { errorStatus, provimuxApi } from './api/provimuxApi';
  * upgrade under an open tab). A page's own loads report back, so a page that starts answering 404 hides itself.
  */
 
-export type ProvimuxEndpoint = 'modelRoutes' | 'liveLists' | 'savings';
+export type ProvimuxEndpoint = 'modelRoutes' | 'liveLists' | 'modelLists' | 'savings';
 export type PresenceStatus = 'unknown' | 'probing' | 'ready' | 'unsupported' | 'error';
 
 export interface PresenceEntry {
@@ -31,6 +31,8 @@ interface PresenceState {
   key: string | null;
   modelRoutes: PresenceEntry;
   liveLists: PresenceEntry;
+  /** The successor of liveLists (model-lists.md 5.5); a server without it keeps the live-lists page. */
+  modelLists: PresenceEntry;
   savings: PresenceEntry;
   /** Probes every endpoint for a connection, unless they were already probed for it. */
   probe: (key: string) => Promise<void>;
@@ -56,6 +58,7 @@ export function presenceOf(outcome: { error?: unknown }): PresenceEntry {
 const PROBES: Record<ProvimuxEndpoint, (client: typeof apiClient) => Promise<unknown>> = {
   modelRoutes: (client) => provimuxApi.probeModelRoutes(client),
   liveLists: (client) => provimuxApi.liveLists(client),
+  modelLists: (client) => provimuxApi.modelLists(client),
   savings: (client) => provimuxApi.probeSavings(client),
 };
 
@@ -63,11 +66,18 @@ export const useProvimuxPresence = create<PresenceState>((set, get) => ({
   key: null,
   modelRoutes: UNKNOWN,
   liveLists: UNKNOWN,
+  modelLists: UNKNOWN,
   savings: UNKNOWN,
 
   probe: async (key) => {
     if (get().key === key) return;
-    set({ key, modelRoutes: PROBING, liveLists: PROBING, savings: PROBING });
+    set({
+      key,
+      modelRoutes: PROBING,
+      liveLists: PROBING,
+      modelLists: PROBING,
+      savings: PROBING,
+    });
     const client = apiClient.captureConnection(() => get().key === key);
     await Promise.all(
       (Object.keys(PROBES) as ProvimuxEndpoint[]).map(async (endpoint) => {
@@ -94,7 +104,14 @@ export const useProvimuxPresence = create<PresenceState>((set, get) => ({
     }
   },
 
-  reset: () => set({ key: null, modelRoutes: UNKNOWN, liveLists: UNKNOWN, savings: UNKNOWN }),
+  reset: () =>
+    set({
+      key: null,
+      modelRoutes: UNKNOWN,
+      liveLists: UNKNOWN,
+      modelLists: UNKNOWN,
+      savings: UNKNOWN,
+    }),
 }));
 
 /** A page is listed while it answers, or fails for another reason than absence. */
@@ -105,6 +122,7 @@ export const isListed = (entry: PresenceEntry): boolean =>
 export const isProvimuxServer = (state: Pick<PresenceState, ProvimuxEndpoint>): boolean =>
   state.modelRoutes.status === 'ready' ||
   state.liveLists.status === 'ready' ||
+  state.modelLists.status === 'ready' ||
   state.savings.status === 'ready';
 
 /**
@@ -117,6 +135,7 @@ export function useProvimuxPages(): Record<ProvimuxEndpoint, PresenceEntry> {
   const serverVersion = useAuthStore((state) => state.serverVersion);
   const modelRoutes = useProvimuxPresence((state) => state.modelRoutes);
   const liveLists = useProvimuxPresence((state) => state.liveLists);
+  const modelLists = useProvimuxPresence((state) => state.modelLists);
   const savings = useProvimuxPresence((state) => state.savings);
   // Also when the entries were reset under a live connection: probe again rather than stay hidden.
   const probedKey = useProvimuxPresence((state) => state.key);
@@ -131,5 +150,5 @@ export function useProvimuxPages(): Record<ProvimuxEndpoint, PresenceEntry> {
     void presence.probe(key);
   }, [connectionStatus, apiBase, serverVersion, probedKey]);
 
-  return { modelRoutes, liveLists, savings };
+  return { modelRoutes, liveLists, modelLists, savings };
 }
