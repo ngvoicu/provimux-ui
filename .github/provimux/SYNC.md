@@ -436,6 +436,20 @@ The owner decided (2026-11-19, after review T-77) to accept these and not build 
   (immutability applies only to releases published afterwards) and carries no release authorization status; it stays
   the latest release until a newer one is promoted, and a promotion dry run against it says it would refuse it.
 
+## The NAS mirror
+
+The owner's Forgejo server keeps a copy, `ssh://git@zeenas:2222/ngvoicu/provimux-ui.git`: `main`, the `v<X.Y.Z>-pmx.<n>`
+tags and the `v<X.Y.Z>` base tags of `ngvoicu/provimux-ui`, nothing else. GitHub is the truth; nobody pushes to the NAS.
+Its workflow `Follow GitHub` (`.forgejo/workflows/follow-github.yml`, a layer file) runs there every hour at minute 27
+(UTC), and by hand: it fast-forwards the NAS's `main` to GitHub's and adds GitHub's new tags, running only `git`. It
+never forces, never merges and never moves a tag: if the NAS has a `main` commit GitHub lacks, or a tag at another
+commit, the run fails and its log is at `http://zeenas:3000/ngvoicu/provimux-ui/actions`. A sync rebases the layer onto
+a new upstream release, so the run after a publish fails until the owner decides how the NAS's `main` moves. GitHub
+never reads `.forgejo/`; Forgejo, while `.forgejo/workflows/` exists, ignores `.github/workflows/`, so none of the
+workflows above (nor upstream's `ci.yml` and `release.yml`) runs on the NAS. Keep `.forgejo/workflows/` in the layer:
+without it a push of `main` or of a tag to the NAS would start them there. It has followed when
+`git ls-remote origin refs/heads/main` and `git ls-remote upstream refs/heads/main` agree.
+
 ## Testing the scripts
 
 - `bash .github/provimux/selftest.sh` runs the fixture tests offline (local repositories, a stub `gh` and `curl`):
