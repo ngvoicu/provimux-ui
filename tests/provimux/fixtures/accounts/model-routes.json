@@ -1,0 +1,388 @@
+{
+  "observed_at": "2026-11-24T14:00:00Z",
+  "models": [
+    {
+      "id": "claude-sonnet-4-6",
+      "display_name": null,
+      "owned_by": null,
+      "limits": {
+        "context": 200000,
+        "output": 64000
+      },
+      "routes": [
+        {
+          "auth_index": "li-claude-1",
+          "provider": "claude",
+          "kind": "oauth",
+          "priority": 10,
+          "host": null,
+          "login": {
+            "name": "claude-alex@example.com.json",
+            "email": "alex@example.com",
+            "label": "alex@example.com"
+          },
+          "limits": {
+            "context": 200000,
+            "output": 64000
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        },
+        {
+          "auth_index": "ak-anthropic-1",
+          "provider": "claude",
+          "kind": "apikey",
+          "priority": 0,
+          "host": "api.anthropic.com",
+          "login": {
+            "name": null,
+            "email": null,
+            "label": null
+          },
+          "limits": {
+            "context": 200000,
+            "output": 64000
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        }
+      ]
+    },
+    {
+      "id": "claude-opus-4-6",
+      "display_name": null,
+      "owned_by": null,
+      "limits": {
+        "context": 200000,
+        "output": 64000
+      },
+      "routes": [
+        {
+          "auth_index": "li-claude-1",
+          "provider": "claude",
+          "kind": "oauth",
+          "priority": 10,
+          "host": null,
+          "login": {
+            "name": "claude-alex@example.com.json",
+            "email": "alex@example.com",
+            "label": "alex@example.com"
+          },
+          "limits": {
+            "context": 200000,
+            "output": 64000
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        },
+        {
+          "auth_index": "ak-anthropic-1",
+          "provider": "claude",
+          "kind": "apikey",
+          "priority": 0,
+          "host": "api.anthropic.com",
+          "login": {
+            "name": null,
+            "email": null,
+            "label": null
+          },
+          "limits": {
+            "context": 200000,
+            "output": 64000
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        }
+      ]
+    },
+    {
+      "id": "gpt-5.2",
+      "display_name": null,
+      "owned_by": null,
+      "limits": {
+        "context": 200000,
+        "output": 64000
+      },
+      "routes": [
+        {
+          "auth_index": "li-codex-1",
+          "provider": "codex",
+          "kind": "oauth",
+          "priority": 10,
+          "host": null,
+          "login": {
+            "name": "codex-alex@example.com-plus.json",
+            "email": "alex@example.com",
+            "label": "alex@example.com"
+          },
+          "limits": {
+            "context": 200000,
+            "output": 64000
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        },
+        {
+          "auth_index": "li-codex-2",
+          "provider": "codex",
+          "kind": "oauth",
+          "priority": 5,
+          "host": null,
+          "login": {
+            "name": "codex-team@example.com-team.json",
+            "email": "team@example.com",
+            "label": "team@example.com"
+          },
+          "limits": {
+            "context": 200000,
+            "output": 64000
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        },
+        {
+          "auth_index": "ak-openai-1",
+          "provider": "codex",
+          "kind": "apikey",
+          "priority": 5,
+          "host": "api.openai.com",
+          "login": {
+            "name": null,
+            "email": null,
+            "label": null
+          },
+          "limits": {
+            "context": 200000,
+            "output": 64000
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        }
+      ]
+    },
+    {
+      "id": "gpt-5.2-codex",
+      "display_name": null,
+      "owned_by": null,
+      "limits": {
+        "context": 200000,
+        "output": 64000
+      },
+      "routes": [
+        {
+          "auth_index": "li-codex-1",
+          "provider": "codex",
+          "kind": "oauth",
+          "priority": 10,
+          "host": null,
+          "login": {
+            "name": "codex-alex@example.com-plus.json",
+            "email": "alex@example.com",
+            "label": "alex@example.com"
+          },
+          "limits": {
+            "context": 200000,
+            "output": 64000
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        },
+        {
+          "auth_index": "li-codex-2",
+          "provider": "codex",
+          "kind": "oauth",
+          "priority": 5,
+          "host": null,
+          "login": {
+            "name": "codex-team@example.com-team.json",
+            "email": "team@example.com",
+            "label": "team@example.com"
+          },
+          "limits": {
+            "context": 200000,
+            "output": 64000
+          },
+          "reasoning": null,
+          "recorded_cooldown": {
+            "scope": "model",
+            "model": "gpt-5.2-codex",
+            "reason": "quota",
+            "until": "2026-11-24T14:20:00Z",
+            "http_status": 429,
+            "backoff_level": 1
+          }
+        },
+        {
+          "auth_index": "ak-openai-1",
+          "provider": "codex",
+          "kind": "apikey",
+          "priority": 5,
+          "host": "api.openai.com",
+          "login": {
+            "name": null,
+            "email": null,
+            "label": null
+          },
+          "limits": {
+            "context": 200000,
+            "output": 64000
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        }
+      ]
+    },
+    {
+      "id": "swe-1.6",
+      "display_name": null,
+      "owned_by": null,
+      "limits": {
+        "context": 200000,
+        "output": 64000
+      },
+      "routes": [
+        {
+          "auth_index": "li-devin-1",
+          "provider": "devin",
+          "kind": "oauth",
+          "priority": 5,
+          "host": null,
+          "login": {
+            "name": "devin-alex@example.com.json",
+            "email": "alex@example.com",
+            "label": "alex@example.com"
+          },
+          "limits": {
+            "context": 200000,
+            "output": 64000
+          },
+          "reasoning": null,
+          "recorded_cooldown": {
+            "scope": "credential",
+            "model": null,
+            "reason": "credential_quota",
+            "until": "2026-11-24T14:47:00Z",
+            "http_status": 429,
+            "backoff_level": 2
+          }
+        }
+      ]
+    },
+    {
+      "id": "gemini-3-pro",
+      "display_name": null,
+      "owned_by": null,
+      "limits": {
+        "context": 200000,
+        "output": 64000
+      },
+      "routes": [
+        {
+          "auth_index": "li-antigravity-1",
+          "provider": "antigravity",
+          "kind": "oauth",
+          "priority": 0,
+          "host": null,
+          "login": {
+            "name": "antigravity-alex@example.com.json",
+            "email": "alex@example.com",
+            "label": "alex@example.com"
+          },
+          "limits": {
+            "context": 200000,
+            "output": 64000
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        }
+      ]
+    },
+    {
+      "id": "muse-1",
+      "display_name": null,
+      "owned_by": null,
+      "limits": {
+        "context": 200000,
+        "output": 64000
+      },
+      "routes": [
+        {
+          "auth_index": "li-meta-1",
+          "provider": "meta",
+          "kind": "oauth",
+          "priority": 0,
+          "host": null,
+          "login": {
+            "name": "meta-alex@example.com.json",
+            "email": "alex@example.com",
+            "label": "alex@example.com"
+          },
+          "limits": {
+            "context": 200000,
+            "output": 64000
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        }
+      ]
+    },
+    {
+      "id": "deepseek",
+      "display_name": null,
+      "owned_by": null,
+      "limits": {
+        "context": 200000,
+        "output": 64000
+      },
+      "routes": [
+        {
+          "auth_index": "ak-openrouter-1",
+          "provider": "openai-compatible-openrouter",
+          "kind": "apikey",
+          "priority": 0,
+          "host": "openrouter.ai",
+          "login": {
+            "name": null,
+            "email": null,
+            "label": null
+          },
+          "limits": {
+            "context": 200000,
+            "output": 64000
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        }
+      ]
+    },
+    {
+      "id": "qwen-coder",
+      "display_name": null,
+      "owned_by": null,
+      "limits": {
+        "context": 200000,
+        "output": 64000
+      },
+      "routes": [
+        {
+          "auth_index": "ak-openrouter-1",
+          "provider": "openai-compatible-openrouter",
+          "kind": "apikey",
+          "priority": 0,
+          "host": "openrouter.ai",
+          "login": {
+            "name": null,
+            "email": null,
+            "label": null
+          },
+          "limits": {
+            "context": 200000,
+            "output": 64000
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        }
+      ]
+    }
+  ]
+}

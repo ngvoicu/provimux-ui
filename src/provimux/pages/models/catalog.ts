@@ -634,7 +634,10 @@ export type NameView = 'all' | 'several' | 'cooling' | 'problems';
 
 export interface ModelsFilter {
   query: string;
-  /** 'all', `login:<channel>`, `family:<family>`, `openrouter`, or `id:<provider id>`. */
+  /**
+   * 'all', `login:<channel>`, `family:<family>`, `openrouter`, `id:<provider id>`, or `account:<auth index>`
+   * (one account: a login, or an API key; any index of an OpenAI-compatible entry names the entry).
+   */
   provider: string;
   view: NameView;
 }
@@ -654,17 +657,20 @@ const FAMILIES = [
 
 /**
  * The filter the page opens with, from its own parameters and the old pages' addresses (redirected here):
- * `?q=`, `?view=`, `?provider=` (Model routes: a provider id, or `openrouter`), `?family=` (the provider
- * forms' link), `?channel=` and `?store=` (the old login alias address).
+ * `?q=`, `?view=`, `?account=` (Accounts' link: one account, by its auth index), `?provider=` (Model routes:
+ * a provider id, or `openrouter`), `?family=` (the provider forms' link), `?channel=` and `?store=` (the old
+ * login alias address).
  */
 export function initialModelsFilter(params: URLSearchParams): ModelsFilter {
   const filter: ModelsFilter = { ...EMPTY_MODELS_FILTER, query: params.get('q')?.trim() ?? '' };
   const view = params.get('view');
   if (view === 'several' || view === 'cooling' || view === 'problems') filter.view = view;
+  const account = params.get('account')?.trim() ?? '';
   const channel = normalizeOAuthProviderKey(params.get('channel') ?? '');
   const family = params.get('family')?.trim() ?? '';
   const provider = params.get('provider')?.trim() ?? '';
-  if (channel) filter.provider = `login:${channel}`;
+  if (account) filter.provider = `account:${account}`;
+  else if (channel) filter.provider = `login:${channel}`;
   else if (FAMILIES.includes(family)) filter.provider = `family:${family}`;
   else if (provider === 'openrouter') filter.provider = 'openrouter';
   else if (provider) filter.provider = `id:${provider}`;
@@ -673,10 +679,36 @@ export function initialModelsFilter(params: URLSearchParams): ModelsFilter {
   return filter;
 }
 
+/**
+ * The name of the account an `account:<auth index>` filter names: a login's e-mail (its label, else its
+ * file), an API key's host or entry name; the index itself when nothing names it.
+ */
+export function accountNameOf(
+  routes: ProvimuxModelRoutesResponse | null,
+  entries: readonly AliasEntry[],
+  index: string
+): string {
+  for (const model of routes?.models ?? []) {
+    for (const route of model.routes) {
+      if (route.auth_index !== index) continue;
+      const name = route.login.email || route.login.label || route.host || route.login.name;
+      if (name) return name;
+    }
+  }
+  const entry = entries.find((e) => e.store === 'api-key' && e.authIndexes.includes(index));
+  if (entry?.store === 'api-key') return entry.host ?? entry.groupName ?? index;
+  return index;
+}
+
 /** The filter keys a line answers to. */
 export function lineProviderKeys(line: RouteLine, entries: readonly AliasEntry[]): string[] {
   const keys = [`id:${line.provider}`, line.access === 'sub' ? 'logins' : 'keys'];
   const entry = line.entryId ? entries.find((e) => e.id === line.entryId) : undefined;
+  if (line.authIndex) keys.push(`account:${line.authIndex}`);
+  // An OpenAI-compatible entry is one account with several keys: any of its indexes names all its lines.
+  if (entry?.store === 'api-key' && entry.keyIndex === null) {
+    for (const index of entry.authIndexes) keys.push(`account:${index}`);
+  }
   if (entry?.store === 'login') keys.push(`login:${entry.channel}`);
   else if (entry?.store === 'api-key') keys.push(`family:${entry.family}`);
   else if (line.access === 'sub') keys.push(`login:${normalizeOAuthProviderKey(line.provider)}`);

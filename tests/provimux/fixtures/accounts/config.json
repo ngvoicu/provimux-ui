@@ -1,0 +1,46 @@
+{
+  "config-version": 8,
+  "routing": { "strategy": "round-robin" },
+  "api-keys": {
+    "claude": [
+      {
+        "name": "anthropic",
+        "keys": [{ "api-key": "fixture-anthropic-key-0000a1b2", "auth_index": "ak-anthropic-1" }]
+      }
+    ],
+    "codex": [
+      {
+        "name": "openai",
+        "base-url": "https://api.openai.com/v1",
+        "keys": [
+          { "api-key": "fixture-openai-key-00000c3d4", "auth_index": "ak-openai-1", "priority": 5 }
+        ]
+      }
+    ],
+    "gemini": [
+      {
+        "name": "gemini",
+        "priority": 2,
+        "keys": [
+          {
+            "api-key": "fixture-gemini-key-0000e5f6",
+            "auth_index": "ak-gemini-1",
+            "excluded-models": ["*"]
+          }
+        ]
+      }
+    ],
+    "openai-compatibility": [
+      {
+        "name": "openrouter",
+        "base-url": "https://openrouter.ai/api/v1",
+        "keys": [{ "api-key": "fixture-openrouter-key-00g7h8", "auth_index": "ak-openrouter-1" }],
+        "models": [
+          { "name": "deepseek/deepseek-v3.2", "alias": "deepseek" },
+          { "name": "qwen/qwen3-coder", "alias": "qwen-coder" }
+        ]
+      }
+    ]
+  },
+  "oauth": { "model-alias": {} }
+}

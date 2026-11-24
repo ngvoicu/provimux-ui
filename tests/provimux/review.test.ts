@@ -177,7 +177,7 @@ describe('5. a Devin login without routes is not "no login"', () => {
     await i18n.changeLanguage('en');
     const card = render({ enabled: 1, disabled: 0 });
     expect(card).toContain('The Devin login is on but serves no model right now');
-    expect(card).toContain('Check it on Auth Files');
+    expect(card).toContain('Check it on Accounts');
     expect(card).not.toContain('add one');
   });
 
@@ -250,7 +250,7 @@ describe('8. the OpenRouter tag only where Model routes exists', () => {
   });
 });
 
-describe('9. a route links to its login on Auth Files', () => {
+describe('9. a route links to its login on Accounts', () => {
   test('a login the credentials page lists opens it there; a key does not pretend to', async () => {
     await i18n.changeLanguage('en');
     const routes = readModelRoutes(JSON.parse(read('tests/provimux/fixtures/model-routes.json')));
@@ -266,11 +266,9 @@ describe('9. a route links to its login on Auth Files', () => {
       nowMs: 0,
     });
     const html = renderCard(opus, draft, routes);
-    expect(html).toContain(
-      'title="Open claude-ada@example.com.json on Auth Files (auth_index a8d167b7d82c8c15)"'
-    );
-    // The key's account is plain text: only the login opens on Auth Files.
-    expect(html.match(/title="Open [^"]* on Auth Files/g)).toHaveLength(1);
+    expect(html).toContain('title="Open ada@example.com on Accounts"');
+    // The key's account is plain text: only the login opens on Accounts.
+    expect(html.match(/title="Open [^"]* on Accounts/g)).toHaveLength(1);
   });
 });
 

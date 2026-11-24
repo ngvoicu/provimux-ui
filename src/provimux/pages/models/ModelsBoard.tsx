@@ -14,6 +14,7 @@ import { compatibleEntryOf, isOpenRouterHost } from '../modelRoutes/logic';
 import type { DevinCooling } from '../modelRoutes/useDevinCooling';
 import {
   EMPTY_MODELS_FILTER,
+  accountNameOf,
   buildNames,
   candidatesFor,
   matches,
@@ -26,6 +27,7 @@ import {
   type NameView,
   type Section,
 } from './catalog';
+import { accountsAddressToAdd } from '../shared/accountsLink';
 import { NameCard } from './NameCard';
 import { NameComposer } from './NameEditor';
 import { ModelsSettings } from './ModelsSettings';
@@ -124,10 +126,15 @@ export function ModelsBoard(props: ModelsBoardProps) {
     }
     if (!seen.has(filter.provider)) {
       const raw = filter.provider.replace(/^[a-z]+:/, '');
-      push(filter.provider, compatibleEntryOf(raw) ?? getTypeLabel(t, raw));
+      push(
+        filter.provider,
+        filter.provider.startsWith('account:')
+          ? t('provimux.models.source_account', { name: accountNameOf(routes, entries, raw) })
+          : (compatibleEntryOf(raw) ?? getTypeLabel(t, raw))
+      );
     }
     return options;
-  }, [entries, filter.provider, t]);
+  }, [entries, filter.provider, routes, t]);
 
   const views: Array<{ value: NameView; label: string }> = [
     { value: 'all', label: t('provimux.models.view_all') },
@@ -323,11 +330,8 @@ export function ModelsBoard(props: ModelsBoardProps) {
             description={t('provimux.models.empty_text')}
             action={
               <div className={styles.emptyLinks}>
-                <Link to="/ai-providers" className={styles.link}>
-                  {t('provimux.models.empty_link_providers')}
-                </Link>
-                <Link to="/oauth" className={styles.link}>
-                  {t('provimux.models.empty_link_logins')}
+                <Link to={accountsAddressToAdd()} className={styles.link}>
+                  {t('provimux.models.empty_link_accounts')}
                 </Link>
               </div>
             }

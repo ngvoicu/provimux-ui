@@ -1,4 +1,5 @@
 import { ProvimuxPageGate } from './components/ProvimuxPageGate';
+import { AccountsPage } from './pages/accounts/AccountsPage';
 import { ModelsPage } from './pages/models/ModelsPage';
 import { ModelsRedirect } from './pages/models/ModelsRedirect';
 import { SavingsPage } from './pages/savings/SavingsPage';
@@ -8,9 +9,11 @@ import { SavingsPage } from './pages/savings/SavingsPage';
  * earlier wins, so `/auth-files/oauth-model-alias` here takes over upstream's old login alias editor.
  * Models reads and writes the configuration, and shows Provimux's endpoints where the proxy has them, so it
  * is not gated by them. The addresses of the pages it replaced (Aliases, Model routes, Live model lists and
- * Model lists, the old login alias editor) lead to it with their filter.
+ * Model lists, the old login alias editor) lead to it with their filter. Accounts reads the credentials and the
+ * configuration only, so it is not gated either; AI Providers, Auth Files and OAuth Login keep their routes.
  */
 export const PROVIMUX_ROUTES = [
+  { path: '/provimux/accounts', element: <AccountsPage /> },
   { path: '/provimux/models', element: <ModelsPage /> },
   { path: '/provimux/aliases', element: <ModelsRedirect /> },
   { path: '/provimux/model-routes', element: <ModelsRedirect /> },

@@ -1,0 +1,834 @@
+@use '../../../styles/mixins' as *;
+
+/* ============================================================
+ * Accounts: one card per service, one row per account. A row
+ * reads left to right as the owner asks about it: which kind
+ * (Subscription green, API key amber, always with the word),
+ * who, whether it works now, its priority, then what to do:
+ * the fix when one is needed, on/off, manage. A row that needs
+ * him carries the error colour on its left edge and its fix in
+ * the brand's primary button; a cooling row only says until
+ * when. Below 860 px of card, who and the state share the first
+ * line, kind and priority go under who.
+ * ============================================================ */
+
+.page {
+  padding-bottom: 24px;
+}
+
+/* ---------- reading ---------- */
+
+.reading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 9px 12px;
+  border: 1px solid var(--pmx-brand-line);
+  border-radius: 8px;
+  background: var(--pmx-brand-bg);
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.readingDot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--pmx-brand);
+  animation: accounts-reading 1.1s ease-in-out infinite;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+@keyframes accounts-reading {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+.textButton {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--pmx-link);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.inlineLink {
+  color: var(--pmx-link);
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* ---------- summary chips ---------- */
+
+.chipDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+
+  &[data-state='working'] {
+    background: var(--success-color);
+  }
+
+  &[data-state='signed-out'],
+  &[data-state='problem'] {
+    background: var(--error-color);
+  }
+
+  &[data-state='cooling'] {
+    background: transparent;
+    box-shadow: inset 0 0 0 1.5px var(--warning-color);
+  }
+}
+
+.chipAttention {
+  border-color: var(--warning-border);
+  background: var(--warning-bg);
+  color: var(--warning-text);
+  font-weight: 600;
+}
+
+.chipCooling {
+  color: var(--text-secondary);
+}
+
+/* ---------- toolbar ---------- */
+
+.toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  margin: 0 -8px;
+  padding: 8px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bg-secondary) 88%, transparent);
+  backdrop-filter: blur(8px);
+
+  @include mobile {
+    position: static;
+  }
+}
+
+.toolbarSpacer {
+  flex: 1 1 auto;
+}
+
+.addButton svg {
+  margin-right: 6px;
+}
+
+.noMatch {
+  margin: 0;
+  padding: 18px;
+  border: 1px dashed var(--border-color);
+  border-radius: 10px;
+  text-align: center;
+  font-size: 13.5px;
+  color: var(--text-secondary);
+}
+
+/* ---------- services ---------- */
+
+.groups {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.group {
+  container-type: inline-size;
+  min-width: 0;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--bg-primary);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.groupHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px 10px 16px;
+  border-bottom: 1px solid var(--border-color);
+  background: color-mix(in srgb, var(--bg-secondary) 55%, var(--bg-primary));
+}
+
+.groupTitle {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 650;
+  letter-spacing: -0.005em;
+  color: var(--text-primary);
+}
+
+.groupCount {
+  font-family: var(--pmx-font-mono);
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.groupAdd {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: none;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    border-color var(--dur-hover) var(--ease-out-strong),
+    color var(--dur-hover) var(--ease-out-strong);
+
+  &:hover {
+    border-color: var(--border-color);
+    color: var(--text-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--pmx-brand);
+    outline-offset: 1px;
+  }
+}
+
+.serviceIcon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  background: var(--bg-primary);
+
+  img {
+    width: 16px;
+    height: 16px;
+    object-fit: contain;
+  }
+
+  &[data-size='lg'] {
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+
+    img {
+      width: 20px;
+      height: 20px;
+    }
+  }
+}
+
+.serviceGlyph {
+  color: var(--text-secondary);
+}
+
+.serviceLetter {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--pmx-brand);
+}
+
+/* ---------- one account ---------- */
+
+.rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  position: relative;
+  display: grid;
+  // A fixed actions column: a row with a fix button lines up with the rows without one.
+  grid-template-columns: 112px minmax(0, 1.25fr) minmax(0, 1fr) 96px 236px;
+  grid-template-areas: 'kind who state prio actions';
+  align-items: center;
+  gap: 4px 16px;
+  min-height: 56px;
+  padding: 9px 14px 9px 16px;
+  transition: background-color var(--dur-hover) var(--ease-out-strong);
+
+  & + & {
+    border-top: 1px solid var(--border-color);
+  }
+
+  &:hover {
+    background: color-mix(in srgb, var(--bg-secondary) 45%, transparent);
+  }
+
+  // The left edge: this account needs him.
+  &[data-attention]::before {
+    content: '';
+    position: absolute;
+    top: 8px;
+    bottom: 8px;
+    left: 0;
+    width: 3px;
+    border-radius: 0 3px 3px 0;
+    background: var(--error-color);
+  }
+
+  &[data-state='off'] .whoMain,
+  &[data-state='off'] .priority {
+    color: var(--text-tertiary);
+  }
+
+  &[aria-busy='true'] {
+    opacity: 0.65;
+  }
+
+  @container (max-width: 860px) {
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) 204px;
+    grid-template-areas:
+      'who state actions'
+      'meta state actions';
+    gap: 6px 14px;
+  }
+}
+
+// Wide: kind and priority are grid items of their own columns. Narrow: one line under who.
+.meta {
+  display: contents;
+
+  @container (max-width: 860px) {
+    grid-area: meta;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+}
+
+.kind {
+  grid-area: kind;
+  display: flex;
+}
+
+.who {
+  grid-area: who;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  min-width: 0;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover .whoMain {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    text-decoration-thickness: 1px;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--pmx-brand);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+}
+
+.whoMain {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.whoDetail {
+  max-width: 100%;
+  overflow: hidden;
+  font-family: var(--pmx-font-mono);
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.state {
+  grid-area: state;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.stateWord {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13.5px;
+  font-weight: 550;
+  color: var(--text-primary);
+}
+
+.stateDot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+
+  &[data-state='working'] {
+    background: var(--success-color);
+  }
+
+  &[data-state='signed-out'],
+  &[data-state='problem'] {
+    background: var(--error-color);
+  }
+
+  &[data-state='cooling'] {
+    background: transparent;
+    box-shadow: inset 0 0 0 2px var(--warning-color);
+  }
+}
+
+.row[data-attention] .stateWord {
+  color: var(--error-color);
+  font-weight: 650;
+}
+
+.row[data-state='off'] .stateWord {
+  color: var(--text-secondary);
+}
+
+.stateHint {
+  max-width: 100%;
+  padding-left: 15px;
+  overflow: hidden;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.priority {
+  grid-area: prio;
+  justify-self: start;
+  padding: 2px 7px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  font-family: var(--pmx-font-mono);
+  font-size: 11.5px;
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:hover {
+    border-color: var(--border-hover);
+    color: var(--text-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--pmx-brand);
+    outline-offset: 1px;
+  }
+}
+
+.actions {
+  grid-area: actions;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.fix {
+  white-space: nowrap;
+}
+
+.manage {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+
+  &:hover {
+    border-color: var(--border-color);
+    color: var(--text-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--pmx-brand);
+    outline-offset: 1px;
+  }
+}
+
+.manageIcon {
+  transform: rotate(180deg);
+}
+
+/* ---------- the manage panel ---------- */
+
+.sheetEyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sheetDescription {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.mono {
+  font-family: var(--pmx-font-mono);
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.sheetBody {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+
+  &[aria-busy='true'] {
+    opacity: 0.75;
+  }
+}
+
+.statusCard {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-secondary);
+
+  &[data-state='signed-out'],
+  &[data-state='problem'] {
+    border-color: var(--warning-border);
+    background: var(--warning-bg);
+  }
+}
+
+.statusHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.statusWord {
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--text-primary);
+
+  .statusCard[data-state='signed-out'] &,
+  .statusCard[data-state='problem'] & {
+    color: var(--error-color);
+  }
+}
+
+.statusText {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+
+.statusActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.sheetSection {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-color);
+}
+
+.sheetRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.sheetHeading {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 650;
+  color: var(--text-primary);
+}
+
+.fieldHint {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-tertiary);
+}
+
+.priorityField {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.stepper {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    border-color: var(--border-hover);
+    color: var(--text-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--pmx-brand);
+    outline-offset: 1px;
+  }
+}
+
+.priorityInput {
+  width: 84px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--pmx-font-mono);
+  font-size: 14px;
+  text-align: center;
+
+  &[aria-invalid='true'] {
+    border-color: var(--error-color);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--pmx-brand);
+    outline-offset: 1px;
+    border-color: transparent;
+  }
+}
+
+.priorityField :global(.btn) {
+  margin-left: 6px;
+}
+
+.sheetLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--pmx-link);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 550;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--pmx-brand);
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+}
+
+.danger {
+  align-items: flex-start;
+
+  :global(.btn) svg {
+    margin-right: 6px;
+  }
+}
+
+/* ---------- the add panel ---------- */
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 0 14px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+
+  &:hover {
+    color: var(--text-primary);
+  }
+}
+
+.servicePicker {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 16px;
+
+  @include mobile {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.serviceTile,
+.choice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-primary);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color var(--dur-hover) var(--ease-out-strong),
+    box-shadow var(--dur-hover) var(--ease-out-strong),
+    transform var(--dur-press) var(--ease-out-strong);
+
+  &:hover {
+    border-color: var(--border-hover);
+    box-shadow: var(--shadow);
+  }
+
+  &:active {
+    transform: scale(0.985);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--pmx-brand);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+
+    &:active {
+      transform: none;
+    }
+  }
+}
+
+.choices {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.choice {
+  align-items: flex-start;
+  padding: 14px 16px;
+}
+
+.choiceIcon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+
+  &[data-access='sub'] {
+    background: var(--pmx-sub-bg);
+    color: var(--pmx-sub);
+  }
+
+  &[data-access='api'] {
+    background: var(--pmx-api-bg);
+    color: var(--pmx-api);
+  }
+}
+
+.choiceText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.choiceTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.choiceCaption {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-tertiary);
+}
+
+.keyForm {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.formActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}

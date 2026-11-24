@@ -11,6 +11,7 @@ import { useSecondClock } from '../shared/clocks';
 import { devinAbsence, devinState } from './logic';
 import type { DevinCooling } from './useDevinCooling';
 import styles from '../shared/Shared.module.scss';
+import { ACCOUNTS_PATH } from '../shared/accountsLink';
 
 interface DevinCoolingCardProps {
   models: readonly ProvimuxModel[];
@@ -131,8 +132,8 @@ function DevinNow({
         {absence !== 'no_login' ? (
           <>
             {' '}
-            <Link to="/auth-files" className={styles.inlineLink}>
-              {t('provimux.devin.open_auth_files')}
+            <Link to={ACCOUNTS_PATH} className={styles.inlineLink}>
+              {t('provimux.devin.open_accounts')}
             </Link>
           </>
         ) : null}

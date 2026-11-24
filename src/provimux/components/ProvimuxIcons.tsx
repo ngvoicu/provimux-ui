@@ -73,3 +73,16 @@ export function IconAliases({ size = 20, ...props }: IconProps) {
     </svg>
   );
 }
+
+/** A person with a key beside them: the owner's accounts, signed in or by key. */
+export function IconAccounts({ size = 20, ...props }: IconProps) {
+  return (
+    <svg {...base} width={size} height={size} {...props}>
+      <circle cx="9" cy="8" r="3.5" />
+      <path d="M2.5 20a6.5 6.5 0 0 1 11.4-4.3" />
+      <circle cx="17.5" cy="14.5" r="2.5" />
+      <path d="M17.5 17v4" />
+      <path d="M17.5 19.5h2" />
+    </svg>
+  );
+}

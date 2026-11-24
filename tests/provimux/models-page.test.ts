@@ -482,6 +482,7 @@ describe('addresses and the menu', () => {
       expect(matched?.[0].route.element?.type).toBe(ModelsRedirect);
     }
     expect(PROVIMUX_PAGES.map((page) => [page.path, page.endpoint])).toEqual([
+      ['/provimux/accounts', null],
       ['/provimux/models', null],
       ['/provimux/savings', 'savings'],
     ]);
@@ -574,18 +575,16 @@ describe('the page', () => {
     expect(text).not.toContain('Devin: quota pause per model');
   });
 
-  test('a route: sub or API key, the account (a login opens on Auth Files), what it sends, its priority', async () => {
+  test('a route: sub or API key, the account (a login opens on Accounts), what it sends, its priority', async () => {
     await i18n.changeLanguage('en');
     const draft = startDraft(ownerState());
     const html = renderCard(nameOf(ownerNames(draft), 'claude-opus-5-5'), draft);
     const text = textOf(html);
     expect(html).toContain('data-access="sub"');
     expect(html).toContain('data-access="api"');
-    expect(html).toContain(
-      'title="Open claude-office@providers.dev.json on Auth Files (auth_index li-claude-1)"'
-    );
-    // Only logins open on Auth Files; a key's priority is a button that edits it here.
-    expect(html.match(/title="Open [^"]* on Auth Files/g)).toHaveLength(2);
+    expect(html).toContain('title="Open office@providers.dev on Accounts"');
+    // Only logins open on Accounts; a key's priority is a button that edits it here.
+    expect(html.match(/title="Open [^"]* on Accounts/g)).toHaveLength(2);
     expect(html.match(/title="This API key[^"]*"/g)).toHaveLength(2);
     expect(text).toContain('devin/claude-opus-5-5');
     expect(text).toContain('priority 10');
