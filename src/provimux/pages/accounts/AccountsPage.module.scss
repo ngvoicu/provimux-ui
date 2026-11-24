@@ -1033,77 +1033,6 @@
   text-align: right;
 }
 
-/* A login's fields kept in its file: set without reading. */
-.replaceList {
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--border-color);
-  border-radius: 10px;
-  overflow: hidden;
-}
-
-.replaceRow {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 11px 14px;
-
-  & + & {
-    border-top: 1px solid var(--border-color);
-  }
-
-  &[data-setting] {
-    background: var(--bg-secondary);
-  }
-}
-
-.replaceHead {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 28px;
-}
-
-.replaceTitle {
-  flex: 1;
-  min-width: 0;
-  font-size: 13.5px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.replaceNow {
-  color: var(--text-tertiary);
-  font-size: 12.5px;
-}
-
-.replaceSet {
-  padding: 4px 12px;
-  border: 1px solid var(--border-color);
-  border-radius: 999px;
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  font: inherit;
-  font-size: 12.5px;
-  font-weight: 550;
-  cursor: pointer;
-
-  &:hover:not(:disabled) {
-    border-color: var(--border-hover);
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--pmx-brand);
-    outline-offset: 1px;
-  }
-}
-
-.replaceBody {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
 .retryRow {
   display: flex;
   flex-wrap: wrap;
@@ -1158,28 +1087,6 @@
   grid-column: 1 / -1;
 }
 
-.replaceKeep {
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--pmx-link);
-  font: inherit;
-  font-size: 12.5px;
-  font-weight: 550;
-  cursor: pointer;
-
-  &:hover {
-    text-decoration: underline;
-    text-underline-offset: 2px;
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--pmx-brand);
-    outline-offset: 2px;
-    border-radius: 3px;
-  }
-}
-
 .sheetRow > :global(.btn) {
   flex: none;
   white-space: nowrap;
@@ -1203,4 +1110,18 @@
       grid-column: 1 / -1;
     }
   }
+}
+
+/* A login's settings its file keeps: one line, and the way there. */
+.elsewhere {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  margin: 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.55;
 }

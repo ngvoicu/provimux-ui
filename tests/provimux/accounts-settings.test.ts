@@ -352,7 +352,7 @@ describe("a key's settings: AI Providers' form model and its save", () => {
   });
 });
 
-describe("a login's settings: Auth Files' field patch, without its file", () => {
+describe("a login's settings: what the proxy lists, edited in place; the rest one click away", () => {
   const file = (over: Record<string, unknown> = {}): AuthFileItem =>
     ({ name: 'codex-team@example.com.json', type: 'codex', provider: 'codex', ...over }) as AuthFileItem;
 
@@ -365,7 +365,6 @@ describe("a login's settings: Auth Files' field patch, without its file", () => 
       retry: { mode: 'custom', value: '2' },
       websockets: true,
       useSiwc: false,
-      replace: {},
     });
     const claude = loginDraftOf(file({ type: 'claude', provider: 'claude' }));
     expect(claude.websockets).toBeNull();
@@ -373,58 +372,46 @@ describe("a login's settings: Auth Files' field patch, without its file", () => 
     expect(claude.retry.mode).toBe('inherit');
   });
 
-  test('a save sends only what changed; a field kept in the file is written only when set', () => {
-    const stored = file({ note: 'team', request_retry: 2, websockets: true });
-    const draft: LoginDraft = { ...loginDraftOf(stored) };
+  test('a save sends only what changed, and only fields the page showed', () => {
+    const stored = file({ note: 'team', request_retry: 2, websockets: true, siwcBound: true });
+    const draft: LoginDraft = loginDraftOf(stored);
     expect(loginPatch(stored, draft)).toEqual({});
-    const next: LoginDraft = {
-      ...draft,
-      note: ' team plan ',
-      retry: { mode: 'inherit', value: '' },
-      websockets: false,
-      replace: {
-        proxyUrl: ' socks5://127.0.0.1:1080 ',
-        prefix: '',
-        weight: '',
-        headers: [
-          { key: 'X-Team', value: 'platform' },
-          { key: 'X-Old', value: '' },
-          { key: ' ', value: 'ignored' },
-        ],
-        excludedModelsText: 'gpt-5-mini\n gpt-5-mini \n*-nano',
-        modelAliases: [
-          { name: 'gpt-5.2', alias: 'fast' },
-          { name: '', alias: '' },
-        ],
-        disableCooling: true,
-      },
-    };
-    expect(loginPatch(stored, next)).toEqual({
-      note: 'team plan',
-      request_retry: null,
-      websockets: false,
-      proxy_url: 'socks5://127.0.0.1:1080',
-      prefix: '',
-      weight: null,
-      headers: { 'X-Team': 'platform', 'X-Old': '' },
-      excluded_models: ['gpt-5-mini', '*-nano'],
-      model_aliases: [{ name: 'gpt-5.2', alias: 'fast' }],
-      disable_cooling: true,
+    expect(
+      loginPatch(stored, {
+        ...draft,
+        note: ' team plan ',
+        retry: { mode: 'inherit', value: '' },
+        websockets: false,
+        useSiwc: true,
+      })
+    ).toEqual({ note: 'team plan', request_retry: null, websockets: false, use_siwc: true });
+    expect(loginPatch(stored, { ...draft, retry: { mode: 'custom', value: '3' } })).toEqual({
+      request_retry: 3,
     });
-  });
-
-  test('a retry count, a weight and a name are checked before saving', () => {
-    const draft = loginDraftOf(file());
     expect(loginProblem({ ...draft, retry: { mode: 'custom', value: '-1' } })).toBe(
       'auth_files.policy_retry_invalid'
     );
-    expect(loginProblem({ ...draft, replace: { weight: '1.5' } })).toBe(
-      'auth_files.weight_invalid_integer'
+    expect(loginProblem(draft)).toBeNull();
+  });
+
+  test('no blind fields: the settings its file keeps are one line and a link to that login', async () => {
+    const source = read('src/provimux/pages/accounts/LoginSettingsFields.tsx');
+    for (const field of ['proxyUrl', 'prefix', 'headers', 'excluded', 'weight', 'modelAliases']) {
+      expect({ field, edited: source.includes(field) }).toEqual({ field, edited: false });
+    }
+    expect(source).toContain('onOpenOriginal');
+    const logic = read('src/provimux/pages/accounts/loginSettings.ts');
+    for (const wire of ['proxy_url', 'prefix', 'headers', 'excluded_models', 'weight', 'model_aliases']) {
+      expect({ wire, written: logic.includes(`patch.${wire}`) }).toEqual({ wire, written: false });
+    }
+    // The line names the menu's words, and its link opens this login on the original page (Auth Files).
+    await i18n.changeLanguage('en');
+    expect(i18n.t('provimux.accounts.login.elsewhere')).toContain('Subscriptions, under All settings');
+    expect(i18n.t('provimux.nav.all_logins')).toBe('Subscriptions');
+    expect(i18n.t('provimux.nav_groups.all_settings')).toBe('All settings');
+    expect(read('src/provimux/pages/accounts/AccountSheet.tsx')).toMatch(
+      /onOpenOriginal=\{\(\) =>\s+void confirmDiscard\(\)\.then\(\(ok\) => \{\s+if \(ok\) props\.onMoreSettings\(account\);/
     );
-    expect(loginProblem({ ...draft, replace: { modelAliases: [{ name: 'a', alias: ' ' }] } })).toBe(
-      'auth_files.policy_aliases_invalid'
-    );
-    expect(loginProblem({ ...draft, replace: { weight: '3' } })).toBeNull();
   });
 });
 

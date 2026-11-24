@@ -166,21 +166,22 @@ settings are that entry's, "for all of them". A key added without touching Advan
 ### 7.2 A subscription
 
 A login's settings live in its file, next to its tokens. Accounts never reads the file (`/credentials/download`), so it
-shows what `GET /credentials` lists and sets the rest without showing it:
+edits only what `GET /credentials` lists, with the value shown: **Note**, **Retries** (as for all accounts, or its own
+number), **WebSockets** (Codex, xAI) and **Use Sign in with ChatGPT** (a bound Codex login); priority is the panel's own
+field. A save is one `PATCH /credentials/fields` with only the fields that change (`loginSettings.ts`).
 
-| Shown and edited | Set without being shown ("Not shown here · Set a new value") |
-| --- | --- |
-| Note, Retries (as for all accounts, or its own number), WebSockets (Codex, xAI), Use Sign in with ChatGPT (a bound Codex login) | Proxy, Prefix, Weight, Custom headers (adds or changes; an empty value removes that header), Models it never serves, Its own model names, What to do on certain errors, After errors (cooling), How it reaches xAI (xAI) |
-
-A save is one `PATCH /credentials/fields` with only the fields that change (`loginSettings.ts`); a field left as it is
-is not sent. The view says why the second column shows no value and that Auth Files shows it. Showing those values on
-Accounts would need a proxy endpoint that returns a login's fields without its tokens.
+The settings the file keeps (proxy, prefix, headers, models it never serves, weight, its own model names, error rules,
+cooling, xAI's API mode) are not edited here: a value he cannot see would invite overwriting it by mistake. One line
+under them says where they are, in the menu's words ("… are in Subscriptions, under All settings"), and **Open this
+login there** opens Auth Files on that login (its search set to the file, as "More settings" does), after asking about
+unsaved changes. A proxy endpoint returning a login's non-secret fields would let Accounts show and edit them; it is on
+the owner's list for later.
 
 ### 7.3 What stays where it was decided
 
 - A key's **model names** (aliases) are set on Models, the one place for names of every account (design
   aliases-page.md, section 5: AI Providers' form shows them and links there); Accounts' list of a key's models does
-  the same. A login's own model names are edited here (section 7.2), as Auth Files edits them.
+  the same. A login's own model names are in its file (section 7.2).
 - **Priority** of an account being managed is the panel's own field (section 5), not repeated in its settings.
 
 ### 7.4 The other ways in
@@ -197,10 +198,11 @@ to OAuth Login for anything.
 What cannot be done on Accounts, said in one line in each panel's "More settings"; the pages are in the menu under All
 settings (section 6):
 
-- **Auth Files**: uploading or downloading a login file; its quota; and the current values of what the file keeps
-  (section 7.2). Also, not one account's settings: batch actions, the model rules of all logins of a service
+- **Auth Files** (Subscriptions): what a login's file keeps (section 7.2): proxy, prefix, headers, models it never
+  serves, weight, its own model names, error rules, cooling, xAI's API mode; uploading or downloading the file; its
+  quota. Also, not one account's settings: batch actions, the model rules of all logins of a service
   (`oauth-excluded-models`), manual refresh and verification.
-- **AI Providers**: testing a key against a model; editing all the keys of a connection together, a key's own value of
+- **AI Providers** (API keys): testing a key against a model; editing all the keys of a connection together, a key's own value of
   a shared setting (inherit, empty or its own), and a connection's name; partner bundles (APIKEY.FUN, FennoAI, Qiniu
   Cloud, AICodeMirror, Kimi keys), which write one key into several families at once.
 

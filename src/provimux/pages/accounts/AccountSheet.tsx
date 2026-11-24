@@ -25,7 +25,6 @@ import {
 import {
   loginChanged,
   loginDraftOf,
-  loginFacts,
   loginPatch,
   loginProblem,
   type LoginDraft,
@@ -252,9 +251,13 @@ export function AccountSheet(props: AccountSheetProps) {
         ) : settings.kind === 'login' ? (
           <LoginSettingsFields
             draft={settings.draft}
-            facts={loginFacts(settings.file)}
             onChange={(draft) => setSettings({ ...settings, draft })}
             disabled={saving || props.busy}
+            onOpenOriginal={() =>
+              void confirmDiscard().then((ok) => {
+                if (ok) props.onMoreSettings(account);
+              })
+            }
           />
         ) : (
           <p className={styles.fieldHint}>{t('provimux.accounts.settings.partner')}</p>
