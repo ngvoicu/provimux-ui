@@ -84,6 +84,11 @@ export interface RouteLine {
   priority: number | null;
   /** The draft changes this API key's priority. */
   priorityEdited: boolean;
+  /**
+   * The login's own list offers this model and the built-in list does not have it yet: its context, output
+   * and reasoning limits come from that list or from defaults.
+   */
+  estimated: boolean;
   /** 1-based: routes of rank 1 are tried first. null: not tried, or not known. */
   rank: number | null;
   /** Another tried route of the name has the same priority: the routing strategy chooses between them. */
@@ -135,7 +140,36 @@ export interface CatalogInput {
   usage: Record<string, number> | null;
   /** The server's now, for cooldowns. */
   nowMs: number;
+  /** Per login (auth index), the models its own list offers that the built-in list lacks. */
+  learned?: Record<string, readonly string[]>;
 }
+
+/**
+ * From the Model lists answers asked per login (`?auth_index=`), the models each login's own list offers
+ * that the built-in list does not have yet, by auth index.
+ */
+export function learnedByLogin(
+  answers: readonly ProvimuxModelListsResponse[]
+): Record<string, string[]> {
+  const learned: Record<string, string[]> = {};
+  for (const answer of answers) {
+    for (const login of answer.logins) {
+      if (!login.auth_index || !login.models) continue;
+      const ids = login.models.filter((model) => model.learned).map((model) => model.id);
+      if (ids.length) learned[login.auth_index] = ids;
+    }
+  }
+  return learned;
+}
+
+/** The logins whose list holds models the built-in list lacks, with what identifies that list's state. */
+export const loginsWithLearned = (lists: ProvimuxModelListsResponse | null) =>
+  (lists?.logins ?? [])
+    .filter((login) => login.auth_index && (login.learned_models ?? 0) > 0)
+    .map((login) => ({
+      authIndex: login.auth_index!,
+      version: `${login.auth_index}|${login.live.fetched_at ?? ''}|${login.learned_models}`,
+    }));
 
 /** 30 days of requests per name, from a savings answer grouped by model. */
 export function usageByName(answer: ProvimuxSavingsResponse | null): Record<string, number> | null {
@@ -258,6 +292,9 @@ interface Collected {
  */
 export function buildNames(input: CatalogInput): NameItem[] {
   const { draft, routes, lists, usage, nowMs } = input;
+  const learned = input.learned ?? {};
+  const isEstimated = (authIndex: string | null, upstream: string) =>
+    authIndex !== null && (learned[authIndex]?.includes(upstream) ?? false);
   const base = draft.base;
   const entries = draftEntries(draft);
   const entryById = new Map(entries.map((entry) => [entry.id, entry]));
@@ -338,6 +375,7 @@ export function buildNames(input: CatalogInput): NameItem[] {
         upstream: (draftRow ?? baseRow)?.upstream.trim() || upstreamOfServed(route, model.id),
         priority,
         priorityEdited: keyPriorityEdited(entry),
+        estimated: false,
         rank: null,
         sharesRank: false,
         cooldown: isCoolingAt(route.recorded_cooldown, nowMs) ? route.recorded_cooldown : null,
@@ -416,7 +454,13 @@ export function buildNames(input: CatalogInput): NameItem[] {
   }
 
   return [...byName.entries()].map(([key, found]): NameItem => {
-    const lines = rank(found.lines);
+    const lines = rank(
+      found.lines.map((line) =>
+        line.access === 'sub' && isEstimated(line.authIndex, line.upstream)
+          ? { ...line, estimated: true }
+          : line
+      )
+    );
     const configLines = lines.filter((line) => line.rowId !== null);
     const problems: NameProblem[] = [];
     if (lines.some((line) => line.state !== 'removed' && isBlocking(line.issue))) {
@@ -489,6 +533,7 @@ function pendingLine(
     upstream: row.upstream.trim(),
     priority: options.priority,
     priorityEdited: options.priorityEdited,
+    estimated: false,
     rank: null,
     sharesRank: false,
     cooldown: null,

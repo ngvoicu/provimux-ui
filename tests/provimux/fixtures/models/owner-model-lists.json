@@ -65,11 +65,11 @@
         "fetched_at": "2026-11-24T13:35:00.000Z",
         "from_cache": false,
         "fetching": false,
-        "listed_models": 7,
+        "listed_models": 8,
         "last_failure": null
       },
-      "registered_models": 7,
-      "learned_models": 0,
+      "registered_models": 8,
+      "learned_models": 1,
       "models": null
     },
     {

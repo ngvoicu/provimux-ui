@@ -1,0 +1,269 @@
+{
+  "observed_at": "2026-11-24T14:00:00.000Z",
+  "options": {
+    "live_lists": true,
+    "published_lists": false
+  },
+  "built_in": {
+    "dataset_version": null,
+    "generated_at": null
+  },
+  "published": {
+    "state": "off",
+    "dataset_version": null,
+    "generated_at": null,
+    "fetched_at": null,
+    "from_cache": false,
+    "last_failure": null
+  },
+  "login_types": [
+    "claude",
+    "codex",
+    "devin",
+    "gemini",
+    "kimi"
+  ],
+  "logins": [
+    {
+      "auth_index": "li-codex-1",
+      "provider": "codex",
+      "login": {
+        "name": "codex-office@providers.dev.json",
+        "email": "office@providers.dev",
+        "label": "office@providers.dev"
+      },
+      "disabled": false,
+      "source": "live",
+      "live": {
+        "supported": true,
+        "held": true,
+        "expired": false,
+        "fetched_at": "2026-11-24T13:35:00.000Z",
+        "from_cache": false,
+        "fetching": false,
+        "listed_models": 8,
+        "last_failure": null
+      },
+      "registered_models": 8,
+      "learned_models": 1,
+      "models": [
+        {
+          "id": "gpt-6.2-sol",
+          "display_name": null,
+          "source": "live",
+          "learned": true,
+          "limits": {
+            "context": 400000,
+            "output": 128000
+          },
+          "modalities": {
+            "input": [
+              "text"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "reasoning_levels": [],
+          "sources": {
+            "display_name": null,
+            "context": null,
+            "output": null,
+            "input_modalities": "live",
+            "output_modalities": "live",
+            "reasoning_levels": null
+          }
+        },
+        {
+          "id": "gpt-6.1-terra",
+          "display_name": null,
+          "source": "built-in",
+          "learned": false,
+          "limits": {
+            "context": 400000,
+            "output": 128000
+          },
+          "modalities": {
+            "input": [
+              "text"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "reasoning_levels": [],
+          "sources": {
+            "display_name": null,
+            "context": "built-in",
+            "output": "built-in",
+            "input_modalities": "built-in",
+            "output_modalities": "built-in",
+            "reasoning_levels": null
+          }
+        },
+        {
+          "id": "gpt-6.1-codex",
+          "display_name": null,
+          "source": "built-in",
+          "learned": false,
+          "limits": {
+            "context": 400000,
+            "output": 128000
+          },
+          "modalities": {
+            "input": [
+              "text"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "reasoning_levels": [],
+          "sources": {
+            "display_name": null,
+            "context": "built-in",
+            "output": "built-in",
+            "input_modalities": "built-in",
+            "output_modalities": "built-in",
+            "reasoning_levels": null
+          }
+        },
+        {
+          "id": "gpt-6.1-codex-mini",
+          "display_name": null,
+          "source": "built-in",
+          "learned": false,
+          "limits": {
+            "context": 400000,
+            "output": 128000
+          },
+          "modalities": {
+            "input": [
+              "text"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "reasoning_levels": [],
+          "sources": {
+            "display_name": null,
+            "context": "built-in",
+            "output": "built-in",
+            "input_modalities": "built-in",
+            "output_modalities": "built-in",
+            "reasoning_levels": null
+          }
+        },
+        {
+          "id": "gpt-6-mini",
+          "display_name": null,
+          "source": "built-in",
+          "learned": false,
+          "limits": {
+            "context": 400000,
+            "output": 128000
+          },
+          "modalities": {
+            "input": [
+              "text"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "reasoning_levels": [],
+          "sources": {
+            "display_name": null,
+            "context": "built-in",
+            "output": "built-in",
+            "input_modalities": "built-in",
+            "output_modalities": "built-in",
+            "reasoning_levels": null
+          }
+        },
+        {
+          "id": "gpt-6-chat",
+          "display_name": null,
+          "source": "built-in",
+          "learned": false,
+          "limits": {
+            "context": 400000,
+            "output": 128000
+          },
+          "modalities": {
+            "input": [
+              "text"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "reasoning_levels": [],
+          "sources": {
+            "display_name": null,
+            "context": "built-in",
+            "output": "built-in",
+            "input_modalities": "built-in",
+            "output_modalities": "built-in",
+            "reasoning_levels": null
+          }
+        },
+        {
+          "id": "gpt-5.5",
+          "display_name": null,
+          "source": "built-in",
+          "learned": false,
+          "limits": {
+            "context": 400000,
+            "output": 128000
+          },
+          "modalities": {
+            "input": [
+              "text"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "reasoning_levels": [],
+          "sources": {
+            "display_name": null,
+            "context": "built-in",
+            "output": "built-in",
+            "input_modalities": "built-in",
+            "output_modalities": "built-in",
+            "reasoning_levels": null
+          }
+        },
+        {
+          "id": "gpt-5.5-codex",
+          "display_name": null,
+          "source": "built-in",
+          "learned": false,
+          "limits": {
+            "context": 400000,
+            "output": 128000
+          },
+          "modalities": {
+            "input": [
+              "text"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "reasoning_levels": [],
+          "sources": {
+            "display_name": null,
+            "context": "built-in",
+            "output": "built-in",
+            "input_modalities": "built-in",
+            "output_modalities": "built-in",
+            "reasoning_levels": null
+          }
+        }
+      ]
+    }
+  ]
+}

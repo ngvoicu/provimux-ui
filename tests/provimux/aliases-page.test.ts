@@ -268,7 +268,7 @@ describe('G-1 the frame: the notices stand above the body, whatever the body is'
     expect(html).toContain('Not saved: type these edits again');
     expect(html).toContain('Gemini · gemini-1');
     expect(html).toContain('g-pro-2');
-    expect(html).toContain('Codex logins');
+    expect(html).toContain('Codex subscription');
     expect(html).toContain('No model yet');
     expect(html.indexOf('g-pro-2')).toBeLessThan(html.indexOf('No model yet'));
   });

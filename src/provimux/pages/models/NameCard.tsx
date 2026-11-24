@@ -14,6 +14,7 @@ import { formatDuration, formatExact, formatRelative, serverNow, timeMs } from '
 import { usePageClock, useSecondClock } from '../shared/clocks';
 import type { NameItem, RouteLine } from './catalog';
 import { NameEditor } from './NameEditor';
+import { providerName } from './labels';
 import styles from './ModelsPage.module.scss';
 
 export interface NameCardProps {
@@ -156,7 +157,11 @@ function lineSentence(t: TFunction, line: RouteLine, routesKnown: boolean): stri
     case 'same-as-name':
       return t('provimux.models.issue_same_as_name');
     case 'duplicate':
-      return t('provimux.models.issue_duplicate');
+      return t('provimux.models.issue_duplicate', {
+        source: t('provimux.models.source_login', {
+          name: providerName(t, line.provider, line.host),
+        }),
+      });
     case 'shadowed':
       return t('provimux.models.issue_shadowed');
     default:
@@ -235,9 +240,14 @@ function Line({
           <span aria-hidden="true">→</span>
           <span className="visually-hidden">{t('provimux.models.sends')}</span>
           <code>{line.upstream}</code>
-          {line.rowId === null ? (
-            <span className={styles.builtIn} title={t('provimux.models.built_in_hint')}>
-              {t('provimux.models.built_in')}
+          {line.estimated ? (
+            <span
+              className={styles.estimated}
+              title={t('provimux.models.estimated_hint', {
+                provider: providerName(t, line.provider, line.host),
+              })}
+            >
+              {t('provimux.models.tag_estimated')}
             </span>
           ) : null}
         </span>
@@ -354,7 +364,12 @@ function ListAge({ line, offsetMs }: { line: RouteLine; offsetMs: number }) {
   const now = serverNow(usePageClock(), offsetMs);
   const kind = sourceKind(list.source);
   const fetched = timeMs(list.live.fetched_at);
-  const source = t(`provimux.models.list_${kind === 'built-in' ? 'built_in' : kind}`);
+  const source =
+    kind === 'live'
+      ? t('provimux.models.list_live', { provider: providerName(t, line.provider, line.host) })
+      : kind === 'unknown'
+        ? t('provimux.models.list_unknown', { source: list.source })
+        : t(`provimux.models.list_${kind === 'built-in' ? 'built_in' : kind}`);
   // A held list a day old means its fetches have been failing; after 7 days the login no longer uses it.
   const age = listAge(list, now);
   const text =
@@ -462,7 +477,15 @@ function Priority({
     );
   }
   return (
-    <span className={styles.priority} data-static title={t('provimux.models.priority_login_title')}>
+    <span
+      className={styles.priority}
+      data-static
+      title={
+        line.access === 'api'
+          ? t('provimux.models.priority_key_hint')
+          : t('provimux.models.priority_login_title')
+      }
+    >
       {t('provimux.models.priority', { value })}
     </span>
   );

@@ -23,6 +23,8 @@ export interface ModelsBodyProps {
   routesOffsetMs: number;
   lists: ProvimuxModelListsResponse | null;
   usage: Record<string, number> | null;
+  /** Per login, the models its own list has that the built-in list lacks. */
+  learned?: Record<string, readonly string[]>;
   nowMs: number;
   filter: ModelsFilter;
   onFilter: (next: ModelsFilter) => void;
@@ -100,6 +102,7 @@ export function ModelsBody(props: ModelsBodyProps) {
             routesOffsetMs={props.routesOffsetMs}
             lists={props.lists}
             usage={props.usage}
+            learned={props.learned}
             nowMs={props.nowMs}
             filter={props.filter}
             onFilter={props.onFilter}
