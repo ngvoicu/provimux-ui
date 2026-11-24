@@ -1,4 +1,8 @@
 {
+  "dashboard": {
+    "cta_manage_providers": "계정 관리",
+    "health_link": "계정 열기"
+  },
   "provimux": {
     "nav": {
       "accounts": "계정",

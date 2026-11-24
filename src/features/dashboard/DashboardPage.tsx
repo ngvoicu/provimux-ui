@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/icons';
 import { InfoTip } from '@/components/ui/Tooltip';
 import { useAuthStore } from '@/stores';
-import { provimuxDashboardLinks } from '@/provimux';
+import { provimuxDashboardLinks, provimuxDashboardTo } from '@/provimux';
 import { useHeaderRefresh } from '@/hooks/useHeaderRefresh';
 import { formatCompactNumber, formatDateValue, formatPercent } from '@/utils/format';
 import { useDashboardOverview } from './hooks/useDashboardOverview';
@@ -235,7 +235,7 @@ export function DashboardPage() {
             {heroMetaLine}
           </p>
           <div className={styles.heroActions} data-reveal>
-            <Link to="/ai-providers" className={styles.primaryAction}>
+            <Link to={provimuxDashboardTo('/ai-providers')} className={styles.primaryAction}>
               {t('dashboard.cta_manage_providers')}
             </Link>
             <Link to="/logs" className={styles.ghostAction}>
@@ -459,7 +459,7 @@ export function DashboardPage() {
                   ))}
                 </ul>
               </div>
-              <Link to="/auth-files" className={styles.panelLink}>
+              <Link to={provimuxDashboardTo('/auth-files')} className={styles.panelLink}>
                 {t('dashboard.health_link')}{' '}
                 <span className={styles.linkArrow} aria-hidden="true">
                   →

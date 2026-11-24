@@ -69,7 +69,7 @@ describe("the Dashboard leads to Provimux's pages", () => {
 
   test('one seam in DashboardPage.tsx, and the theme lays out three, then four', () => {
     const page = read('src/features/dashboard/DashboardPage.tsx');
-    expect(page).toContain("import { provimuxDashboardLinks } from '@/provimux';");
+    expect(page).toContain("import { provimuxDashboardLinks, provimuxDashboardTo } from '@/provimux';");
     expect(page).toContain('const ctaCards = provimuxDashboardLinks([');
     expect(page).toContain('  ], t);');
     const css = sass.compile('src/provimux/theme/_dashboard.scss').css;

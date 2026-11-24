@@ -1,4 +1,8 @@
 {
+  "dashboard": {
+    "cta_manage_providers": "Управлять аккаунтами",
+    "health_link": "Открыть аккаунты"
+  },
   "provimux": {
     "nav": {
       "accounts": "Аккаунты",

@@ -39,6 +39,10 @@
   "footer": {
     "api_version": "Server version"
   },
+  "dashboard": {
+    "cta_manage_providers": "Manage accounts",
+    "health_link": "Open Accounts"
+  },
   "provimux": {
     "version_line": "Provimux version {{version}} (based on CLIProxyAPI {{base}})",
     "version_line_other": "Connected to CLIProxyAPI {{version}}",

@@ -1,4 +1,8 @@
 {
+  "dashboard": {
+    "cta_manage_providers": "Quản lý tài khoản",
+    "health_link": "Mở Tài khoản"
+  },
   "provimux": {
     "nav": {
       "accounts": "Tài khoản",

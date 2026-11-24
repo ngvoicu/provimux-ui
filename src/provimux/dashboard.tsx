@@ -13,6 +13,17 @@ export interface DashboardCard {
 /** Upstream's pages that Accounts took the place of: in the menu under Advanced settings, not offered here. */
 const UNDER_ADVANCED_SETTINGS = new Set(['/ai-providers', '/auth-files', '/oauth']);
 
+/** Accounts: where the Dashboard's own links to AI Providers and Auth Files lead now. */
+const ACCOUNTS = '/provimux/accounts';
+
+/**
+ * Where one of the Dashboard's own links leads: AI Providers and Auth Files (the hero's "Manage providers",
+ * the credentials panel's link) to Accounts, which took their place; any other page as it is. Upstream's
+ * links are hard-coded, so this is their one seam (`to={provimuxDashboardTo('/ai-providers')}`).
+ */
+export const provimuxDashboardTo = (to: string): string =>
+  UNDER_ADVANCED_SETTINGS.has(to) ? ACCOUNTS : to;
+
 /**
  * The Dashboard's "Where to go from here" (owner, 2026-11-24): Provimux's pages first, Accounts, Models and
  * Routing, then the rest of upstream's cards in their order. AI Providers and Auth Files are left out: they are in
@@ -22,7 +33,7 @@ const UNDER_ADVANCED_SETTINGS = new Set(['/ai-providers', '/auth-files', '/oauth
 export function provimuxDashboardLinks(cards: readonly DashboardCard[], t: TFunction): DashboardCard[] {
   const ours: DashboardCard[] = [
     {
-      to: '/provimux/accounts',
+      to: ACCOUNTS,
       icon: <IconAccounts size={20} />,
       title: t('provimux.nav.accounts'),
     },

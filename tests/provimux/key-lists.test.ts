@@ -18,6 +18,7 @@ import type {
   ProvimuxModelListsResponse,
   ProvimuxModelRoutesResponse,
 } from '@/provimux/api/types';
+import { provimuxDashboardTo } from '@/provimux/dashboard';
 import { readAliasState } from '@/provimux/pages/aliases/rows';
 import { startDraft } from '@/provimux/pages/aliases/draft';
 import type { KeyEntry } from '@/provimux/pages/aliases/types';
@@ -983,6 +984,27 @@ describe('links', () => {
     expect(modelsAddressOf(account, true, 'learned')).toBe(
       '/provimux/models?account=c41d9a07b2e8f113&view=learned'
     );
+  });
+
+  test("the Dashboard's own links to AI Providers and Auth Files lead to Accounts", async () => {
+    expect(provimuxDashboardTo('/ai-providers')).toBe('/provimux/accounts');
+    expect(provimuxDashboardTo('/auth-files')).toBe('/provimux/accounts');
+    expect(provimuxDashboardTo('/logs')).toBe('/logs');
+    const page = read('src/features/dashboard/DashboardPage.tsx');
+    expect(page).toContain(
+      "<Link to={provimuxDashboardTo('/ai-providers')} className={styles.primaryAction}>"
+    );
+    expect(page).toContain(
+      "<Link to={provimuxDashboardTo('/auth-files')} className={styles.panelLink}>"
+    );
+    // Their words say where they lead, in every language.
+    for (const language of ['en', 'zh-CN', 'zh-TW', 'ru', 'vi', 'ko', 'tr']) {
+      await i18n.changeLanguage(language);
+      expect(i18n.t('dashboard.health_link')).not.toMatch(/auth files/i);
+    }
+    await i18n.changeLanguage('en');
+    expect(i18n.t('dashboard.cta_manage_providers')).toBe('Manage accounts');
+    expect(i18n.t('dashboard.health_link')).toBe('Open Accounts');
   });
 });
 

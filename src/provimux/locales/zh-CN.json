@@ -1,4 +1,8 @@
 {
+  "dashboard": {
+    "cta_manage_providers": "管理账户",
+    "health_link": "打开账户"
+  },
   "provimux": {
     "nav": {
       "accounts": "账户",
