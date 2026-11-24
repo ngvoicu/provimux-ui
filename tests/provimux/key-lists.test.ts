@@ -48,6 +48,7 @@ import {
   storedListTarget,
   summaryOf,
   withLists,
+  withShared,
   withTyped,
   withValue,
   type CompatibleDraft,
@@ -59,6 +60,7 @@ import { modelsAddressOf } from '@/provimux/pages/accounts/links';
 import { writeErrorMessage } from '@/provimux/pages/accounts/writeErrors';
 import { readExclusions } from '@/provimux/pages/excluded/exclusions';
 import {
+  accountKeyRows,
   keyListState,
   keyListsSupported,
   keyOverlaps,
@@ -375,6 +377,104 @@ const routes = (
       })),
     })),
   });
+
+describe('a Gemini key on Google’s own host without rows: its logins row, read as a key’s', () => {
+  const login = (supported: boolean, source: string, held: boolean) =>
+    readModelLists({
+      options: { live_lists: true },
+      logins: [
+        {
+          auth_index: 'ak-gemini-1',
+          provider: 'gemini',
+          login: { label: 'gemini-apikey' },
+          source,
+          live: {
+            supported,
+            held,
+            fetched_at: held ? '2026-11-24T16:10:44Z' : null,
+            listed_models: held ? 52 : null,
+          },
+          registered_models: held ? 52 : 40,
+        },
+      ],
+      keys: [],
+    });
+
+  test('asked: its list, offered as it is; fixed: not asked, the built-in list; never mixed with other rows', () => {
+    const asked = login(true, 'live', true);
+    const [row] = accountKeyRows(asked, keyRowsByIndex(asked), ['ak-gemini-1'], { fixed: false });
+    expect(keyListState(row, NOW)).toMatchObject({
+      kind: 'live',
+      listed: 52,
+      learned: [],
+      configured: 0,
+    });
+    // A fixed Gemini key: its logins row says supported false and the built-in list (the proxy's K2 fix).
+    const fixed = login(false, 'built-in', false);
+    const [fixedRow] = accountKeyRows(fixed, keyRowsByIndex(fixed), ['ak-gemini-1'], {
+      fixed: true,
+    });
+    expect(keyListState(fixedRow, NOW)).toEqual({ kind: 'fixed', configured: 0 });
+    const off = { ...fixed, options: { ...fixed.options, live_lists: false } };
+    expect(
+      keyListState(accountKeyRows(off, new Map(), ['ak-gemini-1'], { fixed: false })[0], NOW).kind
+    ).toBe('live-lists-off');
+    // Only for a Gemini key with no keys row; another account's logins row is never taken.
+    expect(accountKeyRows(asked, new Map(), ['ak-gemini-1'], null)).toEqual([]);
+    expect(accountKeyRows(asked, new Map(), ['other'], { fixed: false })).toEqual([]);
+    const example = readModelLists(KEYS_EXAMPLE());
+    expect(
+      accountKeyRows(example, keyRowsByIndex(example), ['c41d9a07b2e8f113'], { fixed: false })
+    ).toHaveLength(1);
+  });
+
+  test('its panel and its switch say what they do for it', async () => {
+    await i18n.changeLanguage('en');
+    const asked = login(true, 'live', true);
+    const rows = accountKeyRows(asked, keyRowsByIndex(asked), ['ak-gemini-1'], { fixed: false });
+    const panel = renderToStaticMarkup(
+      createElement(
+        MemoryRouter,
+        null,
+        createElement(KeyListStatus, {
+          rows,
+          prefix: null,
+          routes: null,
+          service: 'Google',
+          nowMs: NOW,
+          busy: false,
+          learnedAddress: '/',
+          onLowerPriority: noop,
+          onExclude: noop,
+          onFix: noop,
+        })
+      )
+    );
+    expect(panel).toContain('Google listed 52 models at the last refresh.');
+    expect(panel).toContain('With no model in its settings, this key offers that list as it is.');
+    const doc = {
+      'config-version': 8,
+      'api-keys': {
+        gemini: [
+          {
+            name: 'gemini',
+            keys: [{ 'api-key': 'fixture-gemini-key-0000e5f6', auth_index: 'ak-gemini-1' }],
+          },
+        ],
+      },
+    };
+    const draft = draftOf(locateKey(doc, entryOf(doc, 'gemini', 0))!);
+    expect(renderFields(draft, true)).toContain(
+      'Off: with no model above, this key offers the list OpenRouter gives it'
+    );
+    expect(renderFields(withLists(draft, { fixed: true }), true)).toContain(
+      'On: OpenRouter is never asked; with no model above'
+    );
+    // Its own base URL: no list of Google's, the catalog text.
+    const own = withShared(draft, { baseUrl: 'https://gemini.example.com' });
+    expect(renderFields(own, true)).not.toContain('with no model above, this key offers the list');
+  });
+});
 
 describe('a model a key learned that a subscription also serves', () => {
   const openai = row({

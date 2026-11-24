@@ -53,7 +53,9 @@ import { accountName, serviceLabel } from './labels';
 import { isChangedError, writeErrorMessage } from './writeErrors';
 import { summaryOf, type KeyDraft } from './keySettings';
 import { saveKeySettingsDraft } from './keySave';
+import { listSettingsIn } from './keyListSettings';
 import {
+  accountKeyRows,
   keyListsSupported,
   keyOverlaps,
   keyRowsByIndex,
@@ -160,6 +162,23 @@ export function AccountsPage() {
           })
         : [],
     [read, routes.data, clock, serverNowMs]
+  );
+
+  /** A key's rows of the status: its keys rows, or a keyless Gemini key's logins row. */
+  const rowsOfAccount = useCallback(
+    (account: KeyAccount) =>
+      accountKeyRows(
+        lists.data,
+        keyRows,
+        account.authIndexes,
+        account.entry.family === 'gemini'
+          ? {
+              fixed: listSettingsIn('gemini', account.entry.storedGroup, account.entry.keyIndex)
+                .fixed,
+            }
+          : null
+      ),
+    [lists.data, keyRows]
   );
 
   /** Per key, the models it learned that a subscription also serves, while the key is tried first or shares. */
@@ -588,7 +607,7 @@ export function AccountsPage() {
           shown: keyListsKnown === true,
           rows:
             (openAccount ?? lastOpen)?.kind === 'api'
-              ? keyRowsOf(keyRows, (openAccount ?? lastOpen)!.authIndexes)
+              ? rowsOfAccount((openAccount ?? lastOpen) as KeyAccount)
               : [],
         }}
         routes={routes.data}

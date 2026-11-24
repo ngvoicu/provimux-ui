@@ -8,6 +8,7 @@
  */
 import type {
   ProvimuxLiveListFailure,
+  ProvimuxModelListLogin,
   ProvimuxModelListKeyRow,
   ProvimuxModelListsResponse,
   ProvimuxModelRoute,
@@ -51,6 +52,58 @@ export function keyRowsOf(
     const row = rows.get(index);
     return row ? [row] : [];
   });
+}
+
+/**
+ * A Gemini key on Google's own host without rows has no keys row: it keeps the row in `logins` it had before
+ * key lists (key-model-lists.md 7.1, 14), with `live.supported` false when it is not asked. Read as a key's row:
+ * its whole list is what it offers (no rows, so nothing is "learned" beyond them), and the reason it is not
+ * asked comes from its own setting (`fixed`) or the server's switch (`liveListsOn`).
+ */
+export function keyRowOfLogin(
+  login: ProvimuxModelListLogin,
+  fixed: boolean,
+  liveListsOn: boolean | null
+): ProvimuxModelListKeyRow {
+  const asked = login.live.supported;
+  return {
+    ...login,
+    source: asked && login.source === 'live' ? 'live' : 'config',
+    models: null,
+    key: {
+      type: 'gemini',
+      name: 'gemini',
+      fixed,
+      not_asked: asked
+        ? null
+        : fixed
+          ? 'fixed'
+          : liveListsOn === false
+            ? 'live_lists_off'
+            : 'no_list_endpoint',
+      configured_models: 0,
+      unlisted_models: null,
+      learned: [],
+      unlisted: null,
+    },
+  };
+}
+
+/**
+ * An account's rows: its keys rows; for a Gemini key without any (Google's own host, no rows), its logins row
+ * read as a key's (`keyRowOfLogin`).
+ */
+export function accountKeyRows(
+  lists: Pick<ProvimuxModelListsResponse, 'logins' | 'options'> | null,
+  rows: ReadonlyMap<string, ProvimuxModelListKeyRow>,
+  authIndexes: readonly string[],
+  gemini: { fixed: boolean } | null
+): ProvimuxModelListKeyRow[] {
+  const own = keyRowsOf(rows, authIndexes);
+  if (own.length || !gemini || !lists) return own;
+  return lists.logins
+    .filter((login) => login.auth_index !== null && authIndexes.includes(login.auth_index))
+    .map((login) => keyRowOfLogin(login, gemini.fixed, lists.options.live_lists));
 }
 
 // --- a key's state ------------------------------------------------------------------------------------------

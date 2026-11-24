@@ -57,6 +57,17 @@ const emptyHeader = () => ({ key: '', value: '' });
 const emptyModel = (): ModelEntryInput => ({ name: '', alias: '' });
 const numberOrUndefined = (value: string) => (value.trim() === '' ? undefined : Number(value));
 
+/** No base URL, or Google's own: where a Gemini key's own list is read (key-model-lists.md 4). */
+const isGoogleHost = (baseUrl: string): boolean => {
+  const value = baseUrl.trim();
+  if (!value) return true;
+  try {
+    return new URL(value).hostname.toLowerCase() === 'generativelanguage.googleapis.com';
+  } catch {
+    return false;
+  }
+};
+
 export interface KeySettingsFieldsProps {
   draft: KeyDraft;
   onChange: (draft: KeyDraft) => void;
@@ -183,6 +194,9 @@ export function KeySettingsFields({
   }, [discovery.models, models, learned]);
   const rowsListed = models.some((model) => model.name.trim());
   const fixedShown = listsShown && (compatible || familyAsked(draft.family));
+  // A Gemini key on Google's own host without rows offers Google's list for it; fixed, the built-in list.
+  const googleHostKey =
+    !compatible && draft.family === 'gemini' && !rowsListed && isGoogleHost(shared.baseUrl);
   const excludedShown = compatible ? listsShown : descriptor.supportsExcludedModels;
   const catalogState: ExcludedModelsCatalogState = discovery.loading
     ? 'loading'
@@ -449,7 +463,11 @@ export function KeySettingsFields({
                     {t('provimux.accounts.settings.fixed')}
                   </span>
                   <p className={formStyles.sectionDesc} id={`${id}-fixed-hint`}>
-                    {!compatible && !rowsListed
+                    {googleHostKey
+                      ? draft.lists.fixed
+                        ? t('provimux.accounts.settings.fixed_google_on', { service })
+                        : t('provimux.accounts.settings.fixed_google_off', { service })
+                      : !compatible && !rowsListed
                       ? t('provimux.accounts.settings.fixed_catalog_text', { service })
                       : draft.lists.fixed
                         ? t('provimux.accounts.settings.fixed_on_text', { service })

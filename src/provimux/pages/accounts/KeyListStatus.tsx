@@ -313,9 +313,12 @@ function stateText(
         state.listed !== null
           ? t('provimux.accounts.lists.found', { count: state.listed, service })
           : '';
+      // No rows: the key offers its service's list as it is (a Gemini key on Google's own host).
       const learned = state.learned.length
         ? t('provimux.accounts.lists.learned', { count: state.learned.length })
-        : t('provimux.accounts.lists.learned_none');
+        : state.configured === 0
+          ? t('provimux.accounts.lists.whole_list')
+          : t('provimux.accounts.lists.learned_none');
       const old = state.old ? t('provimux.accounts.lists.old_text') : '';
       return [found, learned, old].filter(Boolean).join(' ');
     }
