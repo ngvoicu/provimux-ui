@@ -12,6 +12,7 @@
  */
 import { normalizeOAuthProviderKey } from '@/utils/providerKeys';
 import type {
+  ProvimuxFieldSource,
   ProvimuxLimits,
   ProvimuxModelListLogin,
   ProvimuxModelListsResponse,
@@ -89,6 +90,8 @@ export interface RouteLine {
    * and reasoning limits come from that list or from defaults.
    */
   estimated: boolean;
+  /** Where the login's list says each limit of the model comes from; null when not known (or an API key). */
+  detail: ModelDetail | null;
   /** 1-based: routes of rank 1 are tried first. null: not tried, or not known. */
   rank: number | null;
   /** Another tried route of the name has the same priority: the routing strategy chooses between them. */
@@ -129,6 +132,18 @@ export interface NameItem {
   /** Requests in the last 30 days; null when not known. */
   requests: number | null;
   limits: ProvimuxLimits | null;
+  /** No list states the context of the model behind any of its routes: the value is a default. */
+  contextDefault: boolean;
+}
+
+/** Where a login's model list says a model's limits come from (model-lists.md): its own list, the built-in
+ *  list, or neither (null: a default). */
+export interface ModelDetail {
+  /** The login's own list has the model and the built-in list does not, yet. */
+  learned: boolean;
+  context: ProvimuxFieldSource;
+  output: ProvimuxFieldSource;
+  reasoning: ProvimuxFieldSource;
 }
 
 export interface CatalogInput {
@@ -140,36 +155,9 @@ export interface CatalogInput {
   usage: Record<string, number> | null;
   /** The server's now, for cooldowns. */
   nowMs: number;
-  /** Per login (auth index), the models its own list offers that the built-in list lacks. */
-  learned?: Record<string, readonly string[]>;
+  /** Per login (auth index), its models by id, with where each limit comes from (Model lists per login). */
+  details?: Record<string, Record<string, ModelDetail>>;
 }
-
-/**
- * From the Model lists answers asked per login (`?auth_index=`), the models each login's own list offers
- * that the built-in list does not have yet, by auth index.
- */
-export function learnedByLogin(
-  answers: readonly ProvimuxModelListsResponse[]
-): Record<string, string[]> {
-  const learned: Record<string, string[]> = {};
-  for (const answer of answers) {
-    for (const login of answer.logins) {
-      if (!login.auth_index || !login.models) continue;
-      const ids = login.models.filter((model) => model.learned).map((model) => model.id);
-      if (ids.length) learned[login.auth_index] = ids;
-    }
-  }
-  return learned;
-}
-
-/** The logins whose list holds models the built-in list lacks, with what identifies that list's state. */
-export const loginsWithLearned = (lists: ProvimuxModelListsResponse | null) =>
-  (lists?.logins ?? [])
-    .filter((login) => login.auth_index && (login.learned_models ?? 0) > 0)
-    .map((login) => ({
-      authIndex: login.auth_index!,
-      version: `${login.auth_index}|${login.live.fetched_at ?? ''}|${login.learned_models}`,
-    }));
 
 /** 30 days of requests per name, from a savings answer grouped by model. */
 export function usageByName(answer: ProvimuxSavingsResponse | null): Record<string, number> | null {
@@ -184,6 +172,38 @@ export function usageByName(answer: ProvimuxSavingsResponse | null): Record<stri
   }
   return usage;
 }
+
+/** From the Model lists answers asked per login (`?auth_index=`), each login's models with their sources. */
+export function detailsByLogin(
+  answers: readonly ProvimuxModelListsResponse[]
+): Record<string, Record<string, ModelDetail>> {
+  const details: Record<string, Record<string, ModelDetail>> = {};
+  for (const answer of answers) {
+    for (const login of answer.logins) {
+      if (!login.auth_index || !login.models) continue;
+      const models: Record<string, ModelDetail> = {};
+      for (const model of login.models) {
+        models[model.id] = {
+          learned: model.learned,
+          context: model.sources.context,
+          output: model.sources.output,
+          reasoning: model.sources.reasoning_levels,
+        };
+      }
+      details[login.auth_index] = models;
+    }
+  }
+  return details;
+}
+
+/** The logins whose models to ask for, with what identifies their list's state (asked again when it changes). */
+export const loginsToDetail = (lists: ProvimuxModelListsResponse | null) =>
+  (lists?.logins ?? [])
+    .filter((login) => login.auth_index && !login.disabled)
+    .map((login) => ({
+      authIndex: login.auth_index!,
+      version: `${login.auth_index}|${login.live.fetched_at ?? ''}|${login.registered_models ?? ''}`,
+    }));
 
 /** The served names in the shape the name check of the data layer takes (aliases-page.md 4.4). */
 export function servedOf(routes: ProvimuxModelRoutesResponse | null): ServedNames {
@@ -292,9 +312,9 @@ interface Collected {
  */
 export function buildNames(input: CatalogInput): NameItem[] {
   const { draft, routes, lists, usage, nowMs } = input;
-  const learned = input.learned ?? {};
-  const isEstimated = (authIndex: string | null, upstream: string) =>
-    authIndex !== null && (learned[authIndex]?.includes(upstream) ?? false);
+  const details = input.details ?? {};
+  const detailOf = (authIndex: string | null, upstream: string): ModelDetail | null =>
+    authIndex !== null ? (details[authIndex]?.[upstream] ?? null) : null;
   const base = draft.base;
   const entries = draftEntries(draft);
   const entryById = new Map(entries.map((entry) => [entry.id, entry]));
@@ -376,6 +396,7 @@ export function buildNames(input: CatalogInput): NameItem[] {
         priority,
         priorityEdited: keyPriorityEdited(entry),
         estimated: false,
+        detail: null,
         rank: null,
         sharesRank: false,
         cooldown: isCoolingAt(route.recorded_cooldown, nowMs) ? route.recorded_cooldown : null,
@@ -455,12 +476,12 @@ export function buildNames(input: CatalogInput): NameItem[] {
 
   return [...byName.entries()].map(([key, found]): NameItem => {
     const lines = rank(
-      found.lines.map((line) =>
-        line.access === 'sub' && isEstimated(line.authIndex, line.upstream)
-          ? { ...line, estimated: true }
-          : line
-      )
+      found.lines.map((line) => {
+        const detail = line.access === 'sub' ? detailOf(line.authIndex, line.upstream) : null;
+        return detail ? { ...line, detail, estimated: detail.learned } : line;
+      })
     );
+    const triedLines = lines.filter(tried);
     const configLines = lines.filter((line) => line.rowId !== null);
     const problems: NameProblem[] = [];
     if (lines.some((line) => line.state !== 'removed' && isBlocking(line.issue))) {
@@ -481,6 +502,9 @@ export function buildNames(input: CatalogInput): NameItem[] {
       fresh: configLines.length > 0 && configLines.every((line) => line.state === 'new'),
       requests: usage ? (usage[key] ?? 0) : null,
       limits: found.limits,
+      contextDefault:
+        triedLines.length > 0 &&
+        triedLines.every((line) => line.detail !== null && line.detail.context === null),
     };
   });
 }
@@ -534,6 +558,7 @@ function pendingLine(
     priority: options.priority,
     priorityEdited: options.priorityEdited,
     estimated: false,
+    detail: null,
     rank: null,
     sharesRank: false,
     cooldown: null,

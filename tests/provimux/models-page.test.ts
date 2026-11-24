@@ -24,9 +24,9 @@ import {
   addToName,
   candidatesFor,
   initialModelsFilter,
-  learnedByLogin,
+  detailsByLogin,
   listlessKeys,
-  loginsWithLearned,
+  loginsToDetail,
   matches,
   removable,
   removeName,
@@ -154,33 +154,68 @@ describe('the list', () => {
   });
 });
 
-describe('a model only the login’s own list has (owner: “wtf is this”)', () => {
-  const learned = () => learnedByLogin([readModelLists(ownerFixture('model-lists-codex'))]);
-
-  test('the logins to ask, and what they answer', () => {
-    expect(loginsWithLearned(ownerLists()).map((login) => login.authIndex)).toEqual(['li-codex-1']);
-    expect(learned()).toEqual({ 'li-codex-1': ['gpt-6.2-sol'] });
-  });
-
-  test('its route says so in plain words, with one line on why', async () => {
-    await i18n.changeLanguage('en');
-    const draft = startDraft(ownerState());
-    const items = buildNames({
-      draft,
+describe('where a limit comes from, said plainly (owner: “wtf is this”, “who is the provider”)', () => {
+  const details = () =>
+    detailsByLogin([
+      readModelLists(ownerFixture('model-lists-codex')),
+      readModelLists(ownerFixture('model-lists-devin')),
+    ]);
+  const names = () =>
+    buildNames({
+      draft: startDraft(ownerState()),
       routes: ownerRoutes(),
       lists: ownerLists(),
       usage: null,
       nowMs: OWNER_NOW,
-      learned: learned(),
+      details: details(),
     });
-    expect(nameOf(items, 'gpt-6.2-sol').lines[0].estimated).toBe(true);
+
+  test('every login is asked once per list; each model with the source of each limit', () => {
+    expect(loginsToDetail(ownerLists()).map((login) => login.authIndex)).toEqual([
+      'li-claude-1',
+      'li-codex-1',
+      'li-devin-1',
+    ]);
+    expect(details()['li-codex-1']['gpt-6.2-sol']).toEqual({
+      learned: true,
+      context: 'live',
+      output: null,
+      reasoning: null,
+    });
+    expect(details()['li-devin-1']['swe-2-flash'].context).toBeNull();
+  });
+
+  test('a model only the login’s own list has: “new: limits estimated”, each limit with the company named', async () => {
+    await i18n.changeLanguage('en');
+    const items = names();
+    const sol = nameOf(items, 'gpt-6.2-sol');
+    expect(sol.lines[0].estimated).toBe(true);
     expect(nameOf(items, 'terra').lines[0].estimated).toBe(false);
-    const html = renderCard(nameOf(items, 'gpt-6.2-sol'), draft);
+    const html = renderCard(sol, startDraft(ownerState()));
     expect(textOf(html)).toContain('new: limits estimated');
-    expect(html).toContain(
-      'title="Codex&#x27;s own list offers this model, but Provimux&#x27;s built-in list doesn&#x27;t have it yet, so its context, output and reasoning limits come from Codex&#x27;s list or from defaults."'
+    expect(textOf(html)).not.toMatch(/catalog|\bL\b|\bB\b/);
+    expect(html.replace(/&#x27;/g, "'")).toContain(
+      "title=\"Codex's own list offers this model, but Provimux's built-in list doesn't have it yet. Context from Codex's list; output: a default; reasoning levels: a default.\""
     );
-    expect(textOf(html)).not.toMatch(/catalog/i);
+  });
+
+  test('a context no list states says it is a default; one a list states says nothing more', async () => {
+    await i18n.changeLanguage('en');
+    const items = names();
+    const flash = nameOf(items, 'swe-2-flash');
+    expect(flash.contextDefault).toBe(true);
+    const html = renderCard(flash, startDraft(ownerState()));
+    expect(textOf(html)).toContain('262K context (a default)');
+    expect(html.replace(/&#x27;/g, "'")).toContain(
+      'title="No list states this model\'s context, so Provimux uses a default."'
+    );
+    // Only where it matters: a value from a list carries no mark.
+    const terra = nameOf(items, 'terra');
+    expect(terra.contextDefault).toBe(false);
+    expect(textOf(renderCard(terra, startDraft(ownerState())))).toContain('400K context');
+    expect(textOf(renderCard(terra, startDraft(ownerState())))).not.toContain('default');
+    // A route without a login list (an API key) never makes a name's value a default.
+    expect(nameOf(items, 'deepseek').contextDefault).toBe(false);
   });
 });
 
