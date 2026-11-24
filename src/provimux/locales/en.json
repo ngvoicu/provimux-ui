@@ -466,7 +466,6 @@
       "off_text": "Off: every login uses the built-in catalog. Turn it on to have each Claude, Codex and Meta login register what its own account lists. It applies at once.",
       "refresh_now": "Refresh lists now",
       "refresh_hint": "Asks the server to refresh the model catalogs and each login's list in the background. Each row below shows its login's state as of the latest status read.",
-      "refresh_off_hint": "Turn the switch on to refresh the lists.",
       "refresh_requested": "Asked at {{time}}. Each login's list on its routes updates on the next read (every 30 seconds, or Reload).",
       "refresh_catalog_failed": "The server could not refresh the built-in model list ({{message}}). Each login's list on its routes updates on the next read.",
       "refresh_failed": "Refresh not requested: {{message}}",
@@ -889,7 +888,7 @@
       "show_more_other": "Show {{count}} more of {{total}}",
       "order_note": "Order: among the routes that can take a new request, Provimux tries the highest priority first; routes with the same priority share the requests, and a conversation already on a route may stay there. A priority belongs to a login or an API key, so it applies to every model it serves: an API key's is set here or on Accounts, a login's on Accounts. A cooldown is the timer Provimux recorded after a refused request, with its reason; a route without one can still fail.",
       "settings_title": "Settings",
-      "lists_hint": "Each login's list and its age show on its routes above.",
+      "lists_hint": "Each login's list and its age show on its routes above. It updates the shared model catalog too.",
       "routes_none": "no route",
       "routes_count_one": "{{count}} route",
       "routes_count_other": "{{count}} routes",
@@ -1007,7 +1006,8 @@
       "tab_excluded": "Excluded models",
       "excluded_mark_one": "Excluded in {{count}} place",
       "excluded_mark_other": "Excluded in {{count}} places",
-      "excluded_mark_title": "Never served by: {{places}}. Open it in Excluded models."
+      "excluded_mark_title": "Never served by: {{places}}. Open it in Excluded models.",
+      "lists_off_hint": "Turn the switch on to refresh the lists. Sync model catalog updates the shared model catalog alone."
     },
     "aliases": {
       "load_failed": "Could not read the configuration",
@@ -1144,6 +1144,10 @@
         "submit": "Exclude",
         "cancel": "Cancel"
       }
+    },
+    "system": {
+      "models_line": "Every model your accounts serve, with its names, its routes and where it is excluded, is on Models.",
+      "models_link": "Open Models"
     }
   },
   "theme": {

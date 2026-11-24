@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/Button';
-import { IconRefreshCw } from '@/components/ui/icons';
+import { IconDownload, IconRefreshCw } from '@/components/ui/icons';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
+import { useModelCatalogSync } from '@/features/authFiles/hooks/useModelCatalogSync';
 import { useConfigStore, useNotificationStore } from '@/stores';
 import { getErrorMessage } from '@/utils/helpers';
 import { provimuxApi } from '../../api/provimuxApi';
@@ -67,7 +68,12 @@ export function ModelsSettings(props: ModelsSettingsProps) {
   );
 }
 
-/** models.live-lists, and "Refresh lists now": what the Model lists page held, as one card. */
+/**
+ * models.live-lists, and "Refresh lists now": what the Model lists page held, as one card. "Refresh lists now" is
+ * `POST /models/refresh`, which updates the shared model catalog and, with live lists on, asks every login for its
+ * list. With them off it cannot ask, so "Sync model catalog" stands beside it: the same catalog update, through
+ * Auth Files' own action (`useModelCatalogSync`), the one the System page's models card had.
+ */
 function ListsCard({
   lists,
   onChanged,
@@ -82,6 +88,7 @@ function ListsCard({
   const refreshGuard = useRequestGuard();
   const switchGuard = useRequestGuard();
   const enabled = lists.options.live_lists;
+  const { syncingModelCatalog, syncModelCatalog } = useModelCatalogSync(onChanged);
 
   const startRefresh = async () => {
     setRefresh({ phase: 'sending' });
@@ -143,7 +150,7 @@ function ListsCard({
     return {
       tone: undefined,
       text:
-        enabled === true ? t('provimux.models.lists_hint') : t('provimux.live.refresh_off_hint'),
+        enabled === true ? t('provimux.models.lists_hint') : t('provimux.models.lists_off_hint'),
     };
   })();
 
@@ -195,6 +202,18 @@ function ListsCard({
           <IconRefreshCw size={14} />
           {t('provimux.live.refresh_now')}
         </Button>
+        {enabled !== true ? (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => void syncModelCatalog()}
+            disabled={syncingModelCatalog}
+            loading={syncingModelCatalog}
+          >
+            {!syncingModelCatalog ? <IconDownload size={14} /> : null}
+            {t('auth_files.sync_catalog_button')}
+          </Button>
+        ) : null}
         {status ? (
           <span
             className={styles.refreshHint}

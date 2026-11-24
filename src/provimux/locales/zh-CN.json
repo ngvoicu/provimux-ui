@@ -315,7 +315,7 @@
       "show_more_other": "再显示 {{count}} 个（共 {{total}} 个）",
       "order_note": "顺序：在可以接收新请求的路由中，Provimux 先尝试优先级最高的；优先级相同的路由分担请求，已经在某条路由上的对话可能会继续留在那里。优先级属于登录或 API 密钥，因此适用于它提供的每个模型：API 密钥的优先级在这里或“账户”中设置，登录的在“账户”中设置。冷却是请求被拒绝后 Provimux 记录的计时器，并附有原因；没有冷却的路由也仍可能失败。",
       "settings_title": "设置",
-      "lists_hint": "每个登录的模型列表及其更新时间显示在上方它的路由上。",
+      "lists_hint": "每个登录的模型列表及其更新时间显示在上方它的路由上。它也会更新共享的模型目录。",
       "routes_none": "没有路由",
       "routes_count_other": "{{count}} 条路由",
       "requests_other": "30 天内 {{count}} 次请求",
@@ -427,7 +427,8 @@
       "tab_names": "名称",
       "tab_excluded": "已排除的模型",
       "excluded_mark_other": "在 {{count}} 处被排除",
-      "excluded_mark_title": "不提供它的地方：{{places}}。在“已排除的模型”中打开。"
+      "excluded_mark_title": "不提供它的地方：{{places}}。在“已排除的模型”中打开。",
+      "lists_off_hint": "打开开关即可刷新列表。“更新模型目录”只更新共享的模型目录。"
     },
     "aliases": {
       "load_failed": "无法读取配置",
@@ -550,6 +551,10 @@
         "submit": "排除",
         "cancel": "取消"
       }
+    },
+    "system": {
+      "models_line": "你的账户提供的每个模型，连同它的名称、路由和被排除的位置，都在“模型”页上。",
+      "models_link": "打开“模型”"
     }
   }
 }

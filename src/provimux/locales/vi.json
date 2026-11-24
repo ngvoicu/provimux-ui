@@ -315,7 +315,7 @@
       "show_more_other": "Hiện thêm {{count}} (tổng {{total}})",
       "order_note": "Thứ tự: trong các tuyến có thể nhận yêu cầu mới, Provimux thử tuyến có mức ưu tiên cao nhất trước; các tuyến cùng mức ưu tiên chia nhau yêu cầu, và một cuộc hội thoại đang ở một tuyến có thể ở lại tuyến đó. Mức ưu tiên thuộc về một đăng nhập hoặc một API key, nên áp dụng cho mọi model mà nó phục vụ: của API key thì đặt ở đây hoặc ở Tài khoản, của đăng nhập thì ở Tài khoản. Tạm nghỉ là bộ hẹn giờ Provimux ghi lại sau một yêu cầu bị từ chối, kèm lý do; tuyến không tạm nghỉ vẫn có thể lỗi.",
       "settings_title": "Cài đặt",
-      "lists_hint": "Danh sách model của mỗi đăng nhập và thời điểm cập nhật hiện trên các tuyến của nó ở trên.",
+      "lists_hint": "Danh sách model của mỗi đăng nhập và thời điểm cập nhật hiện trên các tuyến của nó ở trên. Nó cũng cập nhật danh mục model dùng chung.",
       "routes_none": "không có tuyến",
       "routes_count_other": "{{count}} tuyến",
       "requests_other": "{{count}} yêu cầu trong 30 ngày",
@@ -427,7 +427,8 @@
       "tab_names": "Tên",
       "tab_excluded": "Model bị loại trừ",
       "excluded_mark_other": "Bị loại trừ ở {{count}} nơi",
-      "excluded_mark_title": "Không bao giờ được phục vụ bởi: {{places}}. Mở trong Model bị loại trừ."
+      "excluded_mark_title": "Không bao giờ được phục vụ bởi: {{places}}. Mở trong Model bị loại trừ.",
+      "lists_off_hint": "Bật công tắc để làm mới danh sách. Đồng bộ danh mục mô hình chỉ cập nhật danh mục model dùng chung."
     },
     "aliases": {
       "load_failed": "Không đọc được cấu hình",
@@ -550,6 +551,10 @@
         "submit": "Loại trừ",
         "cancel": "Hủy"
       }
+    },
+    "system": {
+      "models_line": "Mọi model mà tài khoản của bạn phục vụ, cùng tên, tuyến và nơi bị loại trừ, đều ở trang Model.",
+      "models_link": "Mở Model"
     }
   }
 }

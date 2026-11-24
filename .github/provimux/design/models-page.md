@@ -139,3 +139,17 @@ Each change is written at once, one request, the original pages' own for the fie
 A file changed since the read is refused (412) and nothing is written: the page says so and has read again. A read
 without a tag writes nothing. While the names have edits not saved, no exclusion is written (one line says to save or
 discard them first): a write changes the file's tag, which the names' save is conditional on.
+
+## 7. The System page's models card, and the catalog update
+
+The owner (2026-11-24): System's "Available models" list is a duplicate of Models. The theme hides that card
+(`theme/_system.scss`: the card of the page's column whose header holds `.modelsActions`), and one line takes its place:
+"Every model your accounts serve, with its names, its routes and where it is excluded, is on Models", with **Open
+Models**. `SystemPage.tsx` is not edited: the line comes from Provimux's seam already in its Quick links card
+(`ProvimuxLinks` renders `ProvimuxSystemModels`), which places it right after the hidden card through a portal. When
+upstream no longer has that card, nothing is placed and nothing is hidden.
+
+The card's "Update model catalog" was `POST /models/refresh`, the request Models' "Refresh lists now" sends: the proxy
+then updates the shared model catalog and, with live lists on, asks every login for its list. With live lists off
+"Refresh lists now" cannot ask, so **Sync model catalog** stands beside it: Auth Files' own action
+(`useModelCatalogSync`, imported as it is), the same request. Each button's line says which does what.

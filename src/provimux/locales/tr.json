@@ -331,7 +331,7 @@
       "show_more_other": "{{total}} içinden {{count}} tane daha göster",
       "order_note": "Sıra: yeni bir istek alabilecek rotalar arasında Provimux önce en yüksek öncelikliyi dener; aynı öncelikteki rotalar istekleri paylaşır ve bir rotada süren bir konuşma orada kalabilir. Öncelik bir girişe ya da bir API anahtarına aittir, bu yüzden onun sunduğu her model için geçerlidir: API anahtarınınki burada ya da Hesaplar'da, girişinki Hesaplar'da ayarlanır. Bekleme, reddedilen bir istekten sonra Provimux'un nedeniyle birlikte kaydettiği süredir; beklemesi olmayan bir rota da yine başarısız olabilir.",
       "settings_title": "Ayarlar",
-      "lists_hint": "Her girişin listesi ve ne zaman güncellendiği yukarıda, o girişin rotalarında gösterilir.",
+      "lists_hint": "Her girişin listesi ve ne zaman güncellendiği yukarıda, o girişin rotalarında gösterilir. Ortak model kataloğunu da günceller.",
       "routes_none": "rota yok",
       "routes_count_one": "{{count}} rota",
       "routes_count_other": "{{count}} rota",
@@ -449,7 +449,8 @@
       "tab_excluded": "Hariç tutulan modeller",
       "excluded_mark_one": "{{count}} yerde hariç",
       "excluded_mark_other": "{{count}} yerde hariç",
-      "excluded_mark_title": "Hiç sunmayanlar: {{places}}. Hariç tutulan modellerde açın."
+      "excluded_mark_title": "Hiç sunmayanlar: {{places}}. Hariç tutulan modellerde açın.",
+      "lists_off_hint": "Listeleri yenilemek için anahtarı açın. Model kataloğunu eşitle yalnızca ortak model kataloğunu günceller."
     },
     "aliases": {
       "load_failed": "Yapılandırma okunamadı",
@@ -586,6 +587,10 @@
         "submit": "Hariç tut",
         "cancel": "İptal"
       }
+    },
+    "system": {
+      "models_line": "Hesaplarınızın sunduğu her model, adları, rotaları ve hariç tutulduğu yerlerle birlikte Modeller sayfasında.",
+      "models_link": "Modeller'i aç"
     }
   }
 }

@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { IconExternalLink } from '@/components/ui/icons';
 import { PROVIMUX_LINKS } from '../brand';
 import { ProvidersDevMark } from './ProvidersDevMark';
+import { ProvimuxSystemModels } from './ProvimuxSystemModels';
 import { ProvimuxTileIcon } from './ProvimuxTileIcon';
 
 interface ProvimuxLinksProps {
@@ -9,7 +10,10 @@ interface ProvimuxLinksProps {
   styles: Record<string, string>;
 }
 
-/** Provimux and providers.dev, first among the System page's links (upstream's follow as "Built on"). */
+/**
+ * Provimux and providers.dev, first among the System page's links (upstream's follow as "Built on"). Also the
+ * System page's seam for the line that replaces its models card (ProvimuxSystemModels).
+ */
 export function ProvimuxLinks({ styles }: ProvimuxLinksProps) {
   const { t } = useTranslation();
   const links = [
@@ -51,6 +55,7 @@ export function ProvimuxLinks({ styles }: ProvimuxLinksProps) {
           </div>
         </a>
       ))}
+      <ProvimuxSystemModels />
     </>
   );
 }

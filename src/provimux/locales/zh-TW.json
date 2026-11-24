@@ -315,7 +315,7 @@
       "show_more_other": "再顯示 {{count}} 個（共 {{total}} 個）",
       "order_note": "順序：在可以接收新請求的路由中，Provimux 先嘗試優先順序最高的；優先順序相同的路由分擔請求，已經在某條路由上的對話可能會繼續留在那裡。優先順序屬於登入或 API 金鑰，因此適用於它提供的每個模型：API 金鑰的優先順序在這裡或「帳戶」中設定，登入的在「帳戶」中設定。冷卻是請求被拒絕後 Provimux 記錄的計時器，並附上原因；沒有冷卻的路由也仍可能失敗。",
       "settings_title": "設定",
-      "lists_hint": "每個登入的模型清單及其更新時間顯示在上方它的路由上。",
+      "lists_hint": "每個登入的模型清單及其更新時間顯示在上方它的路由上。它也會更新共用的模型目錄。",
       "routes_none": "沒有路由",
       "routes_count_other": "{{count}} 條路由",
       "requests_other": "30 天內 {{count}} 次請求",
@@ -427,7 +427,8 @@
       "tab_names": "名稱",
       "tab_excluded": "已排除的模型",
       "excluded_mark_other": "在 {{count}} 處被排除",
-      "excluded_mark_title": "不提供它的地方：{{places}}。在「已排除的模型」中開啟。"
+      "excluded_mark_title": "不提供它的地方：{{places}}。在「已排除的模型」中開啟。",
+      "lists_off_hint": "開啟開關即可重新整理清單。「更新模型目錄」只更新共用的模型目錄。"
     },
     "aliases": {
       "load_failed": "無法讀取設定",
@@ -550,6 +551,10 @@
         "submit": "排除",
         "cancel": "取消"
       }
+    },
+    "system": {
+      "models_line": "你的帳戶提供的每個模型，連同它的名稱、路由和被排除的位置，都在「模型」頁上。",
+      "models_link": "開啟「模型」"
     }
   }
 }

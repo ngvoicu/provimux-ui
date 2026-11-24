@@ -1,0 +1,53 @@
+// The System page (upstream's SystemPage.tsx, not edited): its "Available models" card duplicates the Models page,
+// which lists every model with its routes, names and exclusions, and sends the same catalog update from its
+// settings. The card is hidden; one line linking to Models takes its place (components/ProvimuxSystemModels.tsx).
+// The card is found by the class of its header's buttons (.modelsActions); tests/provimux/system-models.test.ts
+// checks the page still has it there.
+
+[class*='SystemPage-module__content___'] > .card:has([class*='SystemPage-module__modelsActions___']) {
+  display: none !important;
+}
+
+.pmx-system-models-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 14px 20px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--bg-primary);
+  box-shadow: var(--shadow);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.pmx-system-models-icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--pmx-brand-bg);
+  color: var(--pmx-brand);
+}
+
+.pmx-system-models-link {
+  color: var(--pmx-link);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+
+  &:hover {
+    text-decoration-thickness: 2px;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--pmx-brand);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+}
