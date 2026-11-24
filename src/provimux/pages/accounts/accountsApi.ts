@@ -2,15 +2,16 @@
  * The Accounts page's requests (design accounts-page.md, section 5). It reads what Auth Files and the
  * Models page read, and writes only with the calls the original pages make for the same change:
  *
- * - a login: `PATCH /credentials/status` (on, off), `PATCH /credentials/fields` with `priority` (the call the
- *   Auth Files editor makes for that field), `DELETE /credentials` (remove), `POST /routing/cooldown/reset`
- *   (try now); a login file is never downloaded, so no token reaches the page;
+ * - a login: `PATCH /credentials/status` (on, off), `PATCH /credentials/fields` with `priority` or the
+ *   settings that changed (the call the Auth Files editor makes for those fields), `DELETE /credentials`
+ *   (remove), `POST /routing/cooldown/reset` (try now); a login file is never downloaded, so no token
+ *   reaches the page;
  * - an API key: `PUT /config/api-keys/<family>`, the family's list as read with one key changed, with
  *   `If-Match` set to the read's tag, as the Models page writes it; a list changed since is refused (412)
  *   and nothing is written.
  */
 import { apiClient } from '@/services/api/client';
-import { authFilesApi } from '@/services/api/authFiles';
+import { authFilesApi, type AuthFileFieldsPatch } from '@/services/api/authFiles';
 import type { ProviderFamily } from '@/services/api/providers';
 import type { AuthFileItem } from '@/types';
 import { isRecord } from '@/utils/helpers';
@@ -78,6 +79,9 @@ export const accountsApi = {
   /** As the Auth Files editor writes it: 0 clears the field. */
   setLoginPriority: (name: string, priority: number) =>
     authFilesApi.patchFields(name, { priority }),
+
+  /** A login's settings: only the changed fields, as the Auth Files editor writes them. */
+  setLoginFields: (name: string, patch: AuthFileFieldsPatch) => authFilesApi.patchFields(name, patch),
 
   removeLogin: async (name: string) => {
     const result = await authFilesApi.deleteFiles([name]);

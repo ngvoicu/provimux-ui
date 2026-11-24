@@ -5,7 +5,11 @@ import { Button } from '@/components/ui/Button';
 import { IconRefreshCw } from '@/components/ui/icons';
 import { AUTH_FILES_CHANGED_EVENT } from '@/features/authFiles/authFilesEvents';
 import { OAuthFlowDialog } from '@/features/oauth/components/OAuthFlowDialog';
+import { SiwcBindDialog } from '@/features/oauth/components/SiwcBindDialog';
+import { VertexImportDialog } from '@/features/oauth/components/VertexImportDialog';
 import { useOAuthFlows, usePluginOAuthProviders } from '@/features/oauth/hooks/useOAuthFlows';
+import { useVertexImport } from '@/features/oauth/hooks/useVertexImport';
+import iconVertex from '@/assets/icons/vertex.svg';
 import {
   OAUTH_PROVIDERS,
   resolveThemedIcon,
@@ -14,9 +18,12 @@ import {
 } from '@/features/oauth/providers';
 import { useHeaderRefresh } from '@/hooks/useHeaderRefresh';
 import { apiClient } from '@/services/api/client';
+import type { AuthFileFieldsPatch } from '@/services/api/authFiles';
+import { providersApi } from '@/services/api/providers';
 import { useAuthStore, useConfigStore, useNotificationStore, useThemeStore } from '@/stores';
-import { getErrorMessage } from '@/utils/helpers';
+import { getErrorMessage, isRecord } from '@/utils/helpers';
 import { provimuxApi } from '../../api/provimuxApi';
+import { familyGroups } from '../aliases/rows';
 import { useProvimuxPresence } from '../../presence';
 import { useOpenInAuthFiles } from '../shared/authFilesLink';
 import { useOpenInProviders } from '../shared/providersLink';
@@ -31,7 +38,7 @@ import {
   type AccountsFilter,
   type KeyAccount,
 } from './accounts';
-import { AccountsWriteError, accountsApi, type AccountsRead } from './accountsApi';
+import { accountsApi, type AccountsRead } from './accountsApi';
 import { AccountSheet } from './AccountSheet';
 import { AccountsBoard } from './AccountsBoard';
 import { AddAccountSheet } from './AddAccountSheet';
@@ -46,7 +53,8 @@ import {
   type NewKey,
 } from './keyWrites';
 import { accountName, serviceLabel } from './labels';
-import { writeErrorMessage } from './writeErrors';
+import { isChangedError, writeErrorMessage } from './writeErrors';
+import { compatibleConfig, nativeSave, summaryOf, type KeyDraft } from './keySettings';
 import { modelsAddressOf } from './links';
 import { ReplaceKeyDialog } from './ReplaceKeyDialog';
 import { serviceById } from './services';
@@ -55,6 +63,8 @@ import styles from './AccountsPage.module.scss';
 
 /** The routes' rhythm, as on Models: a key's cooldowns are read from them. */
 const POLL_MS = 30_000;
+/** The sign-in dialogs' focus mark for the Vertex import (not one of OAuth Login's flows). */
+const VERTEX_FOCUS = '__vertex__';
 const fetchRoutes = (client: Parameters<typeof provimuxApi.modelRoutes>[0]) =>
   provimuxApi.modelRoutes(client);
 
@@ -207,6 +217,33 @@ export function AccountsPage() {
 
   const signInCard = signIn ? providerCards.find((card) => card.id === signIn.flow) : undefined;
 
+  // --- the other ways in: OAuth Login's Vertex service account import and Sign in with ChatGPT binding ------
+  const vertexImport = useVertexImport({
+    isFocused: () => focusedRef.current === VERTEX_FOCUS,
+    onCredentialAdded: flows.recordCredentialAdded,
+  });
+  const [vertexOpen, setVertexOpen] = useState(false);
+  const openVertex = () => {
+    focusedRef.current = VERTEX_FOCUS;
+    setAddOpen(false);
+    setVertexOpen(true);
+  };
+  const closeVertex = () => {
+    if (vertexImport.vertex.result) vertexImport.resetForAnother();
+    focusedRef.current = null;
+    setVertexOpen(false);
+    void load();
+  };
+  // Mounted afresh for each binding (a new choice and session); kept mounted while it closes.
+  const [siwcKey, setSiwcKey] = useState(0);
+  const [siwcOpen, setSiwcOpen] = useState(false);
+  const openSiwc = () => {
+    setSiwcKey((key) => key + 1);
+    setAddOpen(false);
+    setSheetOpen(false);
+    setSiwcOpen(true);
+  };
+
   // --- links that open the page on an account, or on adding one --------------------------------------------
   const handledParams = useRef(false);
   useEffect(() => {
@@ -240,9 +277,7 @@ export function AccountsPage() {
         await Promise.all([load(), routes.load()]);
         return true;
       } catch (error) {
-        const changed =
-          (error instanceof AccountsWriteError && error.reason === 'changed') ||
-          (error instanceof KeyWriteError && error.code === 'not-found');
+        const changed = isChangedError(error);
         showNotification(writeErrorMessage(t, error), changed ? 'warning' : 'error');
         if (changed) await load();
         return false;
@@ -346,19 +381,67 @@ export function AccountsPage() {
       t('provimux.accounts.replaced', { name: accountName(t, account) })
     );
 
-  const addKey = async (serviceId: string, input: NewKey) => {
+  /** A key's settings, saved with AI Providers' own calls (its connection form, its OpenAI entry form). */
+  const saveKeyDraft = async (draft: KeyDraft) => {
+    if (draft.kind === 'native') {
+      const { source, settings, members } = nativeSave(draft);
+      await providersApi.saveNativeConnection(draft.family, source, settings, members);
+      return;
+    }
+    const config = compatibleConfig(draft);
+    if (draft.resource) {
+      await providersApi.updateOpenAIProvider(config.name, draft.resource.originalIndex, config);
+      return;
+    }
+    const taken = familyGroups(read?.config.document, 'openai-compatibility').some(
+      (group) => isRecord(group) && String(group.name ?? '').trim() === config.name
+    );
+    if (taken) throw new KeyWriteError('duplicate-name');
+    await providersApi.createOpenAIProvider(config);
+  };
+
+  const saveKeySettings = (account: Account, draft: KeyDraft) =>
+    run(
+      account.id,
+      () => saveKeyDraft(draft),
+      t('provimux.accounts.settings.saved', { name: accountName(t, account) })
+    );
+
+  const saveLoginSettings = (account: Account, patch: AuthFileFieldsPatch) =>
+    account.kind !== 'sub'
+      ? Promise.resolve(false)
+      : run(
+          account.id,
+          async () => {
+            await accountsApi.setLoginFields(account.fileName, patch);
+          },
+          t('provimux.accounts.settings.saved', { name: accountName(t, account) })
+        );
+
+  /** "Claude key added"; a key of a list-served service is told to pick its models, unless it listed some. */
+  const addedMessage = (serviceId: string, input: NewKey, settings: KeyDraft | null) => {
+    const service = serviceById(serviceId)?.key?.custom
+      ? (input.name ?? '').trim() || serviceLabel(t, serviceId)
+      : serviceLabel(t, serviceId);
+    const listed = settings !== null && summaryOf(settings).models > 0;
+    return (serviceId === 'openrouter' || serviceById(serviceId)?.key?.custom) && !listed
+      ? t('provimux.accounts.key_added_listed', { service })
+      : t('provimux.accounts.key_added', { service });
+  };
+
+  const addKey = async (serviceId: string, input: NewKey, settings: KeyDraft | null) => {
     const service = serviceById(serviceId);
     if (!service?.key || !read) return false;
     const target = service.key;
     const added = await run(
       '__add__',
-      async () => {
-        const { family, groups } = familyWithKeyAdded(read.config.document, target, input);
-        await accountsApi.writeFamily(family, groups, read.config.etag);
-      },
-      serviceId === 'openrouter' || target.custom
-        ? t('provimux.accounts.key_added_listed', { service: serviceLabel(t, serviceId) })
-        : t('provimux.accounts.key_added', { service: serviceLabel(t, serviceId) })
+      settings
+        ? () => saveKeyDraft(settings)
+        : async () => {
+            const { family, groups } = familyWithKeyAdded(read.config.document, target, input);
+            await accountsApi.writeFamily(family, groups, read.config.etag);
+          },
+      addedMessage(serviceId, input, settings)
     );
     if (added) setAddOpen(false);
     return added;
@@ -371,6 +454,8 @@ export function AccountsPage() {
       startSignIn(step.flow, known.id);
       return;
     }
+    if (step?.kind === 'service-account') return openVertex();
+    if (step?.kind === 'siwc') return openSiwc();
     setAddService(known ? known.id : null);
     setAddOpen(true);
   };
@@ -470,6 +555,17 @@ export function AccountsPage() {
         nowMs={read ? Math.max(clock, read.receivedAtMs) : clock}
         serverNowMs={serverNowMs}
         busy={openAccount ? busy.has(openAccount.id) : false}
+        document={read?.config.document ?? null}
+        file={
+          (openAccount ?? lastOpen)?.kind === 'sub'
+            ? (read?.files?.find(
+                (file) => file.name === ((openAccount ?? lastOpen) as { fileName: string }).fileName
+              ) ?? null)
+            : null
+        }
+        onSaveKeySettings={saveKeySettings}
+        onSaveLoginSettings={saveLoginSettings}
+        onSiwc={openSiwc}
         onClose={closeSheet}
         onToggle={toggle}
         onFix={fix}
@@ -484,10 +580,46 @@ export function AccountsPage() {
         open={addOpen}
         initialService={addService}
         pluginFlows={pluginCards.map((card) => ({ id: card.id, title: card.title }))}
+        document={read?.config.document ?? null}
+        loginProxy={{
+          value: flows.loginProxy,
+          rejected: flows.loginProxyRejected,
+          onChange: flows.setLoginProxy,
+        }}
         onClose={() => setAddOpen(false)}
         onSignIn={startSignIn}
+        onServiceAccount={openVertex}
+        onSiwc={openSiwc}
         onAddKey={addKey}
       />
+
+      <VertexImportDialog
+        open={vertexOpen}
+        heading={{
+          title: t('provimux.accounts.vertex_title'),
+          caption: t('vertex_import.file_label'),
+          icon: iconVertex,
+        }}
+        vertex={vertexImport.vertex}
+        onPickFile={vertexImport.pickFile}
+        onLocationChange={vertexImport.setLocation}
+        onImport={() => void vertexImport.importCredential()}
+        onImportAnother={vertexImport.resetForAnother}
+        onViewAuthFiles={closeVertex}
+        onClose={closeVertex}
+      />
+
+      {siwcKey > 0 ? (
+        <SiwcBindDialog
+          key={siwcKey}
+          open={siwcOpen}
+          onClose={() => {
+            setSiwcOpen(false);
+            void load();
+          }}
+          onViewAuthFiles={() => setSiwcOpen(false)}
+        />
+      ) : null}
 
       <ReplaceKeyDialog
         account={replacing}

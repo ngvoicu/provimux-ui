@@ -116,7 +116,9 @@ const formatJsonObject = (value?: Record<string, unknown>): string => {
 
 const isClaudeLikeBrand = (brand: ProviderBrand): boolean => brand === 'claude';
 
-function buildInitialForm(
+// Provimux: exported for the Accounts page's key settings (src/provimux/pages/accounts/keySettings.ts).
+// eslint-disable-next-line react-refresh/only-export-components
+export function buildInitialForm(
   brand: ProviderBrand,
   resource: ProviderResource | null,
   mode: 'create' | 'edit'

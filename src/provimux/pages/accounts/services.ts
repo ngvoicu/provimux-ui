@@ -32,11 +32,18 @@ export interface Service {
   keyIssuer?: string;
   /** Shown in the add sheet (a service that has existing accounts only is listed, not offered). */
   offered: boolean;
+  /**
+   * Other ways in, offered next to a subscription and a key: a Google Cloud service account file (OAuth
+   * Login's Vertex import), or Sign in with ChatGPT bound to a ChatGPT login (OAuth Login's SIWC binding).
+   */
+  ways?: ReadonlyArray<'service-account' | 'siwc'>;
 }
 
 export const OPENAI_BASE_URL = 'https://api.openai.com/v1';
 export const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
 export const XAI_BASE_URL = 'https://api.x.ai/v1';
+/** AI Providers' default address for a Meta key (BaseProviderForm). */
+export const META_BASE_URL = 'https://api.meta.ai/v1';
 
 /** In the order the page groups them and the add sheet offers them. */
 export const SERVICES: readonly Service[] = [
@@ -57,6 +64,7 @@ export const SERVICES: readonly Service[] = [
     key: { family: 'codex', baseUrl: OPENAI_BASE_URL },
     keyIssuer: 'OpenAI',
     offered: true,
+    ways: ['siwc'],
   },
   {
     id: 'gemini',
@@ -66,6 +74,7 @@ export const SERVICES: readonly Service[] = [
     key: { family: 'gemini', baseUrl: null },
     keyIssuer: 'Google AI Studio',
     offered: true,
+    ways: ['service-account'],
   },
   {
     id: 'openrouter',
@@ -89,7 +98,15 @@ export const SERVICES: readonly Service[] = [
     offered: true,
   },
   { id: 'devin', label: 'Devin', icon: 'devin', signIn: ['devin'], key: null, offered: true },
-  { id: 'meta', label: 'Muse (Meta)', icon: 'meta', signIn: ['meta'], key: null, offered: true },
+  {
+    id: 'meta',
+    label: 'Muse (Meta)',
+    icon: 'meta',
+    signIn: ['meta'],
+    key: { family: 'meta', baseUrl: META_BASE_URL },
+    keyIssuer: 'Meta',
+    offered: true,
+  },
   {
     id: 'copilot',
     label: 'GitHub Copilot',
@@ -108,10 +125,19 @@ export const SERVICES: readonly Service[] = [
     offered: true,
   },
   { id: 'kimi', label: 'Kimi', icon: 'kimi', signIn: ['kimi', 'kimi-ai'], key: null, offered: true },
-  { id: 'vertex', label: 'Vertex AI', icon: 'vertex', signIn: [], key: null, offered: false },
+  {
+    id: 'vertex',
+    label: 'Vertex AI',
+    icon: 'vertex',
+    signIn: [],
+    key: { family: 'vertex', baseUrl: null },
+    keyIssuer: 'Google Cloud',
+    offered: true,
+    ways: ['service-account'],
+  },
   {
     id: 'compatible',
-    label: 'Other service',
+    label: 'OpenAI-compatible (any other provider)',
     labelKey: 'provimux.accounts.service_custom',
     icon: null,
     signIn: [],

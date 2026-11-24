@@ -669,11 +669,16 @@ describe('what the page draws', () => {
           nowMs: NOW,
           serverNowMs: NOW,
           busy: false,
+          document: fixture('config.json'),
+          file: null,
           onClose: () => undefined,
           onToggle: () => undefined,
           onFix: () => undefined,
           onTryNow: () => undefined,
           onSavePriority: async () => true,
+          onSaveKeySettings: async () => true,
+          onSaveLoginSettings: async () => true,
+          onSiwc: () => undefined,
           onRemove: () => undefined,
           onShowModels: () => undefined,
           onMoreSettings: () => undefined,
@@ -682,8 +687,12 @@ describe('what the page draws', () => {
           open: false,
           initialService: null,
           pluginFlows: [],
+          document: fixture('config.json'),
+          loginProxy: { value: '', rejected: null, onChange: () => undefined },
           onClose: () => undefined,
           onSignIn: () => undefined,
+          onServiceAccount: () => undefined,
+          onSiwc: () => undefined,
           onAddKey: async () => true,
         })
       )
@@ -811,6 +820,10 @@ describe('strings in seven languages', () => {
       'ReplaceKeyDialog.tsx',
       'labels.ts',
       'services.ts',
+      'AdvancedSettings.tsx',
+      'KeySettingsFields.tsx',
+      'LoginSettingsFields.tsx',
+      'settingsSummary.ts',
     ]) {
       for (const match of read(`${dir}/${file}`).matchAll(/'provimux\.accounts\.([a-z_.]+)'/g)) {
         used.add(match[1]);
