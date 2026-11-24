@@ -50,12 +50,21 @@
     "nav": {
       "accounts": "Accounts",
       "models": "Models",
-      "savings": "Savings"
+      "savings": "Savings",
+      "all_keys": "API keys",
+      "all_logins": "Subscriptions",
+      "all_sign_in": "Ways to sign in"
     },
     "nav_meta": {
       "accounts": "Your subscriptions and API keys: add, fix, turn off",
       "models": "Every model name you can send, and what serves it",
-      "savings": "What prompt caching was worth, and what each account kind served"
+      "savings": "What prompt caching was worth, and what each account kind served",
+      "all_keys": "Every setting of every API key, on the original AI Providers page",
+      "all_logins": "Every subscription's login file: upload, download, quota and every setting, on the original Auth Files page",
+      "all_sign_in": "Every way to sign in, on the original OAuth Login page"
+    },
+    "nav_groups": {
+      "all_settings": "All settings"
     },
     "access": {
       "sub": "Subscription",

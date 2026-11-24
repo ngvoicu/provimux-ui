@@ -5,8 +5,9 @@ import { hideSponsorNav } from './sponsors';
 
 /**
  * Provimux's pages in the sidebar. Accounts takes the place of upstream's AI Providers, Auth Files and OAuth
- * Login (their items leave the menu; their routes stay, and Accounts links to them). The others go in the
- * Gateway group, after Routing. An item with an endpoint is listed only while that endpoint answers, or fails
+ * Login; those three move, with their icons and Auth Files' count, to a small group of their own right after
+ * it, "All settings", named in the owner's words (API keys, Subscriptions, Ways to sign in), so every original
+ * setting stays one click away. The others go in the Gateway group, after Routing. An item with an endpoint is listed only while that endpoint answers, or fails
  * for another reason than 404; an item without one (Accounts and Models read the configuration and the
  * credentials, and show Provimux's endpoints where the proxy has them) is always listed.
  */
@@ -46,6 +47,15 @@ export const PROVIMUX_PAGES: ReadonlyArray<{
 const GROUP = 'gateway';
 const AFTER = '/routing';
 
+/** The group the pages Accounts replaces move to, and their names there. */
+export const ALL_SETTINGS_GROUP = 'provimux-all-settings';
+const ALL_SETTINGS_LABEL = 'provimux.nav_groups.all_settings';
+const ALL_SETTINGS_NAMES: Readonly<Record<string, { labelKey: string; metaKey: string }>> = {
+  '/ai-providers': { labelKey: 'provimux.nav.all_keys', metaKey: 'provimux.nav_meta.all_keys' },
+  '/auth-files': { labelKey: 'provimux.nav.all_logins', metaKey: 'provimux.nav_meta.all_logins' },
+  '/oauth': { labelKey: 'provimux.nav.all_sign_in', metaKey: 'provimux.nav_meta.all_sign_in' },
+};
+
 const pathOf = (item: object): string | null =>
   'path' in item && typeof item.path === 'string' ? item.path : null;
 
@@ -54,30 +64,53 @@ type NavItem = { path: string; labelKey: string; metaKey: string; icon: ReactEle
 /**
  * A page that replaces upstream items: those items leave every group, and the page takes the place of the
  * first one found. When upstream has none of them any more, it goes in the Gateway group before Routing (at
- * the end of the first group when there is no Gateway group or no Routing).
+ * the end of the first group when there is no Gateway group or no Routing). Returns the items taken out, in
+ * menu order, and the group the page went to.
  */
 function replaceItems<G extends { id: string; items: object[] }>(
   groups: G[],
   item: NavItem,
   replaced: readonly string[]
-) {
-  let placed = false;
+): { removed: object[]; group: G | undefined } {
+  let home: G | undefined;
+  const removed: object[] = [];
   for (const group of groups) {
     const at = group.items.findIndex((candidate) => replaced.includes(pathOf(candidate) ?? ''));
     if (at === -1) continue;
+    removed.push(...group.items.filter((candidate) => replaced.includes(pathOf(candidate) ?? '')));
     const kept = group.items.filter((candidate) => !replaced.includes(pathOf(candidate) ?? ''));
-    if (!placed) {
+    if (!home) {
       kept.splice(at, 0, item);
-      placed = true;
+      home = group;
     }
     group.items = kept as G['items'];
   }
-  if (placed) return;
+  if (home) return { removed, group: home };
   const group = groups.find((candidate) => candidate.id === GROUP) ?? groups[0];
-  if (!group) return;
+  if (!group) return { removed, group: undefined };
   const anchor = group.items.findIndex((candidate) => pathOf(candidate) === AFTER);
   const at = anchor === -1 ? group.items.length : anchor;
   group.items = [...group.items.slice(0, at), item, ...group.items.slice(at)] as G['items'];
+  return { removed, group };
+}
+
+/**
+ * The upstream items a page replaced, in a group of their own right after the page's group: the same items
+ * (route, icon, badge), named in the owner's words. Nothing is added when none were there.
+ */
+function keepReachable<G extends { id: string; items: object[] }>(
+  groups: G[],
+  removed: object[],
+  after: G | undefined
+) {
+  if (removed.length === 0) return;
+  const items = removed.map((item) => {
+    const names = ALL_SETTINGS_NAMES[pathOf(item) ?? ''];
+    return names ? { ...item, ...names } : item;
+  });
+  const at = after ? groups.indexOf(after) + 1 : groups.length;
+  const group = { ...(after ?? groups[0]), id: ALL_SETTINGS_GROUP, labelKey: ALL_SETTINGS_LABEL, items };
+  groups.splice(at, 0, group as G);
 }
 
 /**
@@ -102,7 +135,9 @@ export function provimuxNav<G extends { id: string; items: object[] }>(
     icon: page.icon(),
   });
   for (const page of PROVIMUX_PAGES) {
-    if (page.replaces && listed(page.endpoint)) replaceItems(groups, itemOf(page), page.replaces);
+    if (!page.replaces || !listed(page.endpoint)) continue;
+    const { removed, group } = replaceItems(groups, itemOf(page), page.replaces);
+    keepReachable(groups, removed, group);
   }
   const items = PROVIMUX_PAGES.filter((page) => !page.replaces && listed(page.endpoint)).map(itemOf);
   if (items.length === 0) return groups;

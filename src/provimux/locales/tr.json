@@ -2,11 +2,20 @@
   "provimux": {
     "nav": {
       "accounts": "Hesaplar",
-      "models": "Modeller"
+      "models": "Modeller",
+      "all_keys": "API anahtarları",
+      "all_logins": "Abonelikler",
+      "all_sign_in": "Giriş yolları"
     },
     "nav_meta": {
       "accounts": "Abonelikleriniz ve API anahtarlarınız: ekleyin, düzeltin, kapatın",
-      "models": "Gönderebileceğiniz her model adı ve onu neyin sunduğu"
+      "models": "Gönderebileceğiniz her model adı ve onu neyin sunduğu",
+      "all_keys": "Her API anahtarının tüm ayarları, özgün AI Sağlayıcıları sayfasında",
+      "all_logins": "Her aboneliğin giriş dosyası: yükleme, indirme, kota ve tüm ayarlar, özgün Kimlik Dosyaları sayfasında",
+      "all_sign_in": "Tüm giriş yolları, özgün OAuth Girişi sayfasında"
+    },
+    "nav_groups": {
+      "all_settings": "Tüm ayarlar"
     },
     "common": {
       "loading": "Yükleniyor…",

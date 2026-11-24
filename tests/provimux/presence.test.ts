@@ -8,7 +8,8 @@ import { MemoryRouter } from 'react-router-dom';
 import { apiClient } from '../../src/services/api/client';
 import { ProvimuxPageGate } from '../../src/provimux/components/ProvimuxPageGate';
 import { ProvimuxOpenRouterTag } from '../../src/provimux/components/ProvimuxOpenRouterTag';
-import { PROVIMUX_PAGES, provimuxNav } from '../../src/provimux/nav';
+import { ALL_SETTINGS_GROUP, PROVIMUX_PAGES, provimuxNav } from '../../src/provimux/nav';
+import { PROVIMUX_TRANSLATIONS } from '@/provimux/i18n';
 import {
   isListed,
   isProvimuxServer,
@@ -175,9 +176,9 @@ describe('sidebar', () => {
     {
       id: 'gateway',
       items: [
-        { path: '/ai-providers' },
-        { path: '/auth-files' },
-        { path: '/oauth' },
+        { path: '/ai-providers', labelKey: 'nav.ai_providers', icon: 'providers' },
+        { path: '/auth-files', labelKey: 'nav.auth_files', badge: 6, icon: 'files' },
+        { path: '/oauth', labelKey: 'nav.oauth', icon: 'oauth' },
         { path: '/routing' },
         { path: '/later' },
       ],
@@ -196,6 +197,7 @@ describe('sidebar', () => {
     expect(paths(result)).toEqual([
       ['/'],
       ['/provimux/accounts', '/routing', '/provimux/models', '/provimux/savings', '/later'],
+      ['/ai-providers', '/auth-files', '/oauth'],
       ['/system'],
     ]);
     const accounts = result[1].items[0] as { labelKey: string; metaKey: string };
@@ -205,6 +207,47 @@ describe('sidebar', () => {
     expect(models.labelKey).toBe('provimux.nav.models');
     expect(models.metaKey).toBe('provimux.nav_meta.models');
     expect(provimuxNav(groups(), { savings: entry('error') })[1].items).toHaveLength(5);
+  });
+
+  test('the three original pages stay one click away, in a group of their own after Gateway, in plain words', () => {
+    const result = provimuxNav(groups(), { savings: entry('ready') });
+    const group = result[2] as { id: string; labelKey?: string; items: Record<string, unknown>[] };
+    expect(group.id).toBe(ALL_SETTINGS_GROUP);
+    expect(group.labelKey).toBe('provimux.nav_groups.all_settings');
+    expect(group.items).toEqual([
+      {
+        path: '/ai-providers',
+        labelKey: 'provimux.nav.all_keys',
+        metaKey: 'provimux.nav_meta.all_keys',
+        icon: 'providers',
+      },
+      {
+        path: '/auth-files',
+        labelKey: 'provimux.nav.all_logins',
+        metaKey: 'provimux.nav_meta.all_logins',
+        badge: 6,
+        icon: 'files',
+      },
+      {
+        path: '/oauth',
+        labelKey: 'provimux.nav.all_sign_in',
+        metaKey: 'provimux.nav_meta.all_sign_in',
+        icon: 'oauth',
+      },
+    ]);
+    // Accounts stays the main item, first in Gateway; without the original items, no group is added.
+    expect((result[1].items[0] as { path: string }).path).toBe('/provimux/accounts');
+    const bare = provimuxNav([{ id: 'gateway', items: [{ path: '/routing' }] }], {});
+    expect(bare.map((g) => g.id)).toEqual(['gateway']);
+    // Every label and description is in the seven languages.
+    for (const own of Object.values(PROVIMUX_TRANSLATIONS)) {
+      const strings = (own as { provimux: Record<string, Record<string, string>> }).provimux;
+      expect(strings.nav_groups.all_settings).toBeTruthy();
+      for (const key of ['all_keys', 'all_logins', 'all_sign_in']) {
+        expect(strings.nav[key]).toBeTruthy();
+        expect(strings.nav_meta[key]).toBeTruthy();
+      }
+    }
   });
 
   test('absent (404) or not yet probed: no item but Models, which needs no endpoint; Quick Start stays hidden', () => {
@@ -217,6 +260,7 @@ describe('sidebar', () => {
       expect(paths(result)).toEqual([
         ['/'],
         ['/provimux/accounts', '/routing', '/provimux/models', '/later'],
+        ['/ai-providers', '/auth-files', '/oauth'],
         ['/system'],
       ]);
     }

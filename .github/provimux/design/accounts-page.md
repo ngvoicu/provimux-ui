@@ -111,8 +111,12 @@ is followed by a new read.
 
 ## 6. Addresses and the menu
 
-The menu holds **Accounts** in the place of AI Providers, Auth Files and OAuth Login (those three items leave it;
-`/ai-providers`, `/auth-files`, `/oauth` stay), then Routing, Models and Savings. `/provimux/accounts?login=<file>` or
+The menu holds **Accounts** in the place of AI Providers, Auth Files and OAuth Login, then Routing, Models and Savings.
+The three original pages stay one click away, at the same addresses (`/ai-providers`, `/auth-files`, `/oauth`), in a
+small group of their own right after Gateway, **All settings**, named in the owner's words: **API keys** (AI
+Providers), **Subscriptions** (Auth Files, with its count), **Ways to sign in** (OAuth Login); each item's description
+names the original page. They are upstream's own items (route, icon, badge), moved and renamed by `provimuxNav`
+(`nav.tsx`); MainLayout is not edited, and the group is not added when upstream has none of them. `/provimux/accounts?login=<file>` or
 `?account=<auth index>` opens an account's panel; `?add=<service>` (or `?add=1`) opens the add panel. Models links each
 login to Accounts (its account and its priority), and Models' empty state to adding an account; Models reads
 `?account=<auth index>`, a filter its menu names "Account: alex@example.com".
@@ -190,7 +194,8 @@ to OAuth Login for anything.
 
 ## 8. Left on the original pages
 
-What cannot be done on Accounts, said in one line in each panel's "More settings":
+What cannot be done on Accounts, said in one line in each panel's "More settings"; the pages are in the menu under All
+settings (section 6):
 
 - **Auth Files**: uploading or downloading a login file; its quota; and the current values of what the file keeps
   (section 7.2). Also, not one account's settings: batch actions, the model rules of all logins of a service

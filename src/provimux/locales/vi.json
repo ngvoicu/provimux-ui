@@ -2,11 +2,20 @@
   "provimux": {
     "nav": {
       "accounts": "Tài khoản",
-      "models": "Model"
+      "models": "Model",
+      "all_keys": "API key",
+      "all_logins": "Gói đăng ký",
+      "all_sign_in": "Cách đăng nhập"
     },
     "nav_meta": {
       "accounts": "Gói đăng ký và API key của bạn: thêm, sửa, tắt",
-      "models": "Mọi tên model bạn có thể gửi, và nguồn phục vụ nó"
+      "models": "Mọi tên model bạn có thể gửi, và nguồn phục vụ nó",
+      "all_keys": "Mọi cài đặt của từng API key, ở trang AI Provider gốc",
+      "all_logins": "Tệp đăng nhập của từng gói: tải lên, tải xuống, hạn mức và mọi cài đặt, ở trang File xác thực gốc",
+      "all_sign_in": "Mọi cách đăng nhập, ở trang Đăng nhập OAuth gốc"
+    },
+    "nav_groups": {
+      "all_settings": "Mọi cài đặt"
     },
     "common": {
       "loading": "Đang tải…",

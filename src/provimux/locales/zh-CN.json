@@ -2,11 +2,20 @@
   "provimux": {
     "nav": {
       "accounts": "账户",
-      "models": "模型"
+      "models": "模型",
+      "all_keys": "API 密钥",
+      "all_logins": "订阅",
+      "all_sign_in": "登录方式"
     },
     "nav_meta": {
       "accounts": "你的订阅和 API 密钥：添加、修复、停用",
-      "models": "你可以发送的每个模型名称，以及由谁提供"
+      "models": "你可以发送的每个模型名称，以及由谁提供",
+      "all_keys": "每个 API 密钥的全部设置，在原来的“AI 提供商”页",
+      "all_logins": "每个订阅的登录文件：上传、下载、配额和全部设置，在原来的“认证文件”页",
+      "all_sign_in": "所有登录方式，在原来的“OAuth 登录”页"
+    },
+    "nav_groups": {
+      "all_settings": "全部设置"
     },
     "common": {
       "loading": "加载中…",
