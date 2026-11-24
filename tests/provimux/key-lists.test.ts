@@ -750,9 +750,15 @@ describe('the switch, the exclusions and the state: shown only by a server that 
     );
     expect(html).toContain('Models it never serves');
     expect(html).toContain('the ones its list learned included');
-    // A Vertex key is never asked: no switch.
+    // A Vertex key is never asked: no switch, the reason in one line; on an older server, not even that.
     const vertex = draftOf(locateKey(doc, entryOf(doc, 'vertex', 0))!);
-    expect(renderFields(vertex, true)).not.toContain('Fixed list');
+    const never = renderFields(vertex, true);
+    expect(never).not.toContain('Fixed list');
+    expect(never).not.toContain('type="checkbox" aria-label="Fixed list"');
+    expect(never).toContain(
+      'No fixed list to set: Provimux can&#x27;t read a model list from OpenRouter'
+    );
+    expect(renderFields(vertex, false)).not.toContain('No fixed list to set');
   });
 
   test('an older server: no switch, and an OpenAI-compatible entry has no exclusions field', async () => {

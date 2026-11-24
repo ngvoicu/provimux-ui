@@ -259,6 +259,7 @@
         "fixed_on_text": "Bật: key này cung cấp đúng các model ở trên, và không bao giờ hỏi {{service}}. Model mới của {{service}} chỉ được cung cấp khi bạn thêm nó ở trên.",
         "fixed_catalog_text": "Khi không có model nào ở trên, key này cung cấp danh sách model {{service}} tích hợp của Provimux, danh sách này tự cập nhật. Danh sách cố định chỉ có tác dụng khi bạn thêm một model.",
         "fixed_empty": "Khi không có model nào ở trên, danh sách cố định không cung cấp gì: hãy thêm các model nó cần phục vụ, hoặc tắt công tắc để cung cấp toàn bộ danh sách của {{service}}.",
+        "fixed_never_asked": "Không cần danh sách cố định: Provimux không đọc được danh sách model của {{service}}, nên key này luôn cung cấp các model ở trên, hoặc danh sách tích hợp khi không có model nào.",
         "excluded_hint_compatible": "Yêu cầu cho các model này bỏ qua key này, kể cả các model danh sách của nó học được. Có thể dùng ký tự đại diện như text-embedding-*.",
         "excluded_reserved_compatible": "“*” sẽ ẩn mọi model: để ngừng dùng key này, hãy tắt “Dùng tài khoản này”.",
         "sum_fixed": "danh sách cố định"

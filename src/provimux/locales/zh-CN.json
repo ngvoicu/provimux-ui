@@ -259,6 +259,7 @@
         "fixed_on_text": "开：此密钥只提供上面的模型，从不询问 {{service}}。{{service}} 的新模型只有在你于上面添加后才会提供。",
         "fixed_catalog_text": "上面没有模型时，此密钥提供 Provimux 内置的 {{service}} 模型列表，该列表会自动保持最新。添加模型后，固定列表才有作用。",
         "fixed_empty": "上面没有模型时，固定列表不提供任何模型：请添加它应服务的模型，或关闭开关以提供 {{service}} 的完整列表。",
+        "fixed_never_asked": "无需设置固定列表：Provimux 无法从 {{service}} 读取模型列表，因此此密钥始终提供上面的模型；上面没有模型时提供内置列表。",
         "excluded_hint_compatible": "对这些模型的请求会跳过此密钥，包括其列表学到的模型。支持 text-embedding-* 这样的通配符。",
         "excluded_reserved_compatible": "“*”会隐藏所有模型：要停止使用此密钥，请关闭“使用此账户”。",
         "sum_fixed": "固定列表"

@@ -470,6 +470,11 @@ export function KeySettingsFields({
                 </p>
               ) : null}
             </div>
+          ) : listsShown ? (
+            // Vertex and Interactions keys are never asked for a list: no switch, the reason in a line.
+            <p className={styles.fieldHint} id={`${id}-lists`}>
+              {t('provimux.accounts.settings.fixed_never_asked', { service })}
+            </p>
           ) : null}
 
           {excludedShown ? (

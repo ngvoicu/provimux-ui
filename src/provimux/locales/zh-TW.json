@@ -259,6 +259,7 @@
         "fixed_on_text": "開：此金鑰只提供上方的模型，從不詢問 {{service}}。{{service}} 的新模型只有在你於上方加入後才會提供。",
         "fixed_catalog_text": "上方沒有模型時，此金鑰提供 Provimux 內建的 {{service}} 模型清單，該清單會自動保持最新。加入模型後，固定清單才有作用。",
         "fixed_empty": "上方沒有模型時，固定清單不提供任何模型：請加入它應服務的模型，或關閉開關以提供 {{service}} 的完整清單。",
+        "fixed_never_asked": "無需設定固定清單：Provimux 無法從 {{service}} 讀取模型清單，因此此金鑰始終提供上方的模型；上方沒有模型時提供內建清單。",
         "excluded_hint_compatible": "對這些模型的請求會略過此金鑰，包括其清單學到的模型。支援 text-embedding-* 這樣的萬用字元。",
         "excluded_reserved_compatible": "「*」會隱藏所有模型：要停止使用此金鑰，請關閉「使用此帳戶」。",
         "sum_fixed": "固定清單"

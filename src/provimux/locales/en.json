@@ -333,6 +333,7 @@
         "fixed_on_text": "On: this key offers exactly the models above, and {{service}} is never asked. A new {{service}} model is offered only once you add it above.",
         "fixed_catalog_text": "With no model above, this key offers Provimux's built-in list of {{service}} models, which keeps itself up to date. A fixed list matters once you add a model.",
         "fixed_empty": "With no model above, a fixed list offers nothing: add the models it should serve, or turn the switch off to offer {{service}}'s whole list.",
+        "fixed_never_asked": "No fixed list to set: Provimux can't read a model list from {{service}}, so this key always offers the models above, or the built-in list when there are none.",
         "excluded_hint_compatible": "Requests for these models skip this key, the ones its list learned included. Wildcards like text-embedding-* work.",
         "excluded_reserved_compatible": "“*” would hide every model: to stop using this key, turn off “Use this account” instead.",
         "sum_fixed": "fixed list"
