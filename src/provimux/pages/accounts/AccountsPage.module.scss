@@ -1125,3 +1125,298 @@
   font-size: 13px;
   line-height: 1.55;
 }
+
+/* ---------- a key's model list (key-model-lists.md 7.2) ---------- */
+
+/* On the panel: whether it keeps itself up to date, what it learned, where that costs money. */
+.keyLists {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 2px 0 4px;
+}
+
+.keyList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-secondary);
+
+  &[data-state='fixed'],
+  &[data-state='live-lists-off'],
+  &[data-state='no-list'],
+  &[data-state='not-asked'] {
+    border-style: dashed;
+  }
+}
+
+.keyListHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+
+.keyListIcon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: var(--pmx-api-bg);
+  color: var(--pmx-api);
+
+  .keyList:not([data-state='live']):not([data-state='waiting']) & {
+    background: var(--bg-tertiary);
+    color: var(--text-tertiary);
+  }
+}
+
+.keyListTitle {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  font-size: 13.5px;
+  font-weight: 650;
+  color: var(--text-primary);
+}
+
+.keyListLabel {
+  color: var(--text-tertiary);
+  font-family: var(--pmx-font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.keyListAge {
+  margin-left: auto;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+
+  &[data-old] {
+    color: var(--warning-text);
+  }
+}
+
+.keyListText {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.55;
+
+  &[data-tone='quiet'] {
+    display: flex;
+    gap: 6px;
+    color: var(--text-tertiary);
+    font-size: 12.5px;
+
+    svg {
+      flex: none;
+      margin-top: 3px;
+    }
+  }
+}
+
+.keyListFailure {
+  display: flex;
+  gap: 6px;
+  margin: 0;
+  color: var(--warning-text);
+  font-size: 12.5px;
+  line-height: 1.5;
+
+  svg {
+    flex: none;
+    margin-top: 3px;
+  }
+}
+
+/* What it learned by itself: the key's amber, dashed, as a list read from the service. */
+.learned {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border-color);
+}
+
+.learnedHeading {
+  color: var(--pmx-api);
+  font-size: 11.5px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.learnedList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.learnedChip {
+  max-width: 100%;
+  padding: 2px 7px;
+  overflow: hidden;
+  border: 1px dashed color-mix(in srgb, var(--pmx-api) 45%, transparent);
+  border-radius: 6px;
+  background: var(--pmx-api-bg);
+  color: var(--text-primary);
+  font-family: var(--pmx-font-mono);
+  font-size: 11.5px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.learnedMore {
+  align-self: center;
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
+/* A learned model a subscription also serves, while the key is tried first or shares: said plainly. */
+.overlap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--warning-border);
+  border-left-width: 3px;
+  border-radius: 8px;
+  background: var(--warning-bg);
+}
+
+.overlapTitle {
+  display: flex;
+  gap: 6px;
+  margin: 0;
+  color: var(--warning-text);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.45;
+
+  svg {
+    flex: none;
+    margin-top: 2px;
+  }
+}
+
+.overlapText {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.overlapList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 2px 0;
+  padding: 0;
+  list-style: none;
+
+  li {
+    display: grid;
+    grid-template-columns: minmax(0, max-content) minmax(0, 1fr) max-content;
+    align-items: baseline;
+    gap: 2px 10px;
+    font-size: 12.5px;
+
+    @include mobile {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  code {
+    color: var(--text-primary);
+    font-family: var(--pmx-font-mono);
+    font-size: 12px;
+    overflow-wrap: anywhere;
+  }
+}
+
+.overlapWho {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--pmx-sub);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.overlapOrder {
+  color: var(--warning-text);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.overlapActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+/* On the Accounts list: a key that learned a model a subscription also serves, and pays for it. */
+.paidMark {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+  color: var(--warning-text);
+  font-size: 11.5px;
+  font-weight: 550;
+
+  svg {
+    flex: none;
+  }
+}
+
+/* In a key's settings: the fixed-list switch, under the models it serves. */
+.fixedField {
+  padding: 12px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-secondary);
+}
+
+.fixedRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.fixedText {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.fixedWarning {
+  display: flex;
+  gap: 6px;
+  margin: 8px 0 0;
+  color: var(--warning-text);
+  font-size: 12.5px;
+  line-height: 1.5;
+
+  svg {
+    flex: none;
+    margin-top: 3px;
+  }
+}

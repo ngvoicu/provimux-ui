@@ -194,6 +194,53 @@ export interface ProvimuxModelListsResponse {
   };
   login_types: string[];
   logins: ProvimuxModelListLogin[];
+  /**
+   * Config API keys whose model list refreshes itself or could (key-model-lists.md 7.1). null: the server sent
+   * no `keys` (a Provimux before self-refreshing key lists): the console then hides the key lists' switch and
+   * state, since such a server drops `fixed-models` on save.
+   */
+  keys: ProvimuxModelListKeyRow[] | null;
+}
+
+/*
+ * Key model lists: the `keys` array of GET /v8/management/provimux/model-lists. Contract: Provimux
+ * `.github/provimux/design/pui13/openapi.yaml` (ModelListKeyRow, ModelListKey, ModelListKeyModel) and
+ * `design/key-model-lists.md` section 7.1. The console reads it in `normalize.ts` and interprets it in
+ * `pages/keyLists/keyLists.ts`, nowhere else.
+ */
+
+/** Why a key's service is not asked for its list; another value is unknown to this console. */
+export type ProvimuxKeyNotAsked = 'fixed' | 'live_lists_off' | 'no_list_endpoint' | (string & {});
+
+export interface ProvimuxModelListKey {
+  /** openai-compatibility, claude, codex, xai, meta, gemini, interactions or vertex; another is unknown. */
+  type: string;
+  /** An OpenAI-compatible entry's name (lower case), else the key type. */
+  name: string;
+  /** The key's entry says `fixed-models: true`. */
+  fixed: boolean;
+  /** null: its service is asked. */
+  not_asked: ProvimuxKeyNotAsked | null;
+  /** Rows of its `models` in config.yaml. */
+  configured_models: number | null;
+  /** Rows whose model the held list does not name; null without a list in use. */
+  unlisted_models: number | null;
+  /** Ids the key offers that no row names, as its service lists them (before the entry's prefix). */
+  learned: string[];
+  /** The rows counted by `unlisted_models`, by name as written; null with it. */
+  unlisted: string[] | null;
+}
+
+export interface ProvimuxModelListKeyModel extends ProvimuxModelListModel {
+  /** The held list names it; null without a held list. */
+  listed: boolean | null;
+}
+
+/** A logins row's fields for one config API key, plus `key`. */
+export interface ProvimuxModelListKeyRow extends Omit<ProvimuxModelListLogin, 'models'> {
+  /** Filled only when asked for this key (`?auth_index=`). */
+  models: ProvimuxModelListKeyModel[] | null;
+  key: ProvimuxModelListKey;
 }
 
 /*

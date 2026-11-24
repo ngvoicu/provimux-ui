@@ -1228,3 +1228,107 @@
   background: var(--bg-primary);
   color: var(--text-secondary);
 }
+
+/* ---------- models a key learned by itself (key-model-lists.md 7.2) ---------- */
+
+/* On a route: the key's amber, dashed, as a list read from its service. */
+.learned {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 18px;
+  padding: 0 6px;
+  border: 1px dashed color-mix(in srgb, var(--pmx-api) 55%, transparent);
+  border-radius: 999px;
+  background: var(--pmx-api-bg);
+  color: var(--pmx-api);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: help;
+
+  svg {
+    flex: none;
+  }
+}
+
+.tag[data-tone='paid'] {
+  border-color: var(--warning-border);
+  background: var(--warning-bg);
+  color: var(--warning-text);
+}
+
+.chipLearned svg {
+  color: var(--pmx-api);
+}
+
+.chipPaid {
+  border-color: var(--warning-border);
+  background: var(--warning-bg);
+  color: var(--warning-text);
+}
+
+/* A learned model a subscription also serves, while the key is tried first or shares the requests. */
+.paid {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border: 1px solid var(--warning-border);
+  border-left-width: 3px;
+  border-radius: 8px;
+  background: var(--warning-bg);
+}
+
+.paidTitle {
+  display: flex;
+  gap: 6px;
+  margin: 0;
+  color: var(--warning-text);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.45;
+
+  svg {
+    flex: none;
+    margin-top: 2px;
+  }
+
+  span {
+    overflow-wrap: anywhere;
+  }
+}
+
+.paidText {
+  margin: 0 0 0 20px;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.paidActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  margin: 4px 0 0 20px;
+}
+
+.paidLead {
+  margin-right: 2px;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+}
+
+.ghost[data-tone='action'] {
+  border-color: var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  text-decoration: none;
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+}

@@ -2,7 +2,14 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { IconChevronLeft, IconInfo, IconPlus, IconSearch, IconX } from '@/components/ui/icons';
+import {
+  IconAlertTriangle,
+  IconChevronLeft,
+  IconInfo,
+  IconPlus,
+  IconSearch,
+  IconX,
+} from '@/components/ui/icons';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import { AccessBadge } from '../shared/AccessBadge';
 import {
@@ -33,6 +40,11 @@ export interface AccountsBoardProps {
   /** false: the proxy reports no cooldowns on API keys (no Provimux endpoint). */
   routesKnown: boolean | null;
   loginsFailed: boolean;
+  /**
+   * Per API key (account id), the models it learned by itself that a subscription also serves while the key
+   * is tried first or shares the requests (key-model-lists.md 12, decision 1): its row says so.
+   */
+  paidOverlaps?: ReadonlyMap<string, number>;
   onAdd: (service?: string) => void;
   onOpen: (account: Account) => void;
   onToggle: (account: Account, on: boolean) => void;
@@ -205,6 +217,7 @@ export function AccountsBoard(props: AccountsBoardProps) {
                       nowMs={account.kind === 'sub' ? props.nowMs : props.serverNowMs}
                       language={i18n.language}
                       busy={props.busy.has(account.id)}
+                      paid={props.paidOverlaps?.get(account.id) ?? 0}
                       onOpen={props.onOpen}
                       onToggle={props.onToggle}
                       onFix={props.onFix}
@@ -230,6 +243,7 @@ function AccountRow({
   nowMs,
   language,
   busy,
+  paid,
   onOpen,
   onToggle,
   onFix,
@@ -238,6 +252,7 @@ function AccountRow({
   nowMs: number;
   language: string;
   busy: boolean;
+  paid: number;
   onOpen: (account: Account) => void;
   onToggle: (account: Account, on: boolean) => void;
   onFix: (account: Account) => void;
@@ -270,6 +285,12 @@ function AccountRow({
       >
         <span className={styles.whoMain}>{account.who}</span>
         {detail ? <span className={styles.whoDetail}>{detail}</span> : null}
+        {paid > 0 ? (
+          <span className={styles.paidMark} title={t('provimux.accounts.lists.board_paid_title')}>
+            <IconAlertTriangle size={12} aria-hidden="true" />
+            {t('provimux.accounts.lists.board_paid', { count: paid })}
+          </span>
+        ) : null}
       </button>
       {/* Kind and priority: their own columns on a wide card, one line under who on a narrow one. */}
       <span className={styles.meta}>

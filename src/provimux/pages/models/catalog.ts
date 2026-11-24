@@ -47,6 +47,12 @@ import type {
   ServedRoute,
 } from '../aliases/types';
 import { accessOf, isCoolingAt, isOpenRouterHost, type Access } from '../modelRoutes/logic';
+import {
+  learnedByIndex,
+  overlapOrder,
+  paysPerToken,
+  type OverlapOrder,
+} from '../keyLists/keyLists';
 
 export { nameKey } from '../aliases/collisions';
 
@@ -106,6 +112,11 @@ export interface RouteLine {
   issue: RowIssue | undefined;
   /** The API key is turned off. */
   off: boolean;
+  /**
+   * An API key serves it because its service's list names it, and no row of its settings does: it learned it
+   * by itself (key-model-lists.md 3.1). `upstream` is then the id as the service lists it.
+   */
+  learned: boolean;
 }
 
 export type NameProblem =
@@ -136,6 +147,13 @@ export interface NameItem {
   limits: ProvimuxLimits | null;
   /** Where the name's context and output come from, when every route that is tried agrees; null: not known. */
   limitSources: { context: LimitSource | null; output: LimitSource | null };
+  /** A key serves it because it learned it from its service's list. */
+  learned: boolean;
+  /**
+   * A key learned it and a subscription serves it too (both tried): who is tried first between that key and the
+   * subscription. null: no such overlap. `paysPerToken(paid)` is the case the owner wants to see.
+   */
+  paid: OverlapOrder | null;
 }
 
 /** Where a limit's value comes from: a company's own list, the built-in list, or neither (a default). */
@@ -329,6 +347,11 @@ export function buildNames(input: CatalogInput): NameItem[] {
   const listByIndex = new Map(
     (lists?.logins ?? []).filter((l) => l.auth_index).map((l) => [l.auth_index!, l])
   );
+  // What each key learned from its service's list, by the names it serves them under (its prefix included).
+  const learnedNames = learnedByIndex(lists, (index) => {
+    const entry = entries.find((e) => e.store === 'api-key' && e.authIndexes.includes(index));
+    return entry?.store === 'api-key' ? entry.prefix : null;
+  });
 
   // A login type's accounts and priority, and an API key's host, from any of its routes: for lines the
   // proxy does not serve.
@@ -385,6 +408,10 @@ export function buildNames(input: CatalogInput): NameItem[] {
       }
       const priority =
         route.kind === 'apikey' && entry?.store === 'api-key' ? keyPriority(entry) : route.priority;
+      const learnedId =
+        route.kind === 'apikey' && !baseRow && route.auth_index
+          ? learnedNames.get(route.auth_index)?.get(key)
+          : undefined;
       found.lines.push({
         key: `route-${index}-${route.auth_index ?? route.provider}`,
         rowId: baseRow?.id ?? null,
@@ -398,7 +425,8 @@ export function buildNames(input: CatalogInput): NameItem[] {
             : (route.login.email ?? route.login.label ?? route.login.name),
         loginFile: route.kind === 'oauth' ? route.login.name : null,
         authIndex: route.auth_index,
-        upstream: (draftRow ?? baseRow)?.upstream.trim() || upstreamOfServed(route, model.id),
+        upstream:
+          (draftRow ?? baseRow)?.upstream.trim() || learnedId || upstreamOfServed(route, model.id),
         priority,
         priorityEdited: keyPriorityEdited(entry),
         estimated: null,
@@ -411,6 +439,7 @@ export function buildNames(input: CatalogInput): NameItem[] {
         state,
         issue: baseRow && draftRow ? issues[draftRow.id] : undefined,
         off: isOff(entry),
+        learned: learnedId !== undefined,
       });
     });
   }
@@ -519,9 +548,31 @@ export function buildNames(input: CatalogInput): NameItem[] {
         context: agreedSource(triedLines, 'context'),
         output: agreedSource(triedLines, 'output'),
       },
+      learned: lines.some((line) => line.learned && line.state !== 'removed'),
+      paid: paidOverlap(triedLines),
     };
   });
 }
+
+/**
+ * A model a key learned that a subscription also serves: between the first such key and the first
+ * subscription, who is tried first, by their priorities. null when no tried line of a learned key and no tried
+ * subscription line meet.
+ */
+function paidOverlap(tried: readonly RouteLine[]): OverlapOrder | null {
+  const learned = tried.filter((line) => line.learned && line.access === 'api');
+  const subs = tried.filter((line) => line.access === 'sub');
+  if (!learned.length || !subs.length) return null;
+  const top = (lines: readonly RouteLine[]) =>
+    lines.some((line) => line.priority === null)
+      ? null
+      : Math.max(...lines.map((line) => line.priority as number));
+  return overlapOrder(top(learned), top(subs));
+}
+
+/** The name's paid overlap is one the owner should see: the key is tried first, or shares the requests. */
+export const paysWhileSubscribed = (item: NameItem): boolean =>
+  item.paid !== null && paysPerToken(item.paid);
 
 /** The source of one limit that every tried line agrees on; null when a line has none known, or they differ. */
 function agreedSource(
@@ -603,6 +654,7 @@ function pendingLine(
     state: options.state,
     issue: options.issue,
     off: options.off,
+    learned: false,
   };
 }
 
@@ -630,7 +682,8 @@ export function sections(items: readonly NameItem[]): Record<Section, NameItem[]
   return out;
 }
 
-export type NameView = 'all' | 'several' | 'cooling' | 'problems';
+/** `learned`: a key learned the name from its service's list; `paid`: that, and a subscription serves it too. */
+export type NameView = 'all' | 'several' | 'cooling' | 'problems' | 'learned' | 'paid';
 
 export interface ModelsFilter {
   query: string;
@@ -664,7 +717,15 @@ const FAMILIES = [
 export function initialModelsFilter(params: URLSearchParams): ModelsFilter {
   const filter: ModelsFilter = { ...EMPTY_MODELS_FILTER, query: params.get('q')?.trim() ?? '' };
   const view = params.get('view');
-  if (view === 'several' || view === 'cooling' || view === 'problems') filter.view = view;
+  if (
+    view === 'several' ||
+    view === 'cooling' ||
+    view === 'problems' ||
+    view === 'learned' ||
+    view === 'paid'
+  ) {
+    filter.view = view;
+  }
   const account = params.get('account')?.trim() ?? '';
   const channel = normalizeOAuthProviderKey(params.get('channel') ?? '');
   const family = params.get('family')?.trim() ?? '';
@@ -727,6 +788,8 @@ export function matches(
   if (filter.view === 'several' && item.active < 2) return false;
   if (filter.view === 'cooling' && !coolingNow(item)) return false;
   if (filter.view === 'problems' && item.problems.length === 0) return false;
+  if (filter.view === 'learned' && !item.learned) return false;
+  if (filter.view === 'paid' && !paysWhileSubscribed(item)) return false;
   if (
     filter.provider !== 'all' &&
     !item.lines.some((line) => lineProviderKeys(line, entries).includes(filter.provider))
@@ -751,6 +814,10 @@ export interface NamesSummary {
   several: number;
   cooling: number;
   problems: number;
+  /** Names a key learned from its service's list. */
+  learned: number;
+  /** Of them, those a subscription serves too while the key is tried first or shares the requests. */
+  paid: number;
 }
 
 export function summarizeNames(items: readonly NameItem[]): NamesSummary {
@@ -760,6 +827,8 @@ export function summarizeNames(items: readonly NameItem[]): NamesSummary {
     several: items.filter((item) => item.active > 1).length,
     cooling: items.filter(coolingNow).length,
     problems: items.filter((item) => item.problems.length > 0).length,
+    learned: items.filter((item) => item.learned).length,
+    paid: items.filter(paysWhileSubscribed).length,
   };
 }
 

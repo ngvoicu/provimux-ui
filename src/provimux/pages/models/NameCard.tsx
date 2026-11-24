@@ -11,16 +11,17 @@ import {
   IconTimer,
 } from '@/components/ui/icons';
 import type { ProvimuxModelRoutesResponse, ProvimuxRecordedCooldown } from '../../api/types';
-import { IconExcluded } from '../../components/ProvimuxIcons';
+import { IconExcluded, IconLiveLists } from '../../components/ProvimuxIcons';
 import type { Exclusion } from '../excluded/exclusions';
 import { placeInline } from '../excluded/labels';
 import { setKeyPriority } from '../aliases/priority';
 import type { AliasDraft, AliasEntry } from '../aliases/types';
-import { formatTokens } from '../modelRoutes/logic';
+import { formatTokens, isOpenRouterHost } from '../modelRoutes/logic';
 import { listAge, sourceKind } from '../modelLists/logic';
 import { AccessBadge } from '../shared/AccessBadge';
 import { ProviderPill } from '../shared/ProviderPill';
-import { useOpenInAccounts } from '../shared/accountsLink';
+import { accountsAddressOfKeyLists, useOpenInAccounts } from '../shared/accountsLink';
+import { paysPerToken } from '../keyLists/keyLists';
 import { formatDuration, formatExact, formatRelative, serverNow, timeMs } from '../time';
 import { usePageClock, useSecondClock } from '../shared/clocks';
 import type { LimitSource, ModelDetail, NameItem, RouteLine } from './catalog';
@@ -49,6 +50,13 @@ export interface NameCardProps {
   /** "Name it": the composer, with this model already chosen. */
   onNewName: (item: NameItem) => void;
   edit: (change: (draft: AliasDraft) => AliasDraft) => void;
+  /**
+   * "Exclude it on this key", for a model a key learned that a subscription also serves: written at once, as
+   * Excluded models writes it. Absent: the key cannot take an exclusion here (the button is not offered).
+   */
+  onExclude?: (line: RouteLine, model: string) => void;
+  /** Why an exclusion cannot be written now (edits not saved, a write running); null when it can. */
+  excludeBlocked?: string | null;
 }
 
 /** One name: its routes in the order they are tried, what needs a look, and its editor when open. */
@@ -95,6 +103,16 @@ export const NameCard = memo(function NameCard(props: NameCardProps) {
           ) : null}
           {props.excludedIn?.length ? (
             <ExcludedMark name={item.name} in={props.excludedIn} onShow={props.onShowExcluded} />
+          ) : null}
+          {item.paid !== null && paysPerToken(item.paid) ? (
+            <span
+              className={styles.tag}
+              data-tone="paid"
+              title={t('provimux.models.tag_paid_title')}
+            >
+              <IconAlertTriangle size={12} />
+              {t('provimux.models.tag_paid')}
+            </span>
           ) : null}
         </div>
         <p className={styles.nameMeta}>{meta.join(' · ')}</p>
@@ -149,6 +167,16 @@ export const NameCard = memo(function NameCard(props: NameCardProps) {
         ))}
       </ol>
       {details ? <NameDetails id={detailsId} item={item} /> : null}
+
+      {item.paid !== null && paysPerToken(item.paid) ? (
+        <PaidOverlap
+          item={item}
+          locked={locked}
+          edit={props.edit}
+          onExclude={props.onExclude}
+          excludeBlocked={props.excludeBlocked ?? null}
+        />
+      ) : null}
 
       {item.problems.includes('mixed') ? (
         <p className={styles.problem}>
@@ -379,6 +407,17 @@ function Line({
           <span aria-hidden="true">→</span>
           <span className="visually-hidden">{t('provimux.models.sends')}</span>
           <code>{line.upstream}</code>
+          {line.learned ? (
+            <span
+              className={styles.learned}
+              title={t('provimux.models.learned_hint', {
+                provider: providerName(t, line.provider, line.host),
+              })}
+            >
+              <IconLiveLists size={11} aria-hidden="true" />
+              {t('provimux.models.tag_learned')}
+            </span>
+          ) : null}
           {line.estimated ? (
             <span className={styles.estimated} title={estimatedHint(t, line)}>
               {line.estimated === 'new'
@@ -415,6 +454,96 @@ function Line({
         </p>
       ) : null}
     </li>
+  );
+}
+
+/**
+ * A model a paid key learned by itself that a subscription also serves, while the key is tried first or shares
+ * the requests (key-model-lists.md 12, decision 1): said plainly, with the three ways to keep the requests on the
+ * subscription. The priority is a change of the page's draft (saved with Save); the exclusion is written at
+ * once; the fixed list is the key's setting on Accounts.
+ */
+function PaidOverlap({
+  item,
+  locked,
+  edit,
+  onExclude,
+  excludeBlocked,
+}: {
+  item: NameItem;
+  locked: boolean;
+  edit: NameCardProps['edit'];
+  onExclude?: (line: RouteLine, model: string) => void;
+  excludeBlocked: string | null;
+}) {
+  const { t } = useTranslation();
+  const tried = item.lines.filter((line) => line.state !== 'removed' && !line.off);
+  const top = (lines: RouteLine[]) =>
+    [...lines].sort((a, b) => (b.priority ?? -Infinity) - (a.priority ?? -Infinity))[0];
+  const keyLine = top(tried.filter((line) => line.learned && line.access === 'api'));
+  const subLine = top(tried.filter((line) => line.access === 'sub'));
+  if (!keyLine || !subLine) return null;
+  // The key by its kind and address ("Codex API key (api.openai.com)"), an entry by its name ("OpenRouter"),
+  // so it never reads as the subscription's service.
+  const keyService = providerName(t, keyLine.provider, keyLine.host);
+  const named = keyLine.provider.startsWith('openai-compatible-') || isOpenRouterHost(keyLine.host);
+  const key =
+    named || !keyLine.host
+      ? keyService
+      : t('provimux.models.paid_key_named', { name: keyService, host: keyLine.host });
+  const sub = providerName(t, subLine.provider, subLine.host);
+  const below = subLine.priority !== null ? subLine.priority - 1 : null;
+  const order =
+    item.paid === 'key-first'
+      ? t('provimux.models.paid_key_first', { key, sub })
+      : item.paid === 'shared'
+        ? t('provimux.models.paid_shared', { key, sub })
+        : t('provimux.models.paid_unknown', { key });
+  return (
+    <div className={styles.paid} role="note">
+      <p className={styles.paidTitle}>
+        <IconAlertTriangle size={14} />
+        <span>{t('provimux.models.paid_title', { key, sub, model: keyLine.upstream })}</span>
+      </p>
+      <p className={styles.paidText}>{order}</p>
+      <div className={styles.paidActions}>
+        <span className={styles.paidLead}>{t('provimux.models.paid_stop')}</span>
+        {below !== null && keyLine.entryId ? (
+          <button
+            type="button"
+            className={styles.ghost}
+            data-tone="action"
+            disabled={locked}
+            title={t('provimux.models.paid_priority_title')}
+            onClick={() => edit((draft) => setKeyPriority(draft, keyLine.entryId!, below))}
+          >
+            {t('provimux.models.paid_priority', { value: below })}
+          </button>
+        ) : null}
+        {onExclude ? (
+          <button
+            type="button"
+            className={styles.ghost}
+            data-tone="action"
+            disabled={excludeBlocked !== null}
+            title={excludeBlocked ?? t('provimux.models.paid_exclude_title')}
+            onClick={() => onExclude(keyLine, keyLine.upstream)}
+          >
+            {t('provimux.models.paid_exclude')}
+          </button>
+        ) : null}
+        {keyLine.authIndex ? (
+          <Link
+            to={accountsAddressOfKeyLists(keyLine.authIndex)}
+            className={styles.ghost}
+            data-tone="action"
+            title={t('provimux.models.paid_fix_title')}
+          >
+            {t('provimux.models.paid_fix')}
+          </Link>
+        ) : null}
+      </div>
+    </div>
   );
 }
 

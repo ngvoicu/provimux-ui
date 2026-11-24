@@ -26,6 +26,8 @@ export interface ModelsBodyProps {
   onExcludedFilter?: (next: ExcludedFilter) => void;
   /** The exclusion being written: its id, or 'new'. */
   writing?: string | null;
+  /** OpenAI-compatible entries have exclusions of their own (a server with self-refreshing key lists). */
+  compatibleExclusions?: boolean;
   onWriteExclusion?: (request: ExclusionWriteRequest, writing: string) => Promise<boolean>;
   /** A name's "excluded" mark: Excluded models, searched for that name. */
   onShowExcluded?: (model: string) => void;
@@ -113,6 +115,7 @@ export function ModelsBody(props: ModelsBodyProps) {
                 locked={!canEdit(page)}
                 dirty={isDirty(page)}
                 writing={props.writing ?? null}
+                compatible={props.compatibleExclusions === true}
                 routes={props.routes}
                 routesKnown={props.routesKnown}
                 filter={props.excludedFilter ?? { query: '', service: 'all' }}
@@ -140,6 +143,10 @@ export function ModelsBody(props: ModelsBodyProps) {
                 devin={props.devin}
                 onRoutesChanged={props.onRoutesChanged}
                 onShowExcluded={props.onShowExcluded}
+                compatibleExclusions={props.compatibleExclusions === true}
+                dirty={isDirty(page)}
+                writing={props.writing ?? null}
+                onWriteExclusion={props.onWriteExclusion}
               />
             </div>
           )}

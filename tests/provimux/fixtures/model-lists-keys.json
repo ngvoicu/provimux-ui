@@ -1,0 +1,107 @@
+{
+  "observed_at": "2026-11-24T18:04:11Z",
+  "options": { "live_lists": true, "published_lists": false },
+  "built_in": { "dataset_version": null, "generated_at": null },
+  "published": {
+    "state": "off",
+    "dataset_version": null,
+    "generated_at": null,
+    "fetched_at": null,
+    "from_cache": false,
+    "last_failure": null
+  },
+  "login_types": ["antigravity", "aistudio", "claude", "codex", "copilot", "devin", "gemini", "kimi", "meta", "vertex", "xai"],
+  "logins": [],
+  "keys": [
+    {
+      "auth_index": "a90c3e1f04d2b7e5",
+      "provider": "claude",
+      "login": { "name": null, "email": null, "label": "Claude API Key" },
+      "disabled": false,
+      "source": "config",
+      "live": {
+        "supported": false,
+        "held": false,
+        "expired": false,
+        "fetched_at": null,
+        "from_cache": false,
+        "fetching": false,
+        "listed_models": null,
+        "last_failure": null
+      },
+      "registered_models": 2,
+      "learned_models": 0,
+      "models": null,
+      "key": {
+        "type": "claude",
+        "name": "claude",
+        "fixed": true,
+        "not_asked": "fixed",
+        "configured_models": 2,
+        "unlisted_models": null,
+        "learned": [],
+        "unlisted": null
+      }
+    },
+    {
+      "auth_index": "c41d9a07b2e8f113",
+      "provider": "openrouter",
+      "login": { "name": null, "email": null, "label": "openrouter" },
+      "disabled": false,
+      "source": "live",
+      "live": {
+        "supported": true,
+        "held": true,
+        "expired": false,
+        "fetched_at": "2026-11-24T16:10:44Z",
+        "from_cache": false,
+        "fetching": false,
+        "listed_models": 3,
+        "last_failure": null
+      },
+      "registered_models": 3,
+      "learned_models": 1,
+      "models": null,
+      "key": {
+        "type": "openai-compatibility",
+        "name": "openrouter",
+        "fixed": false,
+        "not_asked": null,
+        "configured_models": 2,
+        "unlisted_models": 1,
+        "learned": ["openai/gpt-5.5"],
+        "unlisted": ["acme/retired-model"]
+      }
+    },
+    {
+      "auth_index": "5be2f0a9d71c4e38",
+      "provider": "acme-gateway",
+      "login": { "name": null, "email": null, "label": "acme-gateway" },
+      "disabled": false,
+      "source": "config",
+      "live": {
+        "supported": true,
+        "held": false,
+        "expired": false,
+        "fetched_at": null,
+        "from_cache": false,
+        "fetching": false,
+        "listed_models": null,
+        "last_failure": { "at": "2026-11-24T17:58:02Z", "category": "http_status", "http_status": 404 }
+      },
+      "registered_models": 1,
+      "learned_models": 0,
+      "models": null,
+      "key": {
+        "type": "openai-compatibility",
+        "name": "acme-gateway",
+        "fixed": false,
+        "not_asked": null,
+        "configured_models": 1,
+        "unlisted_models": null,
+        "learned": [],
+        "unlisted": null
+      }
+    }
+  ]
+}

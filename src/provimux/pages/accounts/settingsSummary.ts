@@ -35,6 +35,7 @@ export function settingsStatus(
   if (summary.weight !== null) {
     parts.push(t('provimux.accounts.settings.sum_weight', { value: summary.weight }));
   }
+  if (summary.fixed) parts.push(t('provimux.accounts.settings.sum_fixed'));
   if (parts.length) return parts.join(' · ');
   return address ? t('provimux.accounts.settings.sum_none') : t('provimux.accounts.settings.sum_changed');
 }

@@ -5,7 +5,8 @@
  * - An API key: `PUT /config/api-keys/<family>` with the family's list as read, one list changed: the key's own
  *   when it has one; the connection's when no other key of it uses that list; otherwise the key gets its own,
  *   the connection's with the change (as AI Providers' per-key switch does, `applyNativeDisabled`). The rest
- *   of the list, `*` and anything not a string included, stays as it is.
+ *   of the list, `*` and anything not a string included, stays as it is. An OpenAI-compatible entry: its own
+ *   list, on the entry (key-model-lists.md 6.1); a list left empty is removed.
  * - Every subscription of a login type: `PUT /config/oauth/excluded-models` with the map as read, that type's
  *   list changed (its other spellings folded into it, as Auth Files writes it); a list left empty is removed.
  */
@@ -62,13 +63,25 @@ export function familyWithKeyRule(
   rule: string,
   excluded: boolean
 ): unknown[] {
-  // A family without exclusions (OpenAI-compatible, until the proxy has them: `familyExcludes`) takes none.
+  const groups = [...familyGroups(document, entry.family)];
+  const group = groups[entry.groupIndex];
+  if (!isRecord(group)) throw new ExclusionWriteError('not-found');
+  // An OpenAI-compatible entry: one list, on the entry. Only offered as a place by a server that has it.
+  if (entry.family === 'openai-compatibility') {
+    const stored = group[LOGINS_EXCLUDED_KEY];
+    if (stored !== undefined && stored !== null && !Array.isArray(stored)) {
+      throw new ExclusionWriteError('unread');
+    }
+    const list = listWithRule(asList(stored), rule, excluded);
+    const next: Record<string, unknown> = { ...group };
+    if (list.length) next[LOGINS_EXCLUDED_KEY] = list;
+    else delete next[LOGINS_EXCLUDED_KEY];
+    return groups.map((g, i) => (i === entry.groupIndex ? next : g));
+  }
   if (!familyExcludes(entry.family) || entry.keyIndex === null) {
     throw new ExclusionWriteError('invalid');
   }
-  const groups = [...familyGroups(document, entry.family)];
-  const group = groups[entry.groupIndex];
-  if (!isRecord(group) || !Array.isArray(group.keys)) throw new ExclusionWriteError('not-found');
+  if (!Array.isArray(group.keys)) throw new ExclusionWriteError('not-found');
   const keys = [...group.keys];
   const key = keys[entry.keyIndex];
   if (!isRecord(key)) throw new ExclusionWriteError('not-found');

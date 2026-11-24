@@ -190,6 +190,10 @@ function ListsCard({
           : enabled
             ? t('provimux.lists.on_text')
             : t('provimux.lists.off_text')}
+        {/* A server with self-refreshing key lists: the switch covers API keys too. */}
+        {enabled !== null && lists.keys ? (
+          <> {enabled ? t('provimux.models.lists_keys_on') : t('provimux.models.lists_keys_off')}</>
+        ) : null}
       </p>
       <div className={styles.refreshRow}>
         <Button

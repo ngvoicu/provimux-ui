@@ -72,6 +72,8 @@ export interface AddAccountSheetProps {
    * Providers' own save of the settings.
    */
   onAddKey: (service: string, input: NewKey, settings: KeyDraft | null) => Promise<boolean>;
+  /** The server has self-refreshing key lists: the key's Advanced settings show the fixed-list switch. */
+  keyListsShown?: boolean;
 }
 
 /**
@@ -186,6 +188,7 @@ export function AddAccountSheet(props: AddAccountSheetProps) {
           key={step.service}
           service={serviceById(step.service)!}
           document={props.document}
+          listsShown={props.keyListsShown === true}
           onSubmit={(input, settings) => props.onAddKey(step.service, input, settings)}
           onCancel={props.onClose}
         />
@@ -346,11 +349,13 @@ const GOOGLE_APIS: readonly NativeProviderFamily[] = ['gemini', 'interactions'];
 function KeyForm({
   service,
   document,
+  listsShown,
   onSubmit,
   onCancel,
 }: {
   service: Service;
   document: unknown;
+  listsShown: boolean;
   onSubmit: (input: NewKey, settings: KeyDraft | null) => Promise<boolean>;
   onCancel: () => void;
 }) {
@@ -493,6 +498,7 @@ function KeyForm({
           }
           mode="add"
           disabled={saving}
+          listsShown={listsShown}
         />
       </AdvancedSettings>
 

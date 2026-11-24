@@ -5,6 +5,9 @@ import type {
   ProvimuxLiveListsResponse,
   ProvimuxLogin,
   ProvimuxModel,
+  ProvimuxModelListKey,
+  ProvimuxModelListKeyModel,
+  ProvimuxModelListKeyRow,
   ProvimuxModelListLogin,
   ProvimuxModelListModel,
   ProvimuxModelListsResponse,
@@ -241,6 +244,47 @@ export const readModelLists = (value: unknown): ProvimuxModelListsResponse => {
     },
     login_types: list(rec.login_types, str),
     logins: list(rec.logins, readModelListLogin),
+    // A server before self-refreshing key lists sends no `keys`: null, never an empty list.
+    keys: Array.isArray(rec.keys) ? list(rec.keys, readModelListKeyRow) : null,
+  };
+};
+
+/*
+ * Key model lists (key-model-lists.md 7.1): the same leniency. A row without its `key` object is not a key row
+ * and is left out; a missing count is null, a missing list empty (`unlisted`: null, as with its count).
+ */
+
+const strings = (value: unknown): string[] => list(value, str);
+
+export const readModelListKey = (value: unknown): ProvimuxModelListKey | null => {
+  if (!isRec(value)) return null;
+  return {
+    type: str(value.type) ?? 'unknown',
+    name: str(value.name) ?? '',
+    fixed: value.fixed === true,
+    not_asked: str(value.not_asked),
+    configured_models: num(value.configured_models),
+    unlisted_models: num(value.unlisted_models),
+    learned: strings(value.learned),
+    unlisted: Array.isArray(value.unlisted) ? strings(value.unlisted) : null,
+  };
+};
+
+export const readModelListKeyModel = (value: unknown): ProvimuxModelListKeyModel | null => {
+  const model = readModelListModel(value);
+  if (model === null || !isRec(value)) return null;
+  return { ...model, listed: bool(value.listed) };
+};
+
+export const readModelListKeyRow = (value: unknown): ProvimuxModelListKeyRow | null => {
+  const row = readModelListLogin(value);
+  if (row === null || !isRec(value)) return null;
+  const key = readModelListKey(value.key);
+  if (key === null) return null;
+  return {
+    ...row,
+    models: Array.isArray(value.models) ? list(value.models, readModelListKeyModel) : null,
+    key,
   };
 };
 

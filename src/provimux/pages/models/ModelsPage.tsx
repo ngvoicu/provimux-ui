@@ -37,6 +37,7 @@ import { usePageClock } from '../shared/clocks';
 import { useProvimuxResource } from '../shared/useProvimuxResource';
 import { formatClock, formatExact, screenNow } from '../time';
 import { useDevinCooling } from '../modelRoutes/useDevinCooling';
+import { keyListsSupported } from '../keyLists/keyLists';
 import {
   initialModelsFilter,
   detailsByLogin,
@@ -126,6 +127,9 @@ export function ModelsPage() {
     headerRefresh: false,
   });
   const routesStatus = useProvimuxPresence((state) => state.modelRoutes.status);
+  const listsStatus = useProvimuxPresence((state) => state.modelLists.status);
+  // OpenAI-compatible entries have exclusions of their own on a server with self-refreshing key lists.
+  const compatibleExclusions = keyListsSupported(lists.data, listsStatus) === true;
   const { refresh: refreshRoutes, load: loadRoutes } = routes;
   const { load: loadLists } = lists;
   const { load: loadUsage } = usage;
@@ -163,8 +167,9 @@ export function ModelsPage() {
   const dirty = isDirty(page);
   const base = draft?.base ?? null;
   const excludedCount = useMemo(
-    () => (base ? readExclusions(base).exclusions.length : null),
-    [base]
+    () =>
+      base ? readExclusions(base, { compatible: compatibleExclusions }).exclusions.length : null,
+    [base, compatibleExclusions]
   );
   const editable = canEdit(page);
   const changes = useMemo(() => (draft ? changeCount(draft) : 0), [draft]);
@@ -378,6 +383,7 @@ export function ModelsPage() {
         excludedFilter={excludedFilter}
         onExcludedFilter={setExcludedFilter}
         writing={writing}
+        compatibleExclusions={compatibleExclusions}
         onWriteExclusion={writeExclusion}
         onShowExcluded={showExcluded}
         page={page}

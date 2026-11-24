@@ -1,7 +1,8 @@
-import { useId, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useId, useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { IconDownload, IconPlus, IconX } from '@/components/ui/icons';
+import { IconAlertTriangle, IconDownload, IconPlus, IconX } from '@/components/ui/icons';
 import { Select } from '@/components/ui/Select';
+import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import { FieldLabel } from '@/components/ui/FieldLabel';
 import {
   DISABLE_ALL_RULE,
@@ -41,12 +42,14 @@ import {
   sharedForm,
   sharedWithOthers,
   valueOf,
+  withLists,
   withMember,
   withShared,
   withValue,
   type BothField,
   type KeyDraft,
 } from './keySettings';
+import { familyAsked } from './keyListSettings';
 import styles from './AccountsPage.module.scss';
 
 const DISABLE_ALL = [DISABLE_ALL_RULE];
@@ -61,6 +64,15 @@ export interface KeySettingsFieldsProps {
   service: string;
   mode: 'add' | 'edit';
   disabled: boolean;
+  /**
+   * The server has self-refreshing key lists (key-model-lists.md 7.2): the "Fixed list" switch, and an
+   * OpenAI-compatible entry's "Models it never serves", are shown. A server without them drops the fields.
+   */
+  listsShown?: boolean;
+  /** Models the key learned from its service's list: offered when picking a model it never serves. */
+  learned?: readonly string[];
+  /** Brings a part into view when the form opens: the switch, or the models it never serves. */
+  focus?: 'lists' | 'excluded' | null;
 }
 
 /**
@@ -68,9 +80,24 @@ export interface KeySettingsFieldsProps {
  * and what he calls them, how requests reach it, then the service's own extras and the rare ones, each
  * one level deeper. The editors of lists (models, exclusions, cloaking, retries) are AI Providers' own.
  */
-export function KeySettingsFields({ draft, onChange, service, mode, disabled }: KeySettingsFieldsProps) {
+export function KeySettingsFields({
+  draft,
+  onChange,
+  service,
+  mode,
+  disabled,
+  listsShown = false,
+  learned,
+  focus = null,
+}: KeySettingsFieldsProps) {
   const { t } = useTranslation();
   const id = useId();
+  // A panel's "Use a fixed list" or "Exclude them" opens the form on that part.
+  useEffect(() => {
+    if (!focus) return;
+    const target = document.getElementById(`${id}-${focus}`);
+    target?.scrollIntoView({ block: 'center' });
+  }, [focus, id, listsShown]);
   const compatible = draft.kind === 'compatible';
   const brand = compatible ? 'openaiCompatibility' : draft.family;
   const descriptor = PROVIDER_DESCRIPTORS[brand];
@@ -128,8 +155,16 @@ export function KeySettingsFields({ draft, onChange, service, mode, disabled }: 
     set('models', syncDiscoveredModels(models, picked, catalog));
 
   // --- exclusions: AI Providers' picker; '*' stays the on/off switch's ----------------------------------
+  // An OpenAI-compatible entry's are Provimux's own field (key-model-lists.md 6.1), held with the list settings.
   const excludedText = compatible ? '' : valueOf(draft, 'excludedModelsText');
-  const excludedRules = useMemo(() => parseExcludedRulesText(excludedText), [excludedText]);
+  const nativeRules = useMemo(() => parseExcludedRulesText(excludedText), [excludedText]);
+  const excludedRules = compatible ? (draft.lists.excluded ?? []) : nativeRules;
+  const setExcluded = (next: string[]) =>
+    onChange(
+      compatible
+        ? withLists(draft, { excluded: next })
+        : withValue(draft, 'excludedModelsText', formatExcludedRulesText(next))
+    );
   const candidates = useMemo(() => {
     const byKey = new Map<string, { id: string; displayName?: string }>();
     discovery.models.forEach((model) => {
@@ -140,8 +175,15 @@ export function KeySettingsFields({ draft, onChange, service, mode, disabled }: 
       const name = model.name?.trim();
       if (name && !byKey.has(name.toLowerCase())) byKey.set(name.toLowerCase(), { id: name });
     });
+    learned?.forEach((model) => {
+      const name = model.trim();
+      if (name && !byKey.has(name.toLowerCase())) byKey.set(name.toLowerCase(), { id: name });
+    });
     return [...byKey.values()].sort((a, b) => a.id.localeCompare(b.id));
-  }, [discovery.models, models]);
+  }, [discovery.models, models, learned]);
+  const rowsListed = models.some((model) => model.name.trim());
+  const fixedShown = listsShown && (compatible || familyAsked(draft.family));
+  const excludedShown = compatible ? listsShown : descriptor.supportsExcludedModels;
   const catalogState: ExcludedModelsCatalogState = discovery.loading
     ? 'loading'
     : discovery.error
@@ -399,24 +441,63 @@ export function KeySettingsFields({ draft, onChange, service, mode, disabled }: 
             />
           </div>
 
-          {descriptor.supportsExcludedModels ? (
-            <div className={formStyles.field}>
+          {fixedShown ? (
+            <div className={`${formStyles.field} ${styles.fixedField}`} id={`${id}-lists`}>
+              <div className={styles.fixedRow}>
+                <div className={styles.fixedText}>
+                  <span className={formStyles.label} id={`${id}-fixed`}>
+                    {t('provimux.accounts.settings.fixed')}
+                  </span>
+                  <p className={formStyles.sectionDesc} id={`${id}-fixed-hint`}>
+                    {!compatible && !rowsListed
+                      ? t('provimux.accounts.settings.fixed_catalog_text', { service })
+                      : draft.lists.fixed
+                        ? t('provimux.accounts.settings.fixed_on_text', { service })
+                        : t('provimux.accounts.settings.fixed_off_text', { service })}
+                  </p>
+                </div>
+                <ToggleSwitch
+                  checked={draft.lists.fixed}
+                  disabled={disabled}
+                  onChange={(fixed) => onChange(withLists(draft, { fixed }))}
+                  ariaLabel={t('provimux.accounts.settings.fixed')}
+                />
+              </div>
+              {compatible && draft.lists.fixed && !rowsListed ? (
+                <p className={styles.fixedWarning} role="note">
+                  <IconAlertTriangle size={13} />
+                  <span>{t('provimux.accounts.settings.fixed_empty', { service })}</span>
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
+          {excludedShown ? (
+            <div className={formStyles.field} id={`${id}-excluded-field`}>
               <div className={styles.fieldHead}>
                 <span className={formStyles.label} id={`${id}-excluded`}>
                   {t('provimux.accounts.settings.excluded')}
                 </span>
-                {sharedTag('excludedModelsText')}
+                {compatible ? null : sharedTag('excludedModelsText')}
               </div>
-              <p className={formStyles.sectionDesc}>{t('provimux.accounts.settings.excluded_hint')}</p>
+              <p className={formStyles.sectionDesc}>
+                {compatible
+                  ? t('provimux.accounts.settings.excluded_hint_compatible')
+                  : t('provimux.accounts.settings.excluded_hint')}
+              </p>
               <ExcludedModelsPicker
                 value={excludedRules}
-                onChange={(next) => set('excludedModelsText', formatExcludedRulesText(next))}
+                onChange={setExcluded}
                 candidates={candidates}
                 catalogState={catalogState}
                 onRetryCatalog={discovery.available ? () => void discovery.fetch() : undefined}
                 disabled={disabled}
                 reservedRules={DISABLE_ALL}
-                reservedRuleMessage={t('provimux.accounts.settings.excluded_reserved')}
+                reservedRuleMessage={
+                  compatible
+                    ? t('provimux.accounts.settings.excluded_reserved_compatible')
+                    : t('provimux.accounts.settings.excluded_reserved')
+                }
                 labelledBy={`${id}-excluded`}
               />
             </div>

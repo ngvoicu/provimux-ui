@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
@@ -25,8 +25,12 @@ import {
   type ModelsFilter,
   type NameItem,
   type NameView,
+  type RouteLine,
   type Section,
 } from './catalog';
+import type { ExclusionWriteRequest } from '../excluded/ExcludedView';
+import { placeInline } from '../excluded/labels';
+import { IconLiveLists } from '../../components/ProvimuxIcons';
 import { accountsAddressToAdd } from '../shared/accountsLink';
 import { placesExcluding, readExclusions, type Exclusion } from '../excluded/exclusions';
 import { NameCard } from './NameCard';
@@ -55,6 +59,14 @@ export interface ModelsBoardProps {
   onRoutesChanged: () => void;
   /** A name's "excluded" mark: Excluded models, searched for that name. */
   onShowExcluded?: (model: string) => void;
+  /** OpenAI-compatible entries have exclusions of their own (a server with self-refreshing key lists). */
+  compatibleExclusions?: boolean;
+  /** The draft has edits not saved: an exclusion, written at once, waits until they are saved or discarded. */
+  dirty?: boolean;
+  /** The exclusion being written: its id. */
+  writing?: string | null;
+  /** One exclusion written at once (Excluded models' own write), for a learned model a subscription serves. */
+  onWriteExclusion?: (request: ExclusionWriteRequest, writing: string) => Promise<boolean>;
 }
 
 /** How many of the other models are drawn at once; the rest on "Show more". */
@@ -82,7 +94,46 @@ export function ModelsBoard(props: ModelsBoardProps) {
   );
   const summary = useMemo(() => summarizeNames(items), [items]);
   // Where each name is excluded (by its name or a model it sends upstream), for its mark and link.
-  const exclusions = useMemo(() => readExclusions(draft.base).exclusions, [draft.base]);
+  const compatibleExclusions = props.compatibleExclusions === true;
+  const exclusionState = useMemo(
+    () => readExclusions(draft.base, { compatible: compatibleExclusions }),
+    [draft.base, compatibleExclusions]
+  );
+  const exclusions = exclusionState.exclusions;
+  const { onWriteExclusion } = props;
+  /** "Exclude it on this key": the key's place, the model as its service lists it, written at once. */
+  const excludeOnKey = useCallback(
+    (line: RouteLine, model: string) => {
+      const place = exclusionState.places.find(
+        (candidate) => candidate.kind === 'key' && candidate.entry.id === line.entryId
+      );
+      if (!place || !onWriteExclusion) return;
+      void onWriteExclusion(
+        {
+          change: { place, rule: model, excluded: true },
+          model,
+          place: placeInline(t, place),
+        },
+        `${place.id}|${model.toLowerCase()}`
+      );
+    },
+    [exclusionState.places, onWriteExclusion, t]
+  );
+  const excludeBlocked =
+    props.writing != null
+      ? t('provimux.models.paid_exclude_busy')
+      : props.dirty
+        ? t('provimux.models.paid_exclude_dirty')
+        : locked
+          ? t('provimux.models.paid_exclude_busy')
+          : null;
+  const keyPlaces = useMemo(
+    () =>
+      new Set(
+        exclusionState.places.flatMap((place) => (place.kind === 'key' ? [place.entry.id] : []))
+      ),
+    [exclusionState.places]
+  );
   const excludedByName = useMemo(() => {
     const byName = new Map<string, Exclusion[]>();
     if (!exclusions.length) return byName;
@@ -155,6 +206,10 @@ export function ModelsBoard(props: ModelsBoardProps) {
     { value: 'several', label: t('provimux.models.view_several') },
     { value: 'cooling', label: t('provimux.models.view_cooling') },
     { value: 'problems', label: t('provimux.models.view_problems') },
+    // Shown once a key learned a model, or while the address asks for it.
+    ...(summary.learned > 0 || filter.view === 'learned' || filter.view === 'paid'
+      ? [{ value: 'learned' as const, label: t('provimux.models.view_learned') }]
+      : []),
   ];
 
   // Devin's pause and OpenRouter's support are Provimux's: shown only where Provimux answers, and only
@@ -193,6 +248,13 @@ export function ModelsBoard(props: ModelsBoardProps) {
       onRenamed={(to) => setOpenKey(nameKey(to))}
       onNewName={(named) => setComposing({ name: '', seed: seedOf(named) })}
       edit={edit}
+      onExclude={
+        onWriteExclusion &&
+        item.lines.some((line) => line.learned && keyPlaces.has(line.entryId ?? ''))
+          ? excludeOnKey
+          : undefined
+      }
+      excludeBlocked={excludeBlocked}
     />
   );
 
@@ -250,6 +312,30 @@ export function ModelsBoard(props: ModelsBoardProps) {
           >
             <IconAlertTriangle size={13} />
             {t('provimux.models.count_problems', { count: summary.problems })}
+          </button>
+        ) : null}
+        {summary.learned > 0 ? (
+          <button
+            type="button"
+            className={`${shared.chip} ${styles.chipLearned}`}
+            aria-pressed={filter.view === 'learned'}
+            title={t('provimux.models.count_learned_title')}
+            onClick={() => toggleView('learned')}
+          >
+            <IconLiveLists size={13} aria-hidden="true" />
+            {t('provimux.models.count_learned', { count: summary.learned })}
+          </button>
+        ) : null}
+        {summary.paid > 0 ? (
+          <button
+            type="button"
+            className={`${shared.chip} ${styles.chipPaid}`}
+            aria-pressed={filter.view === 'paid'}
+            title={t('provimux.models.count_paid_title')}
+            onClick={() => toggleView('paid')}
+          >
+            <IconAlertTriangle size={13} />
+            {t('provimux.models.count_paid', { count: summary.paid })}
           </button>
         ) : null}
       </div>

@@ -1,0 +1,81 @@
+{
+  "observed_at": "2026-11-24T18:04:11Z",
+  "options": { "live_lists": true, "published_lists": false },
+  "built_in": { "dataset_version": null, "generated_at": null },
+  "published": {
+    "state": "off",
+    "dataset_version": null,
+    "generated_at": null,
+    "fetched_at": null,
+    "from_cache": false,
+    "last_failure": null
+  },
+  "login_types": ["antigravity", "aistudio", "claude", "codex", "copilot", "devin", "gemini", "kimi", "meta", "vertex", "xai"],
+  "logins": [],
+  "keys": [
+    {
+      "auth_index": "c41d9a07b2e8f113",
+      "provider": "openrouter",
+      "login": { "name": null, "email": null, "label": "openrouter" },
+      "disabled": false,
+      "source": "live",
+      "live": {
+        "supported": true,
+        "held": true,
+        "expired": false,
+        "fetched_at": "2026-11-24T16:10:44Z",
+        "from_cache": false,
+        "fetching": false,
+        "listed_models": 3,
+        "last_failure": null
+      },
+      "registered_models": 3,
+      "learned_models": 1,
+      "models": [
+        {
+          "id": "old",
+          "display_name": "old",
+          "source": "other",
+          "learned": false,
+          "limits": { "context": null, "output": null },
+          "modalities": { "input": [], "output": [] },
+          "reasoning_levels": ["low", "medium", "high"],
+          "sources": { "display_name": null, "context": null, "output": null, "input_modalities": null, "output_modalities": null, "reasoning_levels": null },
+          "listed": false
+        },
+        {
+          "id": "openai/gpt-5.5",
+          "display_name": "openai/gpt-5.5",
+          "source": "live",
+          "learned": true,
+          "limits": { "context": 400000, "output": 128000 },
+          "modalities": { "input": [], "output": [] },
+          "reasoning_levels": ["medium", "high"],
+          "sources": { "display_name": null, "context": null, "output": null, "input_modalities": null, "output_modalities": null, "reasoning_levels": null },
+          "listed": true
+        },
+        {
+          "id": "or-opus",
+          "display_name": "or-opus",
+          "source": "other",
+          "learned": false,
+          "limits": { "context": 1000000, "output": null },
+          "modalities": { "input": [], "output": [] },
+          "reasoning_levels": ["low", "medium", "high"],
+          "sources": { "display_name": null, "context": null, "output": null, "input_modalities": null, "output_modalities": null, "reasoning_levels": null },
+          "listed": true
+        }
+      ],
+      "key": {
+        "type": "openai-compatibility",
+        "name": "openrouter",
+        "fixed": false,
+        "not_asked": null,
+        "configured_models": 2,
+        "unlisted_models": 1,
+        "learned": ["openai/gpt-5.5"],
+        "unlisted": ["acme/retired-model"]
+      }
+    }
+  ]
+}

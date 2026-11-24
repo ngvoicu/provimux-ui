@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useMemo, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/Button';
 import { IconChevronLeft, IconExternalLink, IconTrash2 } from '@/components/ui/icons';
@@ -7,12 +7,19 @@ import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import type { AuthFileFieldsPatch } from '@/services/api/authFiles';
 import { useNotificationStore } from '@/stores';
 import type { AuthFileItem } from '@/types';
+import {
+  formatExcludedRulesText,
+  parseExcludedRulesText,
+} from '@/components/excludedModels';
+import type { ProvimuxModelListKeyRow, ProvimuxModelRoutesResponse } from '../../api/types';
+import { learnedOf } from '../keyLists/keyLists';
 import { AccessBadge } from '../shared/AccessBadge';
 import type { Account } from './accounts';
 import { fixOf, keyIssuerLabel, serviceLabel, stateLabel } from './labels';
 import { parsePriority, statusSentence } from './sheetLogic';
 import { ServiceIcon } from './ServiceIcon';
 import { KeySettingsFields } from './KeySettingsFields';
+import { KeyListStatus } from './KeyListStatus';
 import { LoginSettingsFields } from './LoginSettingsFields';
 import {
   draftChanged,
@@ -20,6 +27,9 @@ import {
   draftProblem,
   locateKey,
   summaryOf,
+  valueOf,
+  withLists,
+  withValue,
   type KeyDraft,
 } from './keySettings';
 import {
@@ -30,6 +40,7 @@ import {
   type LoginDraft,
 } from './loginSettings';
 import { settingsStatus } from './settingsSummary';
+import { modelsAddressOf } from './links';
 import styles from './AccountsPage.module.scss';
 
 export interface AccountSheetProps {
@@ -40,6 +51,17 @@ export interface AccountSheetProps {
   busy: boolean;
   /** The configuration as read: a key's settings are read from it. */
   document: unknown;
+  /**
+   * A key's model list (key-model-lists.md 7.2): `shown` when the server has self-refreshing key lists (the
+   * switch and the state are hidden otherwise), and the key's rows of the status.
+   */
+  keyLists?: { shown: boolean; rows: readonly ProvimuxModelListKeyRow[] };
+  /** The served routes: a model the key learned that a subscription also serves. */
+  routes?: ProvimuxModelRoutesResponse | null;
+  /** Models, showing what an account learned by itself. */
+  learnedAddress?: (account: Account) => string;
+  /** Open on the settings view (a link from Models: "Fix the key's list"). */
+  settingsFirst?: boolean;
   /** A subscription's entry of the login list (never its file's content). */
   file: AuthFileItem | null;
   onClose: () => void;
@@ -78,6 +100,8 @@ export function AccountSheet(props: AccountSheetProps) {
   const [view, setView] = useState<'overview' | 'settings'>('overview');
   const [settings, setSettings] = useState<Settings>({ kind: 'none' });
   const [problem, setProblem] = useState<string | null>(null);
+  const [focus, setFocus] = useState<'lists' | 'excluded' | null>(null);
+  const priorityRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (account) setText(String(account.priority));
@@ -87,6 +111,7 @@ export function AccountSheet(props: AccountSheetProps) {
   useEffect(() => {
     setView('overview');
     setProblem(null);
+    setFocus(null);
   }, [account?.id, props.open]);
 
   /** The settings as stored now (the configuration and the login list as last read). */
@@ -98,6 +123,16 @@ export function AccountSheet(props: AccountSheetProps) {
     const located = locateKey(props.document, account.entry);
     return located ? { kind: 'key', draft: draftOf(located) } : { kind: 'none' };
   }, [account, props.document, props.file]);
+
+  // A link that names the settings (Models' "Fix the key's list"): the panel opens on them, at the switch,
+  // turned on and not saved yet, as the panel's own "Use a fixed list" does.
+  const settingsFirst = props.settingsFirst === true && stored.kind === 'key';
+  useEffect(() => {
+    if (!props.open || !settingsFirst || stored.kind !== 'key') return;
+    setSettings({ kind: 'key', draft: withLists(stored.draft, { fixed: true }) });
+    setFocus('lists');
+    setView('settings');
+  }, [account?.id, props.open, settingsFirst]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const dirty =
     view === 'settings' &&
@@ -123,6 +158,9 @@ export function AccountSheet(props: AccountSheetProps) {
   );
 
   if (!account) return <Sheet open={false} onClose={props.onClose} />;
+  const keyLists = props.keyLists ?? { shown: false, rows: [] };
+  const keyRows = account.kind === 'api' && keyLists.shown ? keyLists.rows : [];
+  const learned = keyRows.flatMap(learnedOf);
 
   const service = serviceLabel(t, account.service);
   const parsed = parsePriority(text);
@@ -146,10 +184,36 @@ export function AccountSheet(props: AccountSheetProps) {
     setText(String(base + delta));
   };
 
-  const openSettings = () => {
-    setSettings(stored);
+  const openSettings = (change?: (draft: KeyDraft) => KeyDraft, part: typeof focus = null) => {
+    setSettings(
+      change && stored.kind === 'key' ? { kind: 'key', draft: change(stored.draft) } : stored
+    );
     setProblem(null);
+    setFocus(part);
     setView('settings');
+  };
+
+  /** "Exclude them on this key": its settings, with the models added to those it never serves. */
+  const excludeOnKey = (models: string[]) =>
+    openSettings((draft) => {
+      if (draft.kind === 'compatible') {
+        const current = draft.lists.excluded ?? [];
+        const known = new Set(current.map((rule) => rule.toLowerCase()));
+        return withLists(draft, {
+          excluded: [...current, ...models.filter((model) => !known.has(model.toLowerCase()))],
+        });
+      }
+      const current = parseExcludedRulesText(valueOf(draft, 'excludedModelsText'));
+      const known = new Set(current.map((rule) => rule.toLowerCase()));
+      const next = [...current, ...models.filter((model) => !known.has(model.toLowerCase()))];
+      return withValue(draft, 'excludedModelsText', formatExcludedRulesText(next));
+    }, 'excluded');
+
+  /** "Lower this key's priority": the priority field, filled in and focused; Save writes it. */
+  const lowerPriority = (value: number) => {
+    setText(String(value));
+    priorityRef.current?.focus();
+    priorityRef.current?.scrollIntoView({ block: 'center' });
   };
   const leaveSettings = () =>
     void confirmDiscard().then((ok) => {
@@ -247,6 +311,9 @@ export function AccountSheet(props: AccountSheetProps) {
             service={keyIssuerLabel(t, account.service)}
             mode="edit"
             disabled={saving || props.busy}
+            listsShown={keyLists.shown}
+            learned={learned}
+            focus={focus}
           />
         ) : settings.kind === 'login' ? (
           <LoginSettingsFields
@@ -352,6 +419,7 @@ export function AccountSheet(props: AccountSheetProps) {
               </button>
               <input
                 id={priorityId}
+                ref={priorityRef}
                 className={styles.priorityInput}
                 value={text}
                 inputMode="numeric"
@@ -411,7 +479,7 @@ export function AccountSheet(props: AccountSheetProps) {
                 size="sm"
                 variant="secondary"
                 disabled={props.busy || stored.kind === 'none'}
-                onClick={openSettings}
+                onClick={() => openSettings()}
               >
                 {t('provimux.accounts.settings.open')}
               </Button>
@@ -438,6 +506,22 @@ export function AccountSheet(props: AccountSheetProps) {
 
         <section className={styles.sheetSection}>
           <h3 className={styles.sheetHeading}>{t('provimux.accounts.sheet.models_heading')}</h3>
+          {account.kind === 'api' && keyRows.length ? (
+            <KeyListStatus
+              rows={keyRows}
+              prefix={account.entry.prefix}
+              routes={props.routes ?? null}
+              service={keyIssuerLabel(t, account.service)}
+              nowMs={props.serverNowMs}
+              busy={props.busy || stored.kind === 'none'}
+              learnedAddress={
+                props.learnedAddress?.(account) ?? modelsAddressOf(account, true, 'learned')
+              }
+              onLowerPriority={lowerPriority}
+              onExclude={excludeOnKey}
+              onFix={() => openSettings((draft) => withLists(draft, { fixed: true }), 'lists')}
+            />
+          ) : null}
           <button type="button" className={styles.sheetLink} onClick={() => props.onShowModels(account)}>
             {t('provimux.accounts.sheet.models_link')}
             <span aria-hidden="true">→</span>

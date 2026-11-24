@@ -168,30 +168,54 @@ describe('reading where models are excluded', () => {
     expect(read.unread).toEqual([]);
   });
 
-  test('OpenAI-compatible entries have no exclusions yet: one switch, no place, no write, named in one line', () => {
-    // The proxy has no excluded-models for them yet; a coming release adds it, and `familyExcludes` is the switch.
+  test('OpenAI-compatible entries: none on an older server, one list of their own on a server with key lists', () => {
+    // An older server has no excluded-models for them (and drops the field on save): no place, one line.
     expect(familyExcludes('openai-compatibility')).toBe(false);
+    expect(familyExcludes('openai-compatibility', true)).toBe(true);
     for (const family of ['claude', 'codex', 'gemini', 'interactions', 'vertex', 'xai', 'meta'] as const) {
       expect(familyExcludes(family)).toBe(true);
     }
     const state = stateOf(config());
-    const read = readExclusions(state);
-    expect(read.withoutExclusions.map((entry) => entry.groupName)).toEqual(['openrouter']);
-    expect(read.places.some((p) => p.kind === 'key' && p.entry.family === 'openai-compatibility')).toBe(false);
-    const entry = read.withoutExclusions[0];
-    const asPlace: KeyPlace = {
-      kind: 'key',
-      id: entry.id,
-      entry,
-      service: 'openrouter',
-      storedOn: 'group',
-      sharing: 1,
-      rules: [],
-      off: false,
-    };
-    expect(() => planExclusion(config(), { place: asPlace, rule: 'x', excluded: true })).toThrow(
-      ExclusionWriteError
-    );
+    const older = readExclusions(state);
+    expect(older.withoutExclusions.map((entry) => entry.groupName)).toEqual(['openrouter']);
+    expect(older.places.some((p) => p.kind === 'key' && p.entry.family === 'openai-compatibility')).toBe(false);
+
+    // A server with self-refreshing key lists (key-model-lists.md 6.1): the entry is one place, its own list.
+    const doc = config();
+    const entries = (doc['api-keys'] as Doc)['openai-compatibility'] as Doc[];
+    entries[0] = { ...entries[0], 'excluded-models': ['text-embedding-*', 'X-AI/*', '*'] };
+    const current = readExclusions(stateOf(doc), { compatible: true });
+    expect(current.withoutExclusions).toEqual([]);
+    const entryPlace = current.places.find(
+      (p): p is KeyPlace => p.kind === 'key' && p.entry.family === 'openai-compatibility'
+    )!;
+    // `*` is a rule here, not an off switch: the entry's off switch is `disabled`.
+    expect(entryPlace).toMatchObject({ storedOn: 'group', sharing: 0, off: false });
+    expect(entryPlace.rules).toEqual(['text-embedding-*', 'X-AI/*', '*']);
+    expect(current.exclusions.filter((e) => e.place === entryPlace).map((e) => e.wildcard)).toEqual([
+      true,
+      true,
+      true,
+    ]);
+
+    // A rule added or taken out is written on the entry, its keys and models untouched.
+    const added = planExclusion(doc, { place: entryPlace, rule: 'openai/gpt-5.5', excluded: true });
+    expect(added.path).toBe('/config/api-keys/openai-compatibility');
+    const [written] = added.body as Doc[];
+    expect(written['excluded-models']).toEqual(['text-embedding-*', 'X-AI/*', '*', 'openai/gpt-5.5']);
+    expect(written.keys).toEqual(entries[0].keys);
+    expect(written.models).toEqual(entries[0].models);
+    // Every spelling of a rule goes; the last rule taken out removes the field.
+    const removed = planExclusion(doc, { place: entryPlace, rule: 'x-ai/*', excluded: false });
+    expect((removed.body as Doc[])[0]['excluded-models']).toEqual(['text-embedding-*', '*']);
+    const bare = config();
+    const barePlace = readExclusions(stateOf(bare), { compatible: true }).places.find(
+      (p): p is KeyPlace => p.kind === 'key' && p.entry.family === 'openai-compatibility'
+    )!;
+    const once = planExclusion(bare, { place: barePlace, rule: 'a', excluded: true }).body as Doc[];
+    const back = { ...bare, 'api-keys': { ...(bare['api-keys'] as Doc), 'openai-compatibility': once } };
+    const none = planExclusion(back, { place: barePlace, rule: 'a', excluded: false }).body as Doc[];
+    expect('excluded-models' in none[0]).toBe(false);
   });
 
   test("a key's list is its own when it has one, else its connection's, shared with the keys that use it", () => {

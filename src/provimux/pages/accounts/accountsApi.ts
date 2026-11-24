@@ -8,7 +8,9 @@
  *   reaches the page;
  * - an API key: `PUT /config/api-keys/<family>`, the family's list as read with one key changed, with
  *   `If-Match` set to the read's tag, as the Models page writes it; a list changed since is refused (412)
- *   and nothing is written.
+ *   and nothing is written;
+ * - a key's list settings (`fixed-models`, an OpenAI-compatible entry's `excluded-models`), Provimux's own
+ *   fields: the same `PUT` with `If-Match`, built from a read of its own, since it follows AI Providers' save.
  */
 import { apiClient } from '@/services/api/client';
 import { authFilesApi, type AuthFileFieldsPatch } from '@/services/api/authFiles';
@@ -18,6 +20,7 @@ import { isRecord } from '@/utils/helpers';
 import { ALIAS_PATHS, etagOf, putWithTag } from '../aliases/aliasesApi';
 import { readAliasState } from '../aliases/rows';
 import type { AliasState } from '../aliases/types';
+import { familyWithListSettings, type ListSettings, type ListTarget } from './keyListSettings';
 
 type Client = Pick<typeof apiClient, 'get' | 'getRaw'>;
 
@@ -27,6 +30,17 @@ export interface AccountsRead {
   files: AuthFileItem[] | null;
   /** When the login list was received (a login's countdowns run from it). */
   receivedAtMs: number;
+}
+
+/**
+ * A save whose first write (AI Providers' own) landed and whose list settings did not: the owner is told which
+ * part was saved. `failure` is the list write's error.
+ */
+export class ListSettingsWriteError extends Error {
+  constructor(readonly failure: unknown) {
+    super(failure instanceof Error ? failure.message : String(failure));
+    this.name = 'ListSettingsWriteError';
+  }
 }
 
 export class AccountsWriteError extends Error {
@@ -67,6 +81,20 @@ export const accountsApi = {
       if (status === 400 || status === 422) throw new AccountsWriteError('refused', message);
       throw new AccountsWriteError('error', message);
     }
+  },
+
+  /**
+   * A key's list settings, read afresh and written back with only them changed, conditional on that read's
+   * tag. The key's group must still be where `target` says (KeyWriteError 'not-found' otherwise).
+   */
+  async writeListSettings(
+    target: ListTarget,
+    next: ListSettings,
+    client: Pick<typeof apiClient, 'getRaw'> = apiClient
+  ): Promise<void> {
+    const read = await client.getRaw(ALIAS_PATHS.config);
+    const groups = familyWithListSettings(read.data, target, next);
+    await accountsApi.writeFamily(target.family, groups, etagOf(read.headers));
   },
 
   setLoginOn: (file: Pick<AuthFileItem, 'name' | 'authIndex'>, on: boolean) =>

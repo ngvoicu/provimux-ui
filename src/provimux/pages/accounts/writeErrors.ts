@@ -1,5 +1,5 @@
 import { getErrorMessage, isRecord } from '@/utils/helpers';
-import { AccountsWriteError } from './accountsApi';
+import { AccountsWriteError, ListSettingsWriteError } from './accountsApi';
 import { KeyWriteError } from './keyWrites';
 
 /** AI Providers' writes refuse a connection that changed since it was read (its own words, in English). */
@@ -9,6 +9,7 @@ const CONSOLE_KEY = /^(providersPage|plugin_management|config_management|auth_fi
 
 /** True when the write was refused because what it changes moved since the read: read again. */
 export function isChangedError(error: unknown): boolean {
+  if (error instanceof ListSettingsWriteError) return isChangedError(error.failure);
   if (error instanceof AccountsWriteError) return error.reason === 'changed';
   if (error instanceof KeyWriteError) return error.code === 'not-found';
   if (isRecord(error) && error.status === 412) return true;
@@ -20,6 +21,10 @@ export function writeErrorMessage(
   t: (key: string, options?: Record<string, unknown>) => string,
   error: unknown
 ): string {
+  // The settings AI Providers writes were saved; only the list settings, written after them, were not.
+  if (error instanceof ListSettingsWriteError) {
+    return t('provimux.accounts.lists.not_saved', { reason: writeErrorMessage(t, error.failure) });
+  }
   if (error instanceof AccountsWriteError) {
     if (error.reason === 'changed') return t('provimux.accounts.write_changed');
     if (error.reason === 'no-tag') return t('provimux.accounts.write_no_tag');

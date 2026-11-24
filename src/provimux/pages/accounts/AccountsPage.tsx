@@ -19,11 +19,9 @@ import {
 import { useHeaderRefresh } from '@/hooks/useHeaderRefresh';
 import { apiClient } from '@/services/api/client';
 import type { AuthFileFieldsPatch } from '@/services/api/authFiles';
-import { providersApi } from '@/services/api/providers';
 import { useAuthStore, useConfigStore, useNotificationStore, useThemeStore } from '@/stores';
-import { getErrorMessage, isRecord } from '@/utils/helpers';
+import { getErrorMessage } from '@/utils/helpers';
 import { provimuxApi } from '../../api/provimuxApi';
-import { familyGroups } from '../aliases/rows';
 import { useProvimuxPresence } from '../../presence';
 import { useOpenInAuthFiles } from '../shared/authFilesLink';
 import { useOpenInProviders } from '../shared/providersLink';
@@ -44,7 +42,6 @@ import { AccountsBoard } from './AccountsBoard';
 import { AddAccountSheet } from './AddAccountSheet';
 import { firstStep } from './addSteps';
 import {
-  KeyWriteError,
   familyWithKeyAdded,
   familyWithKeyOn,
   familyWithKeyReplaced,
@@ -54,7 +51,15 @@ import {
 } from './keyWrites';
 import { accountName, serviceLabel } from './labels';
 import { isChangedError, writeErrorMessage } from './writeErrors';
-import { compatibleConfig, nativeSave, summaryOf, type KeyDraft } from './keySettings';
+import { summaryOf, type KeyDraft } from './keySettings';
+import { saveKeySettingsDraft } from './keySave';
+import {
+  keyListsSupported,
+  keyOverlaps,
+  keyRowsByIndex,
+  keyRowsOf,
+  paysPerToken,
+} from '../keyLists/keyLists';
 import { modelsAddressOf } from './links';
 import { ReplaceKeyDialog } from './ReplaceKeyDialog';
 import { serviceById } from './services';
@@ -67,6 +72,8 @@ const POLL_MS = 30_000;
 const VERTEX_FOCUS = '__vertex__';
 const fetchRoutes = (client: Parameters<typeof provimuxApi.modelRoutes>[0]) =>
   provimuxApi.modelRoutes(client);
+const fetchLists = (client: Parameters<typeof provimuxApi.modelLists>[0]) =>
+  provimuxApi.modelLists(client);
 
 /**
  * Accounts (design accounts-page.md): every subscription and API key in one list, whether each works now,
@@ -131,6 +138,13 @@ export function AccountsPage() {
   const routesStatus = useProvimuxPresence((state) => state.modelRoutes.status);
   const routesKnown =
     routesStatus === 'unsupported' ? false : routes.data !== null ? true : null;
+  // Each key's model list (key-model-lists.md 7): shown, with its switch, only by a server that reports it.
+  const lists = useProvimuxResource('modelLists', fetchLists, POLL_MS, undefined, {
+    headerRefresh: false,
+  });
+  const listsStatus = useProvimuxPresence((state) => state.modelLists.status);
+  const keyListsKnown = keyListsSupported(lists.data, listsStatus);
+  const keyRows = useMemo(() => keyRowsByIndex(lists.data), [lists.data]);
   const clock = usePageClock();
   const serverNowMs = screenNow(clock, routes.loadedAt, routes.offsetMs);
 
@@ -148,9 +162,27 @@ export function AccountsPage() {
     [read, routes.data, clock, serverNowMs]
   );
 
+  /** Per key, the models it learned that a subscription also serves, while the key is tried first or shares. */
+  const paidOverlaps = useMemo(() => {
+    const out = new Map<string, number>();
+    if (keyListsKnown !== true) return out;
+    for (const account of accounts) {
+      if (account.kind !== 'api') continue;
+      const names = new Set<string>();
+      for (const row of keyRowsOf(keyRows, account.authIndexes)) {
+        const own = row.auth_index ? [row.auth_index] : [];
+        for (const overlap of keyOverlaps(row, account.entry.prefix, own, routes.data)) {
+          if (paysPerToken(overlap.order)) names.add(overlap.name);
+        }
+      }
+      if (names.size) out.set(account.id, names.size);
+    }
+    return out;
+  }, [accounts, keyListsKnown, keyRows, routes.data]);
+
   const refresh = useCallback(async () => {
-    await Promise.all([load(), routes.refresh()]);
-  }, [load, routes]);
+    await Promise.all([load(), routes.refresh(), lists.load()]);
+  }, [load, routes, lists]);
   useHeaderRefresh(refresh);
 
   // --- filter, panels ------------------------------------------------------------------------------------
@@ -162,12 +194,18 @@ export function AccountsPage() {
   useEffect(() => {
     if (openAccount) setLastOpen(openAccount);
   }, [openAccount]);
-  const open = (account: Account) => {
+  const open = (account: Account, onSettings = false) => {
     setOpenId(account.id);
+    setSettingsFirst(onSettings);
     setSheetOpen(true);
   };
-  const closeSheet = () => setSheetOpen(false);
+  const closeSheet = () => {
+    setSheetOpen(false);
+    setSettingsFirst(false);
+  };
 
+  /** The panel was opened on the key's settings by a link (`?settings=lists`). */
+  const [settingsFirst, setSettingsFirst] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [addService, setAddService] = useState<string | null>(null);
   const [replacing, setReplacing] = useState<KeyAccount | null>(null);
@@ -251,12 +289,13 @@ export function AccountsPage() {
     handledParams.current = true;
     const target = accountFromParams(accounts, searchParams);
     const add = searchParams.get('add');
-    if (target) open(target);
+    if (target) open(target, searchParams.get('settings') === 'lists');
     else if (add) {
       setAddService(add === '1' ? null : add);
       setAddOpen(true);
     }
     if (searchParams.has('login') || searchParams.has('account') || add) {
+      // `settings` goes with `account`.
       setSearchParams({}, { replace: true });
     }
   }, [read, accounts, searchParams, setSearchParams]);
@@ -274,7 +313,7 @@ export function AccountsPage() {
         await write();
         useConfigStore.getState().clearCache();
         if (done) showNotification(done, 'success');
-        await Promise.all([load(), routes.load()]);
+        await Promise.all([load(), routes.load(), lists.load()]);
         return true;
       } catch (error) {
         const changed = isChangedError(error);
@@ -290,7 +329,7 @@ export function AccountsPage() {
         });
       }
     },
-    [load, routes, showNotification, t]
+    [load, routes, lists, showNotification, t]
   );
 
   const writeKey = (account: KeyAccount, groups: (document: unknown) => unknown[]) => async () => {
@@ -381,24 +420,12 @@ export function AccountsPage() {
       t('provimux.accounts.replaced', { name: accountName(t, account) })
     );
 
-  /** A key's settings, saved with AI Providers' own calls (its connection form, its OpenAI entry form). */
-  const saveKeyDraft = async (draft: KeyDraft) => {
-    if (draft.kind === 'native') {
-      const { source, settings, members } = nativeSave(draft);
-      await providersApi.saveNativeConnection(draft.family, source, settings, members);
-      return;
-    }
-    const config = compatibleConfig(draft);
-    if (draft.resource) {
-      await providersApi.updateOpenAIProvider(config.name, draft.resource.originalIndex, config);
-      return;
-    }
-    const taken = familyGroups(read?.config.document, 'openai-compatibility').some(
-      (group) => isRecord(group) && String(group.name ?? '').trim() === config.name
-    );
-    if (taken) throw new KeyWriteError('duplicate-name');
-    await providersApi.createOpenAIProvider(config);
-  };
+  /** A key's settings: AI Providers' own save, then its list settings (keySave.ts). */
+  const saveKeyDraft = (draft: KeyDraft) =>
+    saveKeySettingsDraft(draft, {
+      document: read?.config.document,
+      listsShown: keyListsKnown === true,
+    });
 
   const saveKeySettings = (account: Account, draft: KeyDraft) =>
     run(
@@ -542,6 +569,7 @@ export function AccountsPage() {
           busy={busy}
           routesKnown={routesKnown}
           loginsFailed={read.files === null}
+          paidOverlaps={paidOverlaps}
           onAdd={startAdd}
           onOpen={open}
           onToggle={toggle}
@@ -556,6 +584,16 @@ export function AccountsPage() {
         serverNowMs={serverNowMs}
         busy={openAccount ? busy.has(openAccount.id) : false}
         document={read?.config.document ?? null}
+        keyLists={{
+          shown: keyListsKnown === true,
+          rows:
+            (openAccount ?? lastOpen)?.kind === 'api'
+              ? keyRowsOf(keyRows, (openAccount ?? lastOpen)!.authIndexes)
+              : [],
+        }}
+        routes={routes.data}
+        learnedAddress={(account) => modelsAddressOf(account, true, 'learned')}
+        settingsFirst={settingsFirst}
         file={
           (openAccount ?? lastOpen)?.kind === 'sub'
             ? (read?.files?.find(
@@ -586,6 +624,7 @@ export function AccountsPage() {
           rejected: flows.loginProxyRejected,
           onChange: flows.setLoginProxy,
         }}
+        keyListsShown={keyListsKnown === true}
         onClose={() => setAddOpen(false)}
         onSignIn={startSignIn}
         onServiceAccount={openVertex}

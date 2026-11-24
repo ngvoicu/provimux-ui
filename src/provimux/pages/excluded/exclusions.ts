@@ -4,8 +4,9 @@
  *
  * - an API key's `excluded-models` (`api-keys.<family>`): the key's own list when it has one, else its
  *   connection's (the group's), as the proxy and AI Providers read it. `*` alone is the key's off switch
- *   (Accounts' switch), not an exclusion. OpenAI-compatible entries have no such list yet: they serve only
- *   the models in their list (`familyExcludes` is the one switch for when the proxy adds it).
+ *   (Accounts' switch), not an exclusion. An OpenAI-compatible entry has one list for all its keys, on the
+ *   entry, on a Provimux with self-refreshing key lists (key-model-lists.md 6.1); on an older server it has
+ *   none and serves only the models in its list (`familyExcludes`).
  * - every subscription of a login type: `oauth.excluded-models.<type>` (`oauth-excluded-models` before v8),
  *   the list Auth Files' "Excluded models" page edits. A login whose own file has a list uses that list
  *   instead; the file is never read here (it holds the tokens).
@@ -37,10 +38,10 @@ export interface LoginsPlace {
   rules: string[];
 }
 
-/** One native API key. */
+/** One native API key, or one OpenAI-compatible entry (all its keys). */
 export interface KeyPlace {
   kind: 'key';
-  /** The key's entry id (`<family>/<group>/<key>`), valid for one read. */
+  /** The key's entry id (`<family>/<group>/<key>`, `<family>/<group>/g`), valid for one read. */
   id: string;
   entry: KeyEntry;
   service: string;
@@ -80,16 +81,20 @@ export const ruleKey = (rule: string): string => rule.trim().toLowerCase();
 export const isPattern = (rule: string): boolean => rule.includes('*');
 
 /**
- * Whether the proxy applies an API key's `excluded-models` in this family. OpenAI-compatible entries have none
- * yet (`OpenAICompatibility` in the proxy has no such field, and their registration applies none); a coming
- * Provimux release adds it. This is the one switch: when that release is the one the console runs against,
- * return true for them here. Their entries then become places (`keyPlaces`: an entry is one place,
- * `keyIndex === null`, so `storedListOf` and `familyWithKeyRule` take the entry's own list, at the level the
- * release stores it), they get a model list to offer (`KEY_CHANNEL`, or the entry's own models), and the line
- * saying they have none (`withoutExclusions`) is empty by itself.
+ * Whether the proxy applies an API key's `excluded-models` in this family. OpenAI-compatible entries have them
+ * on a Provimux with self-refreshing key lists (`compatible`: its model-lists answer carries `keys`,
+ * keyLists.ts `keyListsSupported`), on the entry, one list for its keys; an older server has none (its
+ * `OpenAICompatibility` has no such field and drops it on save). This is the one switch: the entries then
+ * become places (`keyPlaces`: an entry is one place, `keyIndex === null`), `familyWithKeyRule` writes the
+ * entry's list, and the line saying they have none (`withoutExclusions`) is empty by itself.
  */
-export const familyExcludes = (family: ProviderFamily): boolean =>
-  family !== 'openai-compatibility';
+export const familyExcludes = (family: ProviderFamily, compatible = false): boolean =>
+  family !== 'openai-compatibility' || compatible;
+
+/** What the server can do with exclusions: OpenAI-compatible entries' own (`familyExcludes`). */
+export interface ExclusionOptions {
+  compatible?: boolean;
+}
 
 /** The model-definition channel that lists a family's models (`GET /routing/model-definitions/<channel>`). */
 const KEY_CHANNEL: Partial<Record<ProviderFamily, string>> = {
@@ -121,8 +126,11 @@ export function loginsMapWritable(document: unknown): boolean {
   return isRecord(map) && inexactNumbers(map, 'oauth.excluded-models').length === 0;
 }
 
-/** The rules of a stored list: its non-empty strings, trimmed, once each (first spelling), `*` apart. */
-function rulesOf(list: readonly unknown[]): { rules: string[]; off: boolean } {
+/**
+ * The rules of a stored list: its non-empty strings, trimmed, once each (first spelling), `*` apart when it is
+ * the key's off switch (`offSwitch`).
+ */
+function rulesOf(list: readonly unknown[], offSwitch = true): { rules: string[]; off: boolean } {
   const seen = new Set<string>();
   const rules: string[] = [];
   let off = false;
@@ -130,7 +138,7 @@ function rulesOf(list: readonly unknown[]): { rules: string[]; off: boolean } {
     if (typeof element !== 'string') continue;
     const rule = element.trim();
     if (!rule) continue;
-    if (rule === DISABLE_ALL_RULE) {
+    if (offSwitch && rule === DISABLE_ALL_RULE) {
       off = true;
       continue;
     }
@@ -168,10 +176,16 @@ export function inheritingKeys(group: Readonly<Record<string, unknown>>): number
   }).length;
 }
 
-function keyPlaces(entries: readonly KeyEntry[], unread: string[]): KeyPlace[] {
+function keyPlaces(
+  entries: readonly KeyEntry[],
+  unread: string[],
+  compatible: boolean
+): KeyPlace[] {
   const places: KeyPlace[] = [];
   for (const entry of entries) {
-    if (!familyExcludes(entry.family) || entry.keyIndex === null) continue;
+    if (!familyExcludes(entry.family, compatible)) continue;
+    const entryWide = entry.family === 'openai-compatibility';
+    if (!entryWide && entry.keyIndex === null) continue;
     const { list, storedOn } = storedListOf(entry);
     if (list !== undefined && list !== null && !Array.isArray(list)) {
       const at = `api-keys.${entry.family}[${entry.groupIndex}]`;
@@ -180,6 +194,20 @@ function keyPlaces(entries: readonly KeyEntry[], unread: string[]): KeyPlace[] {
           ? `${at}.keys[${entry.keyIndex}].${LOGINS_EXCLUDED_KEY}`
           : `${at}.${LOGINS_EXCLUDED_KEY}`
       );
+      continue;
+    }
+    if (entryWide) {
+      // The entry's own list: `*` is a rule like any other here (the entry's off switch is `disabled`).
+      places.push({
+        kind: 'key',
+        id: entry.id,
+        entry,
+        service: serviceOfKey(entry.family, entry.host, entry.groupName),
+        storedOn: 'group',
+        sharing: 0,
+        rules: rulesOf(Array.isArray(list) ? list : [], false).rules,
+        off: false,
+      });
       continue;
     }
     const { rules, off } = rulesOf(Array.isArray(list) ? list : []);
@@ -261,10 +289,14 @@ export function placeOrder(a: Place, b: Place): number {
 }
 
 /** Every place an exclusion can be, and every exclusion, from the Models page's read. */
-export function readExclusions(state: Pick<AliasState, 'document' | 'entries'>): ExclusionState {
+export function readExclusions(
+  state: Pick<AliasState, 'document' | 'entries'>,
+  options: ExclusionOptions = {}
+): ExclusionState {
   const unread: string[] = [];
+  const compatible = options.compatible === true;
   const keyEntries = state.entries.filter((entry): entry is KeyEntry => entry.store === 'api-key');
-  const keys = keyPlaces(keyEntries, unread);
+  const keys = keyPlaces(keyEntries, unread, compatible);
   const logins = loginPlaces(
     state.document,
     state.entries.filter((entry): entry is LoginEntry => entry.store === 'login'),
@@ -282,7 +314,7 @@ export function readExclusions(state: Pick<AliasState, 'document' | 'entries'>):
   return {
     places,
     exclusions,
-    withoutExclusions: keyEntries.filter((entry) => !familyExcludes(entry.family)),
+    withoutExclusions: keyEntries.filter((entry) => !familyExcludes(entry.family, compatible)),
     loginMapWritable: logins.writable,
     unread,
   };

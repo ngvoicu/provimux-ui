@@ -60,6 +60,11 @@ export interface ExcludedViewProps {
   onFilter: (next: ExcludedFilter) => void;
   /** Resolves true when the change was written. */
   onWrite: (request: ExclusionWriteRequest, writing: string) => Promise<boolean>;
+  /**
+   * OpenAI-compatible entries have exclusions of their own (a server with self-refreshing key lists): they are
+   * places like the other keys. Without it, one line says they have none.
+   */
+  compatible?: boolean;
 }
 
 /** How many accounts that still serve a model are named before "and N more". */
@@ -79,7 +84,11 @@ export function ExcludedView(props: ExcludedViewProps) {
   const [adding, setAdding] = useState<{ model: string } | null>(null);
   const openAuthFiles = useOpenAuthFilesOfType();
 
-  const read = useMemo(() => readExclusions(state), [state]);
+  const compatibleExclusions = props.compatible === true;
+  const read = useMemo(
+    () => readExclusions(state, { compatible: compatibleExclusions }),
+    [state, compatibleExclusions]
+  );
   const items = useMemo(() => excludedModels(read.exclusions, routes), [read.exclusions, routes]);
   const visible = useMemo(() => filterExcluded(items, filter), [items, filter]);
   const services = useMemo(() => servicesWithExclusions(read.exclusions), [read.exclusions]);

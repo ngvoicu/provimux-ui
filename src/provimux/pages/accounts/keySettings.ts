@@ -5,7 +5,8 @@
  * connection's unless the key sets its own, as AI Providers reads them; a save is AI Providers' own
  * `saveNativeConnection` with every other key of the connection left as it is. An OpenAI-compatible entry
  * is one account, saved with AI Providers' `createOpenAIProvider` / `updateOpenAIProvider`. Pure: the page
- * makes the requests.
+ * makes the requests. Beside the form, a draft holds the key's list settings (keyListSettings.ts): Provimux's
+ * own fields, which AI Providers' save leaves as they are and Accounts writes after it.
  */
 import { MAX_CREDENTIAL_WEIGHT } from '@/utils/credentialWeight';
 import { isRecord } from '@/utils/helpers';
@@ -37,6 +38,13 @@ import { validateConnectionPool } from '@/features/providers/validateConnectionP
 import type { MemberField } from '@/services/api/nativeProviderGroups';
 import { familyGroups } from '../aliases/rows';
 import type { KeyEntry } from '../aliases/types';
+import {
+  defaultListSettings,
+  listSettingsIn,
+  sameListSettings,
+  type ListSettings,
+  type ListTarget,
+} from './keyListSettings';
 
 export type Form = ProviderEntryFormInput;
 
@@ -92,6 +100,9 @@ export interface NativeDraft {
   shared: Form;
   memberInitial: Form;
   member: Form;
+  /** Provimux's list settings, as stored and as edited. */
+  listsInitial: ListSettings;
+  lists: ListSettings;
 }
 
 export interface CompatibleDraft {
@@ -100,6 +111,8 @@ export interface CompatibleDraft {
   resource: ProviderResource | null;
   initial: Form;
   form: Form;
+  listsInitial: ListSettings;
+  lists: ListSettings;
 }
 
 export type KeyDraft = NativeDraft | CompatibleDraft;
@@ -132,6 +145,7 @@ export function newNativeDraft(
     baseUrl: baseUrl ?? defaults.baseUrl,
   };
   const member = readMemberForm(buildInitialForm(family, null, 'create'), null);
+  const lists = defaultListSettings(family);
   return {
     kind: 'native',
     family,
@@ -142,6 +156,8 @@ export function newNativeDraft(
     shared,
     memberInitial: member,
     member,
+    listsInitial: lists,
+    lists,
   };
 }
 
@@ -149,6 +165,7 @@ export function nativeDraftOf(located: Extract<LocatedKey, { kind: 'native' }>):
   const { family, section, resource } = located;
   const shared = readSharedForm(section.source.group, buildInitialForm(family, null, 'create'));
   const member = readMemberForm(buildInitialForm(family, resource, 'edit'), resource);
+  const lists = listSettingsIn(family, section.source.group, sourceOf(resource)?.keyIndex ?? null);
   return {
     kind: 'native',
     family,
@@ -159,18 +176,22 @@ export function nativeDraftOf(located: Extract<LocatedKey, { kind: 'native' }>):
     shared,
     memberInitial: member,
     member,
+    listsInitial: lists,
+    lists,
   };
 }
 
 /** A new OpenAI-compatible entry with one key. */
 export function newCompatibleDraft(name: string, baseUrl: string): CompatibleDraft {
   const initial = { ...buildInitialForm('openaiCompatibility', null, 'create'), name, baseUrl };
-  return { kind: 'compatible', resource: null, initial, form: initial };
+  const lists = defaultListSettings('openai-compatibility');
+  return { kind: 'compatible', resource: null, initial, form: initial, listsInitial: lists, lists };
 }
 
 export function compatibleDraftOf(resource: ProviderResource): CompatibleDraft {
   const initial = buildInitialForm('openaiCompatibility', resource, 'edit');
-  return { kind: 'compatible', resource, initial, form: initial };
+  const lists = listSettingsIn('openai-compatibility', sourceOf(resource)?.group, null);
+  return { kind: 'compatible', resource, initial, form: initial, listsInitial: lists, lists };
 }
 
 export function draftOf(located: LocatedKey): KeyDraft {
@@ -240,8 +261,19 @@ export const memberForm = (draft: KeyDraft): Form =>
 const same = (a: Form, b: Form) =>
   a === b || JSON.stringify({ ...a, testModel: '' }) === JSON.stringify({ ...b, testModel: '' });
 
+/** The list settings were changed. */
+export const listsChanged = (draft: KeyDraft): boolean =>
+  !sameListSettings(draft.lists, draft.listsInitial);
+
+/** The list settings changed. */
+export const withLists = (draft: KeyDraft, patch: Partial<ListSettings>): KeyDraft => ({
+  ...draft,
+  lists: { ...draft.lists, ...patch },
+});
+
 /** Anything changed besides the key itself (and, for a new entry, its name and address). */
 export function settingsTouched(draft: KeyDraft): boolean {
+  if (listsChanged(draft)) return true;
   if (draft.kind === 'compatible') {
     const strip = (form: Form) => ({
       ...form,
@@ -258,6 +290,11 @@ export function settingsTouched(draft: KeyDraft): boolean {
 }
 
 export function draftChanged(draft: KeyDraft): boolean {
+  return formChanged(draft) || listsChanged(draft);
+}
+
+/** What AI Providers' own save writes changed: the form, not the list settings. */
+export function formChanged(draft: KeyDraft): boolean {
   return draft.kind === 'compatible'
     ? !same(draft.form, draft.initial)
     : !same(draft.shared, draft.sharedInitial) || !same(draft.member, draft.memberInitial);
@@ -332,6 +369,33 @@ export function nativeSave(draft: NativeDraft) {
   };
 }
 
+/**
+ * Where a stored key's list settings are written when only they changed (AI Providers' save does not run):
+ * its group as read, by position and name, and its key. null for a key not stored yet.
+ */
+export function storedListTarget(draft: KeyDraft): ListTarget | null {
+  if (draft.kind === 'native') {
+    if (!draft.located) return null;
+    const { section, resource } = draft.located;
+    const keyIndex = sourceOf(resource)?.keyIndex;
+    if (keyIndex === undefined) return null;
+    return {
+      family: draft.family,
+      groupIndex: section.source.groupIndex,
+      keyIndex,
+      name: String(section.source.group.name ?? ''),
+    };
+  }
+  const source = draft.resource ? sourceOf(draft.resource) : undefined;
+  if (!source) return null;
+  return {
+    family: 'openai-compatibility',
+    groupIndex: source.groupIndex,
+    keyIndex: null,
+    name: String(source.group.name ?? ''),
+  };
+}
+
 /** AI Providers' OpenAI-compatible entry for this draft (with the entry's stored fields kept). */
 export function compatibleConfig(draft: CompatibleDraft): OpenAIProviderConfig {
   return buildOpenAIConfig(
@@ -350,6 +414,8 @@ export interface SettingsSummary {
   excluded: number;
   headers: number;
   weight: number | null;
+  /** The list is fixed (fixed-models). */
+  fixed: boolean;
 }
 
 const filled = (rows: Array<{ key: string }>) => rows.filter((row) => row.key.trim()).length;
@@ -361,7 +427,10 @@ export function summaryOf(draft: KeyDraft): SettingsSummary {
     draft.kind === 'compatible'
       ? (draft.form.apiKeyEntries ?? []).some((entry) => entry.proxyUrl.trim())
       : valueOf(draft, 'proxyUrl').trim() !== '';
-  const excludedText = draft.kind === 'compatible' ? '' : valueOf(draft, 'excludedModelsText');
+  const excludedText =
+    draft.kind === 'compatible'
+      ? (draft.lists.excluded ?? []).join('\n')
+      : valueOf(draft, 'excludedModelsText');
   const weight =
     draft.kind === 'compatible' ? (draft.form.apiKeyEntries?.[0]?.weight ?? null) : member.weight;
   return {
@@ -372,6 +441,7 @@ export function summaryOf(draft: KeyDraft): SettingsSummary {
     excluded: excludedText.split('\n').filter((rule) => rule.trim()).length,
     headers: filled(valueOf(draft, 'headers')),
     weight: weight ?? null,
+    fixed: draft.lists.fixed,
   };
 }
 
@@ -415,7 +485,14 @@ export function joiningDraft(document: unknown, baseUrl: string): CompatibleDraf
     ...stored.initial,
     apiKeyEntries: [...(stored.initial.apiKeyEntries ?? []), { apiKey: '', proxyUrl: '' }],
   };
-  return { kind: 'compatible', resource, initial, form: initial };
+  return {
+    kind: 'compatible',
+    resource,
+    initial,
+    form: initial,
+    listsInitial: stored.listsInitial,
+    lists: stored.lists,
+  };
 }
 
 /** The same settings for the other Google API (Gemini ⇄ Interactions), in a connection of its own. */
@@ -429,6 +506,7 @@ export function retargeted(
     ...fresh,
     shared: { ...draft.shared, name: fresh.shared.name },
     member: draft.member,
+    lists: draft.lists,
   };
 }
 
