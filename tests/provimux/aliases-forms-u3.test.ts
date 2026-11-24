@@ -209,7 +209,7 @@ describe('F-2 a form save keeps every alias, with the alias field gone', () => {
         keys: [{ 'api-key': 'fixture-key-openai' }],
         models: STORED_MODELS,
       });
-      const config = (normalizeProviderGroups(b.stored(), true) as OpenAIProviderConfig[])[0];
+      const config = (normalizeProviderGroups(b.stored(), 'openai-compatibility') as OpenAIProviderConfig[])[0];
       const loaded = formModels(config.models);
       const models =
         edit === 'add'

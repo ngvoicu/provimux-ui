@@ -199,7 +199,7 @@ const emptyForm = (brand: ProviderBrand): ProviderEntryFormInput => ({
 });
 
 const loadForm = (kind: Kind, stored: Record<string, unknown>) => {
-  const config = normalizeProviderGroups([stored], kind.family === 'openai-compatibility')[0];
+  const config = normalizeProviderGroups([stored], kind.family)[0];
   // The edit form reads `resource.raw.models` and shows `alias ?? ''` for each row.
   const resource = kind.toResource(config as never, 0);
   const models = ((resource.raw as { models?: ModelAlias[] }).models ?? []).map((model) => ({

@@ -343,7 +343,7 @@ async function upstreamEdit(name: ProviderFamily, op: Op) {
     const [, g, k] = entryId.split('/').slice(-3);
     const groups = family(await apiClient.get<Doc>('/config'), name);
     if (name === 'openai-compatibility') {
-      const config = (normalizeProviderGroups(groups, true) as OpenAIProviderConfig[]).find(
+      const config = (normalizeProviderGroups(groups, 'openai-compatibility') as OpenAIProviderConfig[]).find(
         (c) => c.source?.groupIndex === Number(g)
       )!;
       await providersApi.updateOpenAIProvider(config.name, Number(g), {

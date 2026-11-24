@@ -192,18 +192,17 @@ describe('seams', () => {
     expect(page).toMatch(/<ProviderPicker\s+groups=\{groupsToAdd\(groups\)\}/);
   });
 
-  test('the theme hides the "Quick Fill" divider and the Kimi offer', () => {
+  test('the theme hides the "Quick Fill" divider; upstream shows no Kimi offer any more', () => {
     expect(hiddenByTheme('BrandTabs', 'divider')).toBe(true);
-    expect(hiddenByTheme('ProviderPicker', 'offer')).toBe(true);
-    // Those classes carry exactly those parts upstream.
+    // That class carries exactly that part upstream.
     const tabs = read('src/features/providers/components/BrandTabs.tsx');
     expect(tabs).toMatch(
       /className=\{styles\.divider\} aria-hidden="true">\s*\{t\('providersPage\.categories\.quickFill'\)\}/
     );
+    // Upstream 1.29.2 removed the offer line, so the theme has nothing to hide there.
     const picker = read('src/features/providers/components/ProviderPicker.tsx');
-    expect(picker).toMatch(
-      /<span className=\{styles\.offer\}>\s*<span className=\{styles\.offerTag\}>\{t\('providersPage\.picker\.offer'\)\}<\/span>\s*\{t\('providersPage\.sponsor\.kimiPromo'\)\}/
-    );
+    expect(picker).not.toContain('kimiPromo');
+    expect(read('src/features/providers/components/BrandPanel.tsx')).not.toContain('kimiPromo');
   });
 });
 
@@ -429,7 +428,6 @@ describe('referral links', () => {
     expect(css).toContain(
       '[class*=BrandPanel-module__note___]:has(> a[href^="https://s.qiniu.com/" i])'
     );
-    expect(hiddenByTheme('ProviderPicker', 'offer')).toBe(true);
   });
 
   // What the pages that carry sponsor links render.

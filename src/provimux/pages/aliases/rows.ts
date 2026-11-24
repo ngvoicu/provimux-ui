@@ -197,7 +197,7 @@ function readKeyEntries(document: unknown, family: ProviderFamily) {
   const openai = family === 'openai-compatibility';
   let configs: ReturnType<typeof normalizeProviderGroups>;
   try {
-    configs = normalizeProviderGroups(groups, openai);
+    configs = normalizeProviderGroups(groups, family);
   } catch {
     // Upstream's normalizer could not read the family: the whole family is unread.
     unread.add(path);
