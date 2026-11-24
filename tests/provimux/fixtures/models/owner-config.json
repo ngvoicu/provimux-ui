@@ -1,0 +1,138 @@
+{
+  "config-version": 8,
+  "routing": {
+    "strategy": "round-robin",
+    "force-model-prefix": false
+  },
+  "models": {
+    "live-lists": true
+  },
+  "api-keys": {
+    "gemini": [
+      {
+        "name": "gemini",
+        "keys": [
+          {
+            "api-key": "fixture-key-gemini-1",
+            "auth_index": "ak-gemini-1"
+          }
+        ]
+      }
+    ],
+    "claude": [
+      {
+        "name": "anthropic",
+        "keys": [
+          {
+            "api-key": "fixture-key-anthropic-1",
+            "auth_index": "ak-anthropic-1",
+            "models": [
+              {
+                "name": "claude-opus-5-5"
+              },
+              {
+                "name": "claude-sonnet-5-5"
+              },
+              {
+                "name": "claude-haiku-5-5",
+                "alias": "haiku"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "openai-compatibility": [
+      {
+        "name": "openrouter",
+        "base-url": "https://openrouter.ai/api/v1",
+        "keys": [
+          {
+            "api-key": "fixture-key-openrouter-1",
+            "auth_index": "ak-openrouter-1"
+          }
+        ],
+        "models": [
+          {
+            "name": "anthropic/claude-opus-5.5",
+            "alias": "claude-opus-5-5"
+          },
+          {
+            "name": "openai/gpt-6.1-terra",
+            "alias": "gpt-6.1-terra"
+          },
+          {
+            "name": "deepseek/deepseek-v4",
+            "alias": "deepseek"
+          },
+          {
+            "name": "qwen/qwen4-coder",
+            "alias": "qwen-coder"
+          },
+          {
+            "name": "moonshotai/kimi-k3",
+            "alias": "kimi"
+          },
+          {
+            "name": "z-ai/glm-5",
+            "alias": "glm"
+          },
+          {
+            "name": "x-ai/grok-5",
+            "alias": "grok"
+          }
+        ]
+      }
+    ]
+  },
+  "oauth": {
+    "model-alias": {
+      "claude": [
+        {
+          "name": "claude-opus-5-5",
+          "alias": "opus",
+          "fork": true
+        },
+        {
+          "name": "claude-sonnet-5-5",
+          "alias": "sonnet",
+          "fork": true
+        },
+        {
+          "name": "claude-sonnet-4-5",
+          "alias": "sonnet",
+          "fork": true
+        }
+      ],
+      "codex": [
+        {
+          "name": "gpt-6.1-terra",
+          "alias": "terra",
+          "fork": true
+        },
+        {
+          "name": "gpt-6.1-codex",
+          "alias": "codex",
+          "fork": true
+        }
+      ],
+      "devin": [
+        {
+          "name": "devin/claude-opus-5-5",
+          "alias": "claude-opus-5-5",
+          "fork": true
+        },
+        {
+          "name": "swe-2",
+          "alias": "swe",
+          "fork": true
+        },
+        {
+          "name": "devin/kimi-k3",
+          "alias": "kimi",
+          "fork": true
+        }
+      ]
+    }
+  }
+}

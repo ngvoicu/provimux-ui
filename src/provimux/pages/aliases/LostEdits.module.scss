@@ -1,0 +1,225 @@
+@use '../../../styles/mixins' as *;
+
+/* The edits a save did not confirm (aliases-page.md 3.6), kept until dismissed: the Models page shows
+ * them above its list. */
+
+.link {
+  color: var(--pmx-link);
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+
+  &:hover {
+    text-decoration-thickness: 2px;
+  }
+}
+
+/* ---------- after a save: the edits not confirmed, one card per save ---------- */
+
+.lostList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+// Not saved: it stays until dismissed, so it reads as a note to act on, not as a passing error.
+.lost {
+  padding: 14px 16px 6px;
+  border: 1px solid var(--warning-border);
+  border-left-width: 3px;
+  border-radius: 10px;
+  background: var(--bg-primary);
+  box-shadow: var(--shadow);
+
+  @include mobile {
+    padding: 12px 12px 4px;
+  }
+}
+
+.lostHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--warning-text);
+
+  svg {
+    flex: none;
+  }
+}
+
+.lostTitle {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 650;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+// The save's one reason, under the title's text.
+.lostWhy {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 96ch;
+  margin: 6px 0 0 24px;
+
+  @include mobile {
+    margin-left: 0;
+  }
+}
+
+.lostReason {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+
+// The proxy's own text, as it sent it (a YAML error names line, field and type on lines of its own).
+.lostMessage {
+  max-height: 11em;
+  margin: 0;
+  padding: 8px 10px;
+  overflow: auto;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-family: var(--pmx-font-mono);
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+// What to do first: the one sentence the user acts on.
+.lostFix {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.55;
+  color: var(--text-primary);
+}
+
+.lostEntries {
+  display: flex;
+  flex-direction: column;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lostEntry {
+  padding: 10px 0;
+  border-top: 1px solid var(--border-color);
+}
+
+.lostEntryHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.lostEntryName {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.lostDismiss {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 9px;
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+
+  &:hover {
+    border-color: var(--border-hover);
+    color: var(--text-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--pmx-brand);
+    outline-offset: 2px;
+  }
+}
+
+.lostEdits {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lostEdit {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+
+.lostKind {
+  flex: none;
+  min-width: 64px;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+
+  &[data-kind='added'] {
+    background: var(--pmx-brand-bg);
+    color: var(--pmx-brand);
+  }
+
+  &[data-kind='removed'] {
+    background: var(--warning-bg);
+    color: var(--warning-text);
+  }
+}
+
+.lostText {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.lostName {
+  font-family: var(--pmx-font-mono);
+  font-size: 12.5px;
+}
+
+.lostNone {
+  font-style: italic;
+  color: var(--text-tertiary);
+}
+
+.lostNotes {
+  color: var(--text-tertiary);
+}

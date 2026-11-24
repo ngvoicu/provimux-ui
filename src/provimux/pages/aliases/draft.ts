@@ -237,6 +237,11 @@ export function discardEntry(draft: AliasDraft, entryId: string): AliasDraft {
     if (row.entryId !== entryId) rows.push(row);
   }
   if (!placed) rows.push(...baseRows);
+  if (draft.priorities && entryId in draft.priorities) {
+    const priorities = { ...draft.priorities };
+    delete priorities[entryId];
+    return { ...draft, rows, priorities };
+  }
   return { ...draft, rows };
 }
 

@@ -6,7 +6,7 @@ import { entryLabelOf } from './labels';
 import type { LostEdit } from './draft';
 import type { LostNotice } from './pageLogic';
 import type { AliasRow, CommitOutcome } from './types';
-import styles from './AliasesPage.module.scss';
+import styles from './LostEdits.module.scss';
 
 /** What else an edit set or changed besides the alias, in words. */
 function optionNotes(t: TFunction, edit: LostEdit): string[] {
@@ -180,6 +180,16 @@ export function LostEdits({
                       {notice.edits.map((edit, index) => (
                         <EditLine key={index} edit={edit} />
                       ))}
+                      {notice.priority ? (
+                        <li className={styles.lostEdit}>
+                          <span className={styles.lostKind} data-kind="changed">
+                            {t('provimux.aliases.lost_changed')}
+                          </span>
+                          <span className={styles.lostText}>
+                            {t('provimux.aliases.lost_priority', notice.priority)}
+                          </span>
+                        </li>
+                      ) : null}
                     </ul>
                   </li>
                 );

@@ -19,8 +19,9 @@ paused, and each login's own model list.
 **provimux-ui**, by [providers.dev](https://providers.dev), is the web console of
 [Provimux](https://github.com/ngvoicu/provimux), the self-hosted AI gateway for you or your whole team that keeps your
 prompt cache in use and shows which account answered each request. One page in your browser to manage your API keys (API key, `apikey`) and
-accounts, see on **Model routes** which accounts serve each model, by priority, with the cooldown recorded and its
-reason, check each login's **Live model list**, watch quotas and logs, and edit the config. It is built on the
+accounts, see on **Models** every model name you can send and which accounts serve it, in the order they are tried,
+with the cooldown recorded and each login's list, give models names of your own, watch quotas and logs, and edit the
+config. It is built on the
 [CLI Proxy API Management Center](https://github.com/router-for-me/Cli-Proxy-API-Management-Center) by router-for-me:
 every page of the original, in the providers.dev look, plus Provimux's own pages. Provimux downloads it by itself.
 
@@ -34,9 +35,9 @@ repository) &nbsp;·&nbsp; **[providers.dev](https://providers.dev)**
 
 ## What provimux-ui adds
 
-- **[Provimux's own pages](#provimuxs-own-pages)**: **Model routes**, which API keys and logins serve each model, by
-  priority, with the cooldowns Provimux recorded and their reasons, and which OpenRouter entries get Provimux's cache
-  markers; and **Model lists**, which list decides each login's models and how old it is, with a refresh.
+- **[Provimux's own pages](#provimuxs-own-pages)**: **Models**, every model name you can send, with the API keys and
+  logins that serve it in the order they are tried, the cooldowns Provimux recorded and each login's list; your own
+  names (one model, or several under one name) made and saved there.
 - **[The providers.dev look](#the-providersdev-look)**: "Provimux by providers.dev" throughout, in three themes.
 - **[The Provimux version](#the-provimux-version-and-the-console-on-the-system-page)** and the console's update source
   on the System page.
@@ -47,44 +48,36 @@ Then: [Use it](#use-it) · [Versions and releases](#versions-and-releases) · [B
 
 ### Provimux's own pages
 
-From v1.28.3-pmx.2, in the sidebar under Gateway:
+In the sidebar under Gateway, **Models** (it replaced Aliases, Model routes and Model lists, whose addresses lead to
+it) and **Savings**:
 
-<table>
-  <tr>
-    <td width="50%"><picture>
-      <source media="(prefers-color-scheme: dark)" srcset="assets/model-routes-desktop-dark.png">
-      <img alt="The Model routes page. Chips read 9 models, 5 subscriptions, 3 API keys, 4 cooldowns recorded. Two cards: Devin: quota pause per model, switched on, with devin-opus-5-5 paused for this model, 55 min left; and OpenRouter, built in, with the entry openrouter (2 models, 1 key). Below a search field, a provider filter and the views All, Cooldown recorded and Several routes, one card per model: anthropic/claude-opus-5.5 on an API key at openrouter.ai, 1M context, 128K output, levels low, medium, high; claude-haiku-5-5 with two Claude subscriptions at priority 10 and a Claude API key at api.anthropic.com at priority 0, joined by a rail." src="assets/model-routes-desktop-light.png">
-    </picture></td>
-    <td width="50%"><picture>
-      <source media="(prefers-color-scheme: dark)" srcset="assets/live-lists-desktop-dark.png">
-      <img alt="The Live model lists page. The Live lists switch is on, with Refresh lists now. Chips read 2 live, 3 catalog, 2 failing, 1 fetching. A table lists five logins: Claude ada@example.com, live list, fetched 2 hours ago, 9 served, 11 listed; Claude grace@example.com, live list kept after HTTP 529 a few minutes ago; Codex ada@example.com, catalog after HTTP 401, with the hint to sign it in again; a disabled Codex login; a Meta login whose fetch is running." src="assets/live-lists-desktop-light.png">
-    </picture></td>
-  </tr>
-</table>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/models-desktop-dark.png">
+  <img alt="The Models page. Chips read 40 names, 13 of yours, 4 on several routes, 2 cooling down, 1 needs a look. Below a search field, a filter by what serves a name, the views All, Several routes, Cooling down and Needs a look, and a New name button, the section Your names: opus, served by a Claude subscription, 1840 requests in 30 days; claude-opus-5-5, served in this order by a Claude subscription at priority 10, a Devin subscription at priority 5 that is cooling down, and a Claude API key and OpenRouter sharing priority 0; sonnet, marked Needs a look, with a second route Provimux ignores because the login type already uses the name." src="assets/models-desktop-light.png">
+</picture>
 
-**Model routes.** For each model, every subscription login and API key that serves it, by priority (a higher priority
-is tried first; routes that share one are chosen between by the routing strategy): subscription in green, API key in
-amber, the provider, the login as Auth Files names it or the key's host, its context and output limits, its reasoning
-levels, and the cooldown Provimux recorded on it, counting down. A recorded cooldown is a record, not a verdict on
-availability. On the same page: **Devin's quota pause per model** (`oauth.providers.devin.model-level-cooling`), with
-the Devin cooldowns it is causing now, and **OpenRouter**: the OpenAI-compatible entries on openrouter.ai that Provimux
-gives cache markers, a session header and OpenRouter's own limits, with a link to edit them on AI Providers, where
-such an entry carries an "OpenRouter · Provimux" tag.
+**Models.** Every model name a client can send is a row: the models your subscriptions and keys serve under their own
+names, and the names you made, one model or several under one name. Your names come first, then the models used in the
+last 30 days, then the rest (folded). Under each name, the routes that serve it in the order Provimux tries them
+(among the routes that can take a new request, a higher priority first; routes that share one share the requests):
+subscription in green, API key in amber, the provider, the login as Auth Files names it (it opens there) or the key's
+host, the model it sends upstream, its priority, the cooldown Provimux recorded on it, counting down (a record, not a
+verdict on availability), and for a login its list: its provider's live list, the published list or the built-in
+catalog, and how old it is.
 
-**Model lists.** The `models.live-lists` switch, a refresh request (the page says what the server answered; the
-rows then show each login's state as of the latest status read), a line saying which published (providers.dev) list
-the server holds, and for each login: the list that decides its models (its provider's live list, the published list,
-the built-in list or none), how old that list is, with a mark once it is a day old and when it no longer counts after
-7 days, whether it was read from the server's disk cache, how many models the provider listed, how many the login
-serves and how many of them the catalog does not have yet, and the last failed fetch (when, its category and HTTP
-status). **Models** opens a login's models, with where each one and each of its values came from. On a Provimux older
-than the `model-lists` endpoint the same item is the earlier **Live model lists** page, for Claude, Codex and Meta
-logins.
+**New name** makes a name and puts models under it; on a name, **Edit** renames it, adds or takes out models, or
+removes it. A row Provimux would ignore, or never use, says so in one sentence. An API key's priority is edited on its
+route (it applies to every model of the key); a login's priority is in its file, on Auth Files. Everything is saved
+with one action, as configuration rows (`api-keys.<family>`, `oauth.model-alias`) written only if the file is still
+the one the page read. Below the list: the **live model lists** switch with a refresh request, and, when you have them,
+**Devin's quota pause per model** (`oauth.providers.devin.model-level-cooling`) and **OpenRouter**, the
+OpenAI-compatible entries on openrouter.ai that Provimux gives cache markers, a session header and OpenRouter's own
+limits (on AI Providers such an entry carries an "OpenRouter · Provimux" tag).
 
-These pages use endpoints only Provimux has (`/v8/management/provimux/…`, described in
+Routes, lists and use come from endpoints only Provimux has (`/v8/management/provimux/…`, described in
 [Provimux's README](https://github.com/ngvoicu/provimux/blob/main/.github/README.md#model-routes-and-live-list-status-for-the-console)).
-Connected to CLIProxyAPI, which answers 404 there, they are not in the sidebar and their addresses open the dashboard;
-any other error shows on the page, with a retry.
+Connected to CLIProxyAPI, which answers 404 there, Models shows the names of the configuration only, without order or
+cooldowns, and says so; Savings is not in the sidebar.
 
 ### The providers.dev look
 

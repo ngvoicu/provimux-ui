@@ -109,6 +109,8 @@ export interface AliasDraft {
   base: AliasState;
   rows: AliasRow[];
   nextNew: number;
+  /** API keys' new priorities, by entry id (section 10); absent or empty: none changed. */
+  priorities?: Record<string, number>;
 }
 
 /** What `changeRow` may set (3.1). API-key rows: `alias` and `forceMapping` only. */

@@ -1,5 +1,9 @@
 # One page for all model aliases (ALP-02)
 
+> The Aliases page is now part of **Models** (`models-page.md`), which uses this page's data layer. Sections 0 to 5
+> still state the proxy's rules and the writes; the page described in 3.6 and 5 is now Models' list and editor, and
+> its old address leads there.
+
 Built: steps W1 to U4 of section 8: the data layer (W1 to W6, `src/provimux/pages/aliases/`), the page (U1,
 `/provimux/aliases`), the old address (U2), the provider forms (U3), W7, the save of 3.4, and U4, the page after a
 save as 3.6 describes it. U3's checks against a running proxy are not done yet.

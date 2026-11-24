@@ -179,10 +179,13 @@ describe('1, 2. Refresh lists now: one request, its answer, nothing followed', (
   });
 
   test('the page has no follower, no success claim and no "being fetched" claim', () => {
-    const page = read('src/provimux/pages/liveLists/LiveListsPage.tsx');
+    // Refresh lists now lives in the Models page's settings; the page reads the lists every 30 s.
+    const page = read('src/provimux/pages/models/ModelsSettings.tsx');
     expect(page).not.toMatch(/followRefresh|refreshFollower|refresh_done|refresh_stopped/);
     expect(page).toContain('requestRefresh(refreshGuard');
-    expect(page).toContain('const POLL_MS = 30_000;');
+    const models = read('src/provimux/pages/models/ModelsPage.tsx');
+    expect(models).toContain('const POLL_MS = 30_000;');
+    expect(models).toContain("useProvimuxResource('modelLists', fetchLists, POLL_MS");
     const strings = JSON.stringify(JSON.parse(read('src/provimux/locales/en.json')).provimux.live);
     expect(strings).not.toMatch(/reported back|being fetched|keep fetching|Waiting for the logins/);
     expect(read('tests/provimux/review.test.ts')).not.toContain("from './refreshFollower'");
@@ -190,7 +193,7 @@ describe('1, 2. Refresh lists now: one request, its answer, nothing followed', (
 
   test('a lost answer says "could not confirm", never "not requested"', async () => {
     await i18n.changeLanguage('en');
-    const page = read('src/provimux/pages/liveLists/LiveListsPage.tsx');
+    const page = read('src/provimux/pages/models/ModelsSettings.tsx');
     expect(page).toMatch(
       /outcome\.kind === 'unconfirmed'[\s\S]*?t\('provimux\.live\.refresh_unconfirmed'\)/
     );
@@ -202,13 +205,8 @@ describe('1, 2. Refresh lists now: one request, its answer, nothing followed', (
     );
   });
 
-  test('the old follower helpers are gone from the logic module', () => {
-    const logic = read('src/provimux/pages/liveLists/logic.ts');
-    expect(logic).not.toMatch(/settledSince|refreshProgress|timeMs/);
-  });
-
   test('the switch write is bound to the page and connection too', () => {
-    const page = read('src/provimux/pages/liveLists/LiveListsPage.tsx');
+    const page = read('src/provimux/pages/models/ModelsSettings.tsx');
     expect(page).toMatch(/const \{ client, isCurrent \} = switchGuard\.begin\(\);/);
     expect(page).toContain('await provimuxApi.setLiveLists(next, client);');
   });
@@ -327,8 +325,8 @@ describe('9. a route opens Auth Files with its file name as the ordinary search'
     );
     const link = read('src/provimux/pages/shared/authFilesLink.ts');
     expect(link).not.toMatch(/provimuxAuthTarget|setAuthFilesTarget|authIndex/);
-    expect(read('src/provimux/pages/modelRoutes/ModelCard.tsx')).toContain(
-      'openInAuthFiles(route.login.name!)'
+    expect(read('src/provimux/pages/models/NameCard.tsx')).toContain(
+      'openInAuthFiles(line.loginFile!)'
     );
   });
 });

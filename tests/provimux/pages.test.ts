@@ -1,31 +1,22 @@
 // Provimux's pages (PUI-15/16): what they derive from the endpoints, and their wording.
 import { afterAll, describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
-import { createElement } from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
-import { MemoryRouter } from 'react-router-dom';
 import i18n from '../../src/i18n/index';
-import { readLiveLists, readModelRoutes } from '../../src/provimux/api/normalize';
-import type { ProvimuxLiveListLogin } from '../../src/provimux/api/types';
-import { failureHint, liveRowState, liveSummary } from '../../src/provimux/pages/liveLists/logic';
-import { ModelCard } from '../../src/provimux/pages/modelRoutes/ModelCard';
+import { readModelRoutes } from '../../src/provimux/api/normalize';
+import { buildNames } from '../../src/provimux/pages/models/catalog';
+import { startDraft } from '../../src/provimux/pages/aliases/draft';
+import { readAliasState } from '../../src/provimux/pages/aliases/rows';
+import { renderCard } from './support/models';
 import {
   devinState,
-  filterModels,
   isCoolingAt,
-  loginText,
   openRouterEntries,
-  providerCounts,
-  providerKeyOf,
-  summarize,
-  tiersOf,
 } from '../../src/provimux/pages/modelRoutes/logic';
 import { clockOffset, formatDuration, serverNow } from '../../src/provimux/pages/time';
 
 const fixture = (name: string): unknown =>
   JSON.parse(readFileSync(`tests/provimux/fixtures/${name}.json`, 'utf8'));
 const routes = readModelRoutes(fixture('model-routes'));
-const lists = readLiveLists(fixture('live-lists'));
 const at = (iso: string) => Date.parse(iso);
 const OBSERVED = at('2026-11-19T18:04:11.482Z');
 
@@ -35,16 +26,31 @@ afterAll(async () => {
 });
 
 describe('model routes', () => {
-  test('routes stand in priority tiers, highest first; a tier holds routes that share a priority', () => {
+  test('routes are ranked by priority, highest first; routes that share a priority share a rank', () => {
     const opus = routes.models.find((model) => model.id === 'claude-opus-5-5')!;
-    expect(tiersOf(opus.routes).map((tier) => [tier.priority, tier.routes.length])).toEqual([
-      [10, 1],
-      [0, 1],
+    const draft = startDraft({ ...readAliasState({ 'config-version': 8 }, []), etag: '"t"' });
+    const ranks = (list: typeof opus.routes) =>
+      buildNames({
+        draft,
+        routes: { observed_at: null, models: [{ ...opus, routes: list }] },
+        lists: null,
+        usage: null,
+        nowMs: OBSERVED,
+      })[0].lines.map((line) => [line.rank, line.priority, line.sharesRank]);
+    expect(ranks(opus.routes)).toEqual([
+      [1, 10, false],
+      [2, 0, false],
     ]);
     const shuffled = [opus.routes[1], opus.routes[0], { ...opus.routes[0], auth_index: 'x' }];
-    expect(tiersOf(shuffled).map((tier) => [tier.priority, tier.routes.length])).toEqual([
-      [10, 2],
-      [0, 1],
+    expect(ranks(shuffled)).toEqual([
+      [1, 10, true],
+      [1, 10, true],
+      [2, 0, false],
+    ]);
+    // A priority the server did not report is not 0: the name then has no order on screen.
+    expect(ranks([opus.routes[0], { ...opus.routes[1], priority: null }])).toEqual([
+      [null, 10, false],
+      [null, null, false],
     ]);
   });
 
@@ -69,46 +75,7 @@ describe('model routes', () => {
     expect(clockOffset(null, 5)).toBe(0);
   });
 
-  test('summary, provider filter and views', () => {
-    expect(summarize(routes.models, OBSERVED)).toEqual({
-      models: 4,
-      subscriptions: 3,
-      apiKeys: 3,
-      cooldowns: 2,
-    });
-    // Once both recorded cooldowns ended, none counts.
-    expect(summarize(routes.models, at('2026-11-19T19:00:00.731Z')).cooldowns).toBe(0);
-    expect(providerCounts(routes.models)).toEqual([
-      { key: 'claude', count: 1 },
-      { key: 'codex', count: 1 },
-      { key: 'devin', count: 1 },
-      { key: 'openai-compatible-lab', count: 1 },
-      { key: 'openrouter', count: 1 },
-    ]);
-    const ids = (filter: Parameters<typeof filterModels>[1]) =>
-      filterModels(routes.models, filter, OBSERVED).map((model) => model.id);
-    expect(ids({ query: '', provider: 'openrouter', view: 'all' })).toEqual([
-      'anthropic/claude-opus-5.5',
-    ]);
-    expect(ids({ query: '', provider: 'all', view: 'cooldown' })).toEqual([
-      'claude-opus-5-5',
-      'devin-opus-5-5',
-    ]);
-    expect(ids({ query: '', provider: 'all', view: 'several' })).toEqual([
-      'claude-opus-5-5',
-      'gpt-6.1-terra',
-    ]);
-    expect(ids({ query: 'llm.lab', provider: 'all', view: 'all' })).toEqual(['gpt-6.1-terra']);
-    expect(ids({ query: 'ADA codex', provider: 'all', view: 'all' })).toEqual(['gpt-6.1-terra']);
-  });
-
   test('an OpenRouter entry is OpenRouter whatever its name', () => {
-    expect(providerKeyOf({ provider: 'openai-compatible-my-router', host: 'openrouter.ai' })).toBe(
-      'openrouter'
-    );
-    expect(providerKeyOf({ provider: 'openai-compatible-lab', host: 'llm.lab.example' })).toBe(
-      'openai-compatible-lab'
-    );
     const entries = openRouterEntries([
       { name: 'my-router', baseUrl: 'https://openrouter.ai/api/v1', apiKeyEntries: [] },
       { name: 'eu', baseUrl: 'https://eu.openrouter.ai/api/v1', apiKeyEntries: [] },
@@ -118,18 +85,6 @@ describe('model routes', () => {
     expect(entries.map((entry) => entry.name)).toEqual(['my-router', 'eu']);
   });
 
-  test('a login is named as the credentials page names it; a key by its host and label', () => {
-    const [oauth, key] = routes.models[1].routes;
-    expect(loginText(oauth)).toEqual({
-      primary: 'ada@example.com',
-      secondary: 'claude-ada@example.com.json',
-    });
-    expect(loginText(key)).toEqual({ primary: 'api.anthropic.com', secondary: 'claude-apikey' });
-    expect(
-      loginText({ kind: 'oauth', host: null, login: { name: null, email: null, label: null } })
-    ).toEqual({ primary: null, secondary: null });
-  });
-
   test('Devin: its logins and the cooldowns recorded on them', () => {
     const state = devinState(routes.models, OBSERVED);
     expect(state.logins).toBe(1);
@@ -137,73 +92,38 @@ describe('model routes', () => {
     expect(devinState(routes.models, at('2026-11-19T19:00:01Z')).cooling).toEqual([]);
   });
 
-  test('a model card says what clients are told, the tiers, and a cooldown as a record', async () => {
+  test('a model on the Models page: its routes by priority, each a subscription or an API key, a cooldown as a record', async () => {
     await i18n.changeLanguage('en');
-    const opus = routes.models.find((model) => model.id === 'claude-opus-5-5')!;
-    const html = renderToStaticMarkup(
-      createElement(
-        MemoryRouter,
-        null,
-        createElement(ModelCard, { model: opus, offsetMs: 0, nowMs: OBSERVED })
-      )
-    );
+    const draft = startDraft({ ...readAliasState({ 'config-version': 8 }, []), etag: '"t"' });
+    const [opus] = buildNames({
+      draft,
+      routes: { observed_at: null, models: routes.models.filter((m) => m.id === 'claude-opus-5-5') },
+      lists: null,
+      usage: null,
+      nowMs: OBSERVED,
+    });
+    const html = renderCard(opus, draft, routes, { offsetMs: OBSERVED - Date.now() });
     const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
-    expect(text).toContain('Clients are told');
     expect(text).toContain('Subscription');
     expect(text).toContain('API key');
     expect(text).toContain('ada@example.com');
     expect(text).toContain('api.anthropic.com');
-    expect(text).toContain('Cooldown recorded until');
-    expect(text).toContain('quota · HTTP 429 · this model · backoff level 2');
+    expect(text).toContain('priority 10');
+    expect(html).toContain('Cooldown recorded until');
+    expect(html).toContain('quota · HTTP 429 · this model · backoff level 2');
     expect(html).toContain('data-access="sub"');
     expect(html).toContain('data-access="api"');
-    expect(html).toContain('title="Priority 10"');
+    expect(opus.lines.map((line) => line.rank)).toEqual([1, 2]);
   });
 
   test('the wording never presents a recorded cooldown as availability', async () => {
     await i18n.changeLanguage('en');
-    expect(i18n.t('provimux.routes.note')).toContain('It is not an availability verdict');
+    expect(i18n.t('provimux.models.order_note')).toContain(
+      'A cooldown is the timer Provimux recorded after a refused request'
+    );
     const strings = JSON.stringify(
       JSON.parse(readFileSync('src/provimux/locales/en.json', 'utf8')).provimux
     );
     expect(strings).not.toMatch(/\b(available|unavailable|last served)\b/i);
-  });
-});
-
-describe('live lists', () => {
-  const login = (patch: Partial<ProvimuxLiveListLogin>): ProvimuxLiveListLogin => ({
-    ...lists.logins[0],
-    ...patch,
-  });
-
-  test('each row states what was recorded', () => {
-    expect(lists.logins.map((row) => liveRowState(row, lists.enabled))).toEqual([
-      'live',
-      'live_failing',
-      'failed',
-      'disabled',
-      'fetching',
-    ]);
-    expect(liveRowState(lists.logins[0], false)).toBe('off');
-    expect(
-      liveRowState(login({ source: 'catalog', fetched_at: null, last_failure: null }), true)
-    ).toBe('waiting');
-    expect(liveRowState(login({ source: 'mirror' }), true)).toBe('unknown');
-    expect(liveSummary(lists.logins)).toEqual({
-      live: 2,
-      catalog: 3,
-      unknown: 0,
-      failing: 2,
-      fetching: 1,
-    });
-  });
-
-  test('a failure reads from its codes', () => {
-    expect(failureHint({ category: 'http_status', http_status: 401 })).toBe('signin');
-    expect(failureHint({ category: 'http_status', http_status: 429 })).toBe('rate_limited');
-    expect(failureHint({ category: 'http_status', http_status: 529 })).toBe('provider_error');
-    expect(failureHint({ category: 'http_status', http_status: 404 })).toBe('http_other');
-    expect(failureHint({ category: 'network', http_status: null })).toBe('network');
-    expect(failureHint({ category: 'cosmic_ray', http_status: null })).toBe('other');
   });
 });

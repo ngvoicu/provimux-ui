@@ -1,20 +1,12 @@
 import type { ReactElement } from 'react';
-import {
-  IconAliases,
-  IconLiveLists,
-  IconModelRoutes,
-  IconSavings,
-} from './components/ProvimuxIcons';
+import { IconModelRoutes, IconSavings } from './components/ProvimuxIcons';
 import { isListed, type PresenceEntry, type ProvimuxEndpoint } from './presence';
 import { hideSponsorNav } from './sponsors';
 
 /**
- * Provimux's pages in the sidebar: in the Gateway group, after Routing (model routes are the routing seen per
- * model). An item with an endpoint is listed only while that endpoint answers, or fails for another reason than
- * 404; an item without one (Aliases, which reads the configuration only) is always listed. Aliases comes first:
- * it edits the configuration as Routing does, and it is there on every proxy, so the block always starts with it.
- * An item with a `successor` (Live lists, whose successor is Model lists) is listed while either endpoint is, and
- * takes the successor's name while the successor's endpoint is listed: one item, one path, on old and new servers.
+ * Provimux's pages in the sidebar: in the Gateway group, after Routing. An item with an endpoint is listed only
+ * while that endpoint answers, or fails for another reason than 404; an item without one (Models, which reads the
+ * configuration and shows Provimux's endpoints where the proxy has them) is always listed, first.
  */
 export const PROVIMUX_PAGES: ReadonlyArray<{
   endpoint: ProvimuxEndpoint | null;
@@ -22,33 +14,13 @@ export const PROVIMUX_PAGES: ReadonlyArray<{
   labelKey: string;
   metaKey: string;
   icon: () => ReactElement;
-  successor?: { endpoint: ProvimuxEndpoint; labelKey: string; metaKey: string };
 }> = [
   {
     endpoint: null,
-    path: '/provimux/aliases',
-    labelKey: 'provimux.nav.aliases',
-    metaKey: 'provimux.nav_meta.aliases',
-    icon: () => <IconAliases size={18} />,
-  },
-  {
-    endpoint: 'modelRoutes',
-    path: '/provimux/model-routes',
-    labelKey: 'provimux.nav.model_routes',
-    metaKey: 'provimux.nav_meta.model_routes',
+    path: '/provimux/models',
+    labelKey: 'provimux.nav.models',
+    metaKey: 'provimux.nav_meta.models',
     icon: () => <IconModelRoutes size={18} />,
-  },
-  {
-    endpoint: 'liveLists',
-    path: '/provimux/live-lists',
-    labelKey: 'provimux.nav.live_lists',
-    metaKey: 'provimux.nav_meta.live_lists',
-    icon: () => <IconLiveLists size={18} />,
-    successor: {
-      endpoint: 'modelLists',
-      labelKey: 'provimux.nav.model_lists',
-      metaKey: 'provimux.nav_meta.model_lists',
-    },
   },
   {
     endpoint: 'savings',
@@ -80,19 +52,12 @@ export function provimuxNav<G extends { id: string; items: object[] }>(
     const entry: PresenceEntry | undefined = pages[endpoint];
     return entry !== undefined && isListed(entry);
   };
-  const items = PROVIMUX_PAGES.filter(
-    (page) =>
-      listed(page.endpoint) || (page.successor !== undefined && listed(page.successor.endpoint))
-  ).map((page) => {
-    const named =
-      page.successor !== undefined && listed(page.successor.endpoint) ? page.successor : page;
-    return {
-      path: page.path,
-      labelKey: named.labelKey,
-      metaKey: named.metaKey,
-      icon: page.icon(),
-    };
-  });
+  const items = PROVIMUX_PAGES.filter((page) => listed(page.endpoint)).map((page) => ({
+    path: page.path,
+    labelKey: page.labelKey,
+    metaKey: page.metaKey,
+    icon: page.icon(),
+  }));
   if (items.length === 0) return groups;
   const group = groups.find((candidate) => candidate.id === GROUP) ?? groups[0];
   if (!group) return groups;

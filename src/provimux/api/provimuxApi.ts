@@ -125,6 +125,16 @@ export const provimuxApi = {
     );
   },
 
+  /**
+   * Requests per model over the last 30 days (the Models page's "used" names): one grouping, small. Rejects
+   * with the client's error (404 on stock CLIProxyAPI).
+   */
+  async modelUsage(client: Client = apiClient): Promise<ProvimuxSavingsResponse> {
+    return readSavings(
+      await client.get<unknown>(`${PROVIMUX_PATHS.savings}?period=30d&group=model`)
+    );
+  },
+
   /** The presence check: today's totals only, small. Rejects with the client's error (404 on stock CLIProxyAPI). */
   async probeSavings(client: Client = apiClient): Promise<void> {
     await client.get<unknown>(`${PROVIMUX_PATHS.savings}?period=today`);

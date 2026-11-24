@@ -16,6 +16,7 @@ import {
   rowChanged,
   rowIssues,
 } from './draft';
+import { priorityChanged, withPriority } from './priority';
 import { ALIAS_FAMILIES, effectiveModels, familyGroups, isModelRow, loginMapIn } from './rows';
 import type {
   AliasDraft,
@@ -45,12 +46,16 @@ const baseRowsOf = (draft: AliasDraft, entryId: string) =>
   draft.base.rows.filter((row) => row.entryId === entryId);
 
 /** Whether an entry's draft rows differ from its base rows. */
-export function entryChanged(draft: AliasDraft, entryId: string): boolean {
+export function rowsChanged(draft: AliasDraft, entryId: string): boolean {
   const rows = draftRowsOf(draft, entryId);
   const base = baseRowsOf(draft, entryId);
   if (rows.length !== base.length) return true;
   return rows.some((row, i) => row.id !== base[i].id || rowChanged(row, base[i]));
 }
+
+/** Whether an entry has something to write: its rows, or (an API key) its priority (section 10). */
+export const entryChanged = (draft: AliasDraft, entryId: string): boolean =>
+  rowsChanged(draft, entryId) || priorityChanged(draft, entryId);
 
 /** The changed entries with a row that has a blocking issue (3.5): while any, nothing is committed. */
 export function blockedEntries(draft: AliasDraft): string[] {
@@ -269,13 +274,25 @@ export function planWrites(draft: AliasDraft): PlannedWrite[] {
       const groups = [...familyGroups(document, unit.family)];
       for (const entryId of unit.entryIds) {
         const entry = unitEntry(draft, entryId) as KeyEntry;
-        const { rows, base } = rowsForWrite(draft, entryId);
-        groups[entry.groupIndex] = withModels(
-          groups[entry.groupIndex] as Record<string, unknown>,
-          entry,
-          rows,
-          base
-        );
+        // A priority-only edit leaves the model list where it is stored: a key that inherits its
+        // group's list keeps inheriting it.
+        if (rowsChanged(draft, entryId)) {
+          const { rows, base } = rowsForWrite(draft, entryId);
+          groups[entry.groupIndex] = withModels(
+            groups[entry.groupIndex] as Record<string, unknown>,
+            entry,
+            rows,
+            base
+          );
+        }
+        const priority = draft.priorities?.[entryId];
+        if (priority !== undefined) {
+          groups[entry.groupIndex] = withPriority(
+            groups[entry.groupIndex] as Record<string, unknown>,
+            entry,
+            priority
+          );
+        }
       }
       return { unit, path: ALIAS_PATHS.family(unit.family), body: groups };
     }

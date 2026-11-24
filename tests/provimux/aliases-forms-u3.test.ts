@@ -66,8 +66,8 @@ describe('F-4 the editor', () => {
     expect(aliasInputs.length).toBe(3);
     for (const input of aliasInputs) expect(input).toContain('type="hidden"');
     expect(html).toContain('1 alias');
-    expect(html).toContain('href="/provimux/aliases?family=claude"');
-    expect(html).toContain('Set aliases on the Aliases page');
+    expect(html).toContain('href="/provimux/models?family=claude"');
+    expect(html).toContain('Set names on the Models page');
     expect(html).toMatch(/→<\/span>opus</);
     // A row without an alias, or with its own name, shows no alias text.
     expect(html).not.toMatch(/→<\/span>claude-sonnet-5</);
@@ -88,7 +88,7 @@ describe('F-4 the editor', () => {
         onRemove: noop,
       })
     );
-    expect(html).toContain('href="#/provimux/aliases?family=claude"');
+    expect(html).toContain('href="#/provimux/models?family=claude"');
   });
 
   test("a login's own aliases: the input stays, no line, no alias text", async () => {
@@ -96,8 +96,8 @@ describe('F-4 the editor', () => {
     const html = editor(rows, { oauthAliasOnly: true, providerBrand: undefined });
     expect(html).not.toContain('type="hidden"');
     expect(html).toMatch(/<input[^>]*type="text"[^>]*value="opus"/);
-    expect(html).not.toContain('/provimux/aliases');
-    expect(html).not.toContain('Set aliases on the Aliases page');
+    expect(html).not.toContain('/provimux/models');
+    expect(html).not.toContain('Set names on the Models page');
   });
 
   test('no aliases: "No aliases"; the link carries the family, none for a brand that is no family', async () => {
@@ -106,9 +106,9 @@ describe('F-4 the editor', () => {
     expect(familyOfBrand('openaiCompatibility')).toBe('openai-compatibility');
     expect(familyOfBrand('vertex')).toBe('vertex');
     expect(familyOfBrand('apikeyFun')).toBeNull();
-    expect(aliasesPageFor('apikeyFun')).toBe('/provimux/aliases');
+    expect(aliasesPageFor('apikeyFun')).toBe('/provimux/models');
     expect(aliasesPageFor('openaiCompatibility')).toBe(
-      '/provimux/aliases?family=openai-compatibility'
+      '/provimux/models?family=openai-compatibility'
     );
   });
 });
