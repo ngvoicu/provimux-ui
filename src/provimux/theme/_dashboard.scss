@@ -1,0 +1,16 @@
+// The Dashboard's "Where to go from here" (provimux/dashboard.tsx): Provimux's three pages, Accounts, Models and
+// Routing, as a row of their own, and the rest of upstream's cards below, four to a row. Only where the list is
+// Provimux's (it holds Accounts); upstream's two columns and one column on narrower screens stay.
+@media (min-width: 901px) {
+  [class*='dashboard-module__ctaGrid___']:has(> a[href$='/provimux/accounts']) {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+
+    > * {
+      grid-column: span 3;
+    }
+
+    > :nth-child(-n + 3) {
+      grid-column: span 4;
+    }
+  }
+}

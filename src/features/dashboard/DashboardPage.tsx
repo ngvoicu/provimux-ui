@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/icons';
 import { InfoTip } from '@/components/ui/Tooltip';
 import { useAuthStore } from '@/stores';
+import { provimuxDashboardLinks } from '@/provimux';
 import { useHeaderRefresh } from '@/hooks/useHeaderRefresh';
 import { formatCompactNumber, formatDateValue, formatPercent } from '@/utils/format';
 import { useDashboardOverview } from './hooks/useDashboardOverview';
@@ -178,7 +179,7 @@ export function DashboardPage() {
       ]
     : [];
 
-  const ctaCards = [
+  const ctaCards = provimuxDashboardLinks([
     {
       to: '/ai-providers',
       icon: <IconBot size={20} />,
@@ -209,7 +210,7 @@ export function DashboardPage() {
       icon: <IconSidebarSystem size={20} />,
       title: t('nav.system_info'),
     },
-  ];
+  ], t);
 
   return (
     <div className={styles.page}>

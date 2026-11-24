@@ -127,6 +127,13 @@ toggle's dependency list); its drawer, toggle and rendering are upstream's. `/pr
 login to Accounts (its account and its priority), and Models' empty state to adding an account; Models reads
 `?account=<auth index>`, a filter its menu names "Account: alex@example.com".
 
+The Dashboard's "Where to go from here" leads to Provimux's pages too (owner, 2026-11-24): **Accounts**, **Models**
+and **Routing** first, as a row of their own, then upstream's other cards in their order (Config Panel, Quota
+Management, Logs Viewer, Management Center Info); AI Providers and Auth Files are left out, being in the menu under
+Advanced settings. Upstream's list is hard-coded: its one seam wraps it (`provimuxDashboardLinks`, `dashboard.tsx`), and
+`theme/_dashboard.scss` lays it out three, then four. The Dashboard's other two links to the original pages (the hero's
+"Manage providers", the health card's "Open auth files") are not part of that list and are unchanged.
+
 ## 7. Settings
 
 The owner, after the first release: "adding an account had a lot of possible settings. Where are they?" Every setting

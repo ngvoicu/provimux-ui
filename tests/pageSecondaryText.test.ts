@@ -64,13 +64,13 @@ describe('dashboard', () => {
       );
     }
     const ctas = sectionFrom(html, i18n.t('dashboard.cta_title')).match(/<a\b[\s\S]*?<\/a>/g) ?? [];
-    expect(ctas).toHaveLength(6);
+    expect(ctas).toHaveLength(7);
     for (const card of ctas) {
       expect(card).toMatch(
         /^<a[^>]*><span><svg\/><\/span><span>[^<]+<\/span><span aria-hidden="true">→<\/span><\/a>$/
       );
     }
-    expect(ctas[3]).toContain(`>${i18n.t('nav.quota_management')}</span>`);
+    expect(ctas[4]).toContain(`>${i18n.t('nav.quota_management')}</span>`);
     expect(read('src/features/dashboard/DashboardPage.tsx')).not.toContain('description:');
   });
 });
