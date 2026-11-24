@@ -9,7 +9,7 @@ import { LostEdits } from '../aliases/LostEdits';
 import { canEdit, type PageState } from '../aliases/pageLogic';
 import type { AliasDraft } from '../aliases/types';
 import type { DevinCooling } from '../modelRoutes/useDevinCooling';
-import type { ModelsFilter } from './catalog';
+import type { ModelDetail, ModelsFilter } from './catalog';
 import { ModelsBoard } from './ModelsBoard';
 import shared from '../shared/Shared.module.scss';
 import styles from './ModelsPage.module.scss';
@@ -23,8 +23,8 @@ export interface ModelsBodyProps {
   routesOffsetMs: number;
   lists: ProvimuxModelListsResponse | null;
   usage: Record<string, number> | null;
-  /** Per login, the models its own list has that the built-in list lacks. */
-  learned?: Record<string, readonly string[]>;
+  /** Per login, its models with where their limits come from. */
+  details?: Record<string, Record<string, ModelDetail>>;
   nowMs: number;
   filter: ModelsFilter;
   onFilter: (next: ModelsFilter) => void;
@@ -102,7 +102,7 @@ export function ModelsBody(props: ModelsBodyProps) {
             routesOffsetMs={props.routesOffsetMs}
             lists={props.lists}
             usage={props.usage}
-            learned={props.learned}
+            details={props.details}
             nowMs={props.nowMs}
             filter={props.filter}
             onFilter={props.onFilter}

@@ -67,10 +67,10 @@
           "reasoning_levels": [],
           "sources": {
             "display_name": null,
-            "context": null,
+            "context": "live",
             "output": null,
-            "input_modalities": "live",
-            "output_modalities": "live",
+            "input_modalities": null,
+            "output_modalities": null,
             "reasoning_levels": null
           }
         },
@@ -98,7 +98,7 @@
             "output": "built-in",
             "input_modalities": "built-in",
             "output_modalities": "built-in",
-            "reasoning_levels": null
+            "reasoning_levels": "built-in"
           }
         },
         {
@@ -125,7 +125,7 @@
             "output": "built-in",
             "input_modalities": "built-in",
             "output_modalities": "built-in",
-            "reasoning_levels": null
+            "reasoning_levels": "built-in"
           }
         },
         {
@@ -152,7 +152,7 @@
             "output": "built-in",
             "input_modalities": "built-in",
             "output_modalities": "built-in",
-            "reasoning_levels": null
+            "reasoning_levels": "built-in"
           }
         },
         {
@@ -179,7 +179,7 @@
             "output": "built-in",
             "input_modalities": "built-in",
             "output_modalities": "built-in",
-            "reasoning_levels": null
+            "reasoning_levels": "built-in"
           }
         },
         {
@@ -206,7 +206,7 @@
             "output": "built-in",
             "input_modalities": "built-in",
             "output_modalities": "built-in",
-            "reasoning_levels": null
+            "reasoning_levels": "built-in"
           }
         },
         {
@@ -233,7 +233,7 @@
             "output": "built-in",
             "input_modalities": "built-in",
             "output_modalities": "built-in",
-            "reasoning_levels": null
+            "reasoning_levels": "built-in"
           }
         },
         {
@@ -260,7 +260,7 @@
             "output": "built-in",
             "input_modalities": "built-in",
             "output_modalities": "built-in",
-            "reasoning_levels": null
+            "reasoning_levels": "built-in"
           }
         }
       ]

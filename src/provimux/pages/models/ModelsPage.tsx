@@ -34,8 +34,9 @@ import { formatClock, formatExact, screenNow } from '../time';
 import { useDevinCooling } from '../modelRoutes/useDevinCooling';
 import {
   initialModelsFilter,
-  learnedByLogin,
-  loginsWithLearned,
+  detailsByLogin,
+  loginsToDetail,
+  type ModelDetail,
   usageByName,
   type ModelsFilter,
 } from './catalog';
@@ -95,7 +96,7 @@ export function ModelsPage() {
   const { load: loadUsage } = usage;
   const now = screenNow(usePageClock(), routes.loadedAt, routes.offsetMs);
   const usageMap = useMemo(() => usageByName(usage.data), [usage.data]);
-  const learned = useLearned(lists.data);
+  const details = useModelDetails(lists.data);
 
   const requestRef = useRef(0);
   /** The page's one read of the configuration (aliases-page.md 3.4). Nothing is editable until it answers. */
@@ -256,7 +257,7 @@ export function ModelsPage() {
         routesOffsetMs={routes.offsetMs}
         lists={lists.data}
         usage={usageMap}
-        learned={learned}
+        details={details}
         nowMs={now}
         filter={filter}
         onFilter={setFilter}
@@ -282,14 +283,16 @@ export function ModelsPage() {
 }
 
 /**
- * The models each login's own list offers that the built-in list lacks: asked per login (`?auth_index=`),
- * only for logins whose list has such models, and again only when that list changed. A failed ask leaves
- * the login out: its routes then carry no "limits estimated" mark.
+ * Each login's models with where their limits come from (Model lists asked per login, `?auth_index=`): asked
+ * once per login, and again only when its list changed. A failed ask leaves the login out: its routes then
+ * say nothing about where a limit comes from.
  */
-function useLearned(lists: ProvimuxModelListsResponse | null): Record<string, string[]> {
-  const [learned, setLearned] = useState<Record<string, string[]>>({});
+function useModelDetails(
+  lists: ProvimuxModelListsResponse | null
+): Record<string, Record<string, ModelDetail>> {
+  const [details, setDetails] = useState<Record<string, Record<string, ModelDetail>>>({});
   const asked = useRef(new Map<string, string>());
-  const logins = useMemo(() => loginsWithLearned(lists), [lists]);
+  const logins = useMemo(() => loginsToDetail(lists), [lists]);
   useEffect(() => {
     const revision = apiClient.getConnectionRevision();
     const isCurrent = () => revision === apiClient.getConnectionRevision();
@@ -300,13 +303,13 @@ function useLearned(lists: ProvimuxModelListsResponse | null): Record<string, st
         .modelLists(apiClient.captureConnection(isCurrent), authIndex)
         .then((answer) => {
           if (!isCurrent()) return;
-          const ids = learnedByLogin([answer])[authIndex] ?? [];
-          setLearned((prev) => ({ ...prev, [authIndex]: ids }));
+          const models = detailsByLogin([answer])[authIndex] ?? {};
+          setDetails((prev) => ({ ...prev, [authIndex]: models }));
         })
         .catch(() => {
-          // A detail only: without it the routes carry no mark.
+          // A detail only: without it the routes say nothing about where a limit comes from.
         });
     }
   }, [logins]);
-  return learned;
+  return details;
 }

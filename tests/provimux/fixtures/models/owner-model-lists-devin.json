@@ -1,0 +1,323 @@
+{
+  "observed_at": "2026-11-24T14:00:00.000Z",
+  "options": {
+    "live_lists": true,
+    "published_lists": false
+  },
+  "built_in": {
+    "dataset_version": null,
+    "generated_at": null
+  },
+  "published": {
+    "state": "off",
+    "dataset_version": null,
+    "generated_at": null,
+    "fetched_at": null,
+    "from_cache": false,
+    "last_failure": null
+  },
+  "login_types": [
+    "claude",
+    "codex",
+    "devin",
+    "gemini",
+    "kimi"
+  ],
+  "logins": [
+    {
+      "auth_index": "li-devin-1",
+      "provider": "devin",
+      "login": {
+        "name": "devin-office@providers.dev.json",
+        "email": "office@providers.dev",
+        "label": "office@providers.dev"
+      },
+      "disabled": false,
+      "source": "live",
+      "live": {
+        "supported": true,
+        "held": true,
+        "expired": false,
+        "fetched_at": "2026-11-24T13:50:00.000Z",
+        "from_cache": false,
+        "fetching": false,
+        "listed_models": 10,
+        "last_failure": null
+      },
+      "registered_models": 10,
+      "learned_models": 0,
+      "models": [
+        {
+          "id": "devin/claude-opus-5-5",
+          "display_name": null,
+          "source": "built-in",
+          "learned": false,
+          "limits": {
+            "context": 1000000,
+            "output": 128000
+          },
+          "modalities": {
+            "input": [
+              "text"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "reasoning_levels": [],
+          "sources": {
+            "display_name": null,
+            "context": "built-in",
+            "output": "built-in",
+            "input_modalities": "built-in",
+            "output_modalities": "built-in",
+            "reasoning_levels": "built-in"
+          }
+        },
+        {
+          "id": "devin/claude-sonnet-5-5",
+          "display_name": null,
+          "source": "built-in",
+          "learned": false,
+          "limits": {
+            "context": 1000000,
+            "output": 128000
+          },
+          "modalities": {
+            "input": [
+              "text"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "reasoning_levels": [],
+          "sources": {
+            "display_name": null,
+            "context": "built-in",
+            "output": "built-in",
+            "input_modalities": "built-in",
+            "output_modalities": "built-in",
+            "reasoning_levels": "built-in"
+          }
+        },
+        {
+          "id": "devin/gpt-6.1-terra",
+          "display_name": null,
+          "source": "built-in",
+          "learned": false,
+          "limits": {
+            "context": 400000,
+            "output": 128000
+          },
+          "modalities": {
+            "input": [
+              "text"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "reasoning_levels": [],
+          "sources": {
+            "display_name": null,
+            "context": "built-in",
+            "output": "built-in",
+            "input_modalities": "built-in",
+            "output_modalities": "built-in",
+            "reasoning_levels": "built-in"
+          }
+        },
+        {
+          "id": "devin/gemini-3-pro",
+          "display_name": null,
+          "source": "built-in",
+          "learned": false,
+          "limits": {
+            "context": 1048576,
+            "output": 65536
+          },
+          "modalities": {
+            "input": [
+              "text"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "reasoning_levels": [],
+          "sources": {
+            "display_name": null,
+            "context": "built-in",
+            "output": "built-in",
+            "input_modalities": "built-in",
+            "output_modalities": "built-in",
+            "reasoning_levels": "built-in"
+          }
+        },
+        {
+          "id": "devin/kimi-k3",
+          "display_name": null,
+          "source": "built-in",
+          "learned": false,
+          "limits": {
+            "context": 262144,
+            "output": 32768
+          },
+          "modalities": {
+            "input": [
+              "text"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "reasoning_levels": [],
+          "sources": {
+            "display_name": null,
+            "context": "built-in",
+            "output": "built-in",
+            "input_modalities": "built-in",
+            "output_modalities": "built-in",
+            "reasoning_levels": "built-in"
+          }
+        },
+        {
+          "id": "devin/glm-5",
+          "display_name": null,
+          "source": "built-in",
+          "learned": false,
+          "limits": {
+            "context": 262144,
+            "output": 32768
+          },
+          "modalities": {
+            "input": [
+              "text"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "reasoning_levels": [],
+          "sources": {
+            "display_name": null,
+            "context": "built-in",
+            "output": "built-in",
+            "input_modalities": "built-in",
+            "output_modalities": "built-in",
+            "reasoning_levels": "built-in"
+          }
+        },
+        {
+          "id": "devin/qwen4-coder",
+          "display_name": null,
+          "source": "built-in",
+          "learned": false,
+          "limits": {
+            "context": 262144,
+            "output": 32768
+          },
+          "modalities": {
+            "input": [
+              "text"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "reasoning_levels": [],
+          "sources": {
+            "display_name": null,
+            "context": "built-in",
+            "output": "built-in",
+            "input_modalities": "built-in",
+            "output_modalities": "built-in",
+            "reasoning_levels": "built-in"
+          }
+        },
+        {
+          "id": "devin/deepseek-v4",
+          "display_name": null,
+          "source": "built-in",
+          "learned": false,
+          "limits": {
+            "context": 262144,
+            "output": 32768
+          },
+          "modalities": {
+            "input": [
+              "text"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "reasoning_levels": [],
+          "sources": {
+            "display_name": null,
+            "context": "built-in",
+            "output": "built-in",
+            "input_modalities": "built-in",
+            "output_modalities": "built-in",
+            "reasoning_levels": "built-in"
+          }
+        },
+        {
+          "id": "swe-2",
+          "display_name": null,
+          "source": "built-in",
+          "learned": false,
+          "limits": {
+            "context": 262144,
+            "output": 32768
+          },
+          "modalities": {
+            "input": [
+              "text"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "reasoning_levels": [],
+          "sources": {
+            "display_name": null,
+            "context": "built-in",
+            "output": "built-in",
+            "input_modalities": "built-in",
+            "output_modalities": "built-in",
+            "reasoning_levels": "built-in"
+          }
+        },
+        {
+          "id": "swe-2-flash",
+          "display_name": null,
+          "source": "built-in",
+          "learned": false,
+          "limits": {
+            "context": 262144,
+            "output": 32768
+          },
+          "modalities": {
+            "input": [
+              "text"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "reasoning_levels": [],
+          "sources": {
+            "display_name": null,
+            "context": null,
+            "output": null,
+            "input_modalities": null,
+            "output_modalities": null,
+            "reasoning_levels": null
+          }
+        }
+      ]
+    }
+  ]
+}

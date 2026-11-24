@@ -12,7 +12,7 @@ import { ProviderPill } from '../shared/ProviderPill';
 import { useOpenInAuthFiles } from '../shared/authFilesLink';
 import { formatDuration, formatExact, formatRelative, serverNow, timeMs } from '../time';
 import { usePageClock, useSecondClock } from '../shared/clocks';
-import type { NameItem, RouteLine } from './catalog';
+import type { ModelDetail, NameItem, RouteLine } from './catalog';
 import { NameEditor } from './NameEditor';
 import { providerName } from './labels';
 import styles from './ModelsPage.module.scss';
@@ -46,10 +46,8 @@ export const NameCard = memo(function NameCard(props: NameCardProps) {
     item.requests !== null && item.requests > 0
       ? t('provimux.models.requests', { count: item.requests })
       : null,
-    item.limits?.context
-      ? t('provimux.models.context', { value: formatTokens(item.limits.context, i18n.language) })
-      : null,
   ].filter(Boolean);
+  const context = item.limits?.context ? formatTokens(item.limits.context, i18n.language) : null;
 
   return (
     <article
@@ -79,7 +77,22 @@ export const NameCard = memo(function NameCard(props: NameCardProps) {
             </span>
           ) : null}
         </div>
-        <p className={styles.nameMeta}>{meta.join(' · ')}</p>
+        <p className={styles.nameMeta}>
+          {meta.join(' · ')}
+          {context ? (
+            item.contextDefault ? (
+              <span title={t('provimux.models.context_default_hint')}>
+                {' · '}
+                {t('provimux.models.context_default', { value: context })}
+              </span>
+            ) : (
+              <>
+                {' · '}
+                {t('provimux.models.context', { value: context })}
+              </>
+            )
+          ) : null}
+        </p>
         <div className={styles.nameActions}>
           {!item.own ? (
             <button
@@ -146,6 +159,31 @@ export const NameCard = memo(function NameCard(props: NameCardProps) {
     </article>
   );
 });
+
+/**
+ * Why a route's limits are estimated, naming the company: "Codex's own list offers this model, but
+ * Provimux's built-in list doesn't have it yet. Context from Codex's list; output: a default; …".
+ */
+function estimatedHint(t: TFunction, line: RouteLine): string {
+  const provider = providerName(t, line.provider, line.host);
+  const detail = line.detail;
+  if (!detail) return t('provimux.models.estimated_hint', { provider });
+  const value = (what: string, source: ModelDetail['context']) =>
+    source === 'live'
+      ? t('provimux.models.limit_from_list', { what, provider })
+      : source === 'built-in'
+        ? t('provimux.models.limit_built_in', { what })
+        : t('provimux.models.limit_default', { what });
+  // The joining is the language's own (Chinese has no spaces and its own semicolon and full stop).
+  return t('provimux.models.estimated_full', {
+    lead: t('provimux.models.estimated_lead', { provider }),
+    limits: [
+      value(t('provimux.models.limit_context'), detail.context),
+      value(t('provimux.models.limit_output'), detail.output),
+      value(t('provimux.models.limit_reasoning'), detail.reasoning),
+    ].join(t('provimux.models.limit_separator')),
+  });
+}
 
 /** The sentence a line's issue, or its state, reads as; null when there is nothing to say. */
 function lineSentence(t: TFunction, line: RouteLine, routesKnown: boolean): string | null {
@@ -241,12 +279,7 @@ function Line({
           <span className="visually-hidden">{t('provimux.models.sends')}</span>
           <code>{line.upstream}</code>
           {line.estimated ? (
-            <span
-              className={styles.estimated}
-              title={t('provimux.models.estimated_hint', {
-                provider: providerName(t, line.provider, line.host),
-              })}
-            >
+            <span className={styles.estimated} title={estimatedHint(t, line)}>
               {t('provimux.models.tag_estimated')}
             </span>
           ) : null}
