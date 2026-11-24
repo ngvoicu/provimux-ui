@@ -6,15 +6,29 @@ import { IconAlertTriangle, IconInfo } from '@/components/ui/icons';
 import { Skeleton } from '@/components/ui/Skeleton';
 import type { ProvimuxModelListsResponse, ProvimuxModelRoutesResponse } from '../../api/types';
 import { LostEdits } from '../aliases/LostEdits';
-import { canEdit, type PageState } from '../aliases/pageLogic';
+import { canEdit, isDirty, type PageState } from '../aliases/pageLogic';
 import type { AliasDraft } from '../aliases/types';
 import type { DevinCooling } from '../modelRoutes/useDevinCooling';
+import type { ExcludedFilter } from '../excluded/exclusions';
+import { ExcludedView, type ExclusionWriteRequest } from '../excluded/ExcludedView';
 import type { ModelDetail, ModelsFilter } from './catalog';
 import { ModelsBoard } from './ModelsBoard';
 import shared from '../shared/Shared.module.scss';
 import styles from './ModelsPage.module.scss';
 
+/** The page's two views: its names, and the models accounts never serve. */
+export type ModelsTab = 'names' | 'excluded';
+
 export interface ModelsBodyProps {
+  /** Which view is shown; names when not given. */
+  tab?: ModelsTab;
+  excludedFilter?: ExcludedFilter;
+  onExcludedFilter?: (next: ExcludedFilter) => void;
+  /** The exclusion being written: its id, or 'new'. */
+  writing?: string | null;
+  onWriteExclusion?: (request: ExclusionWriteRequest, writing: string) => Promise<boolean>;
+  /** A name's "excluded" mark: Excluded models, searched for that name. */
+  onShowExcluded?: (model: string) => void;
   page: PageState;
   routes: ProvimuxModelRoutesResponse | null;
   /** true: the proxy reports its routes; false: it has no such endpoint; null: not answered yet. */
@@ -92,24 +106,43 @@ export function ModelsBody(props: ModelsBodyProps) {
               {t('provimux.aliases.reload_failed', { message: page.loadError })}
             </p>
           ) : null}
-          <ModelsBoard
-            draft={draft}
-            locked={!canEdit(page)}
-            busy={page.reading || page.saving}
-            routes={props.routes}
-            routesKnown={props.routesKnown}
-            routesError={props.routesError}
-            routesOffsetMs={props.routesOffsetMs}
-            lists={props.lists}
-            usage={props.usage}
-            details={props.details}
-            nowMs={props.nowMs}
-            filter={props.filter}
-            onFilter={props.onFilter}
-            edit={props.edit}
-            devin={props.devin}
-            onRoutesChanged={props.onRoutesChanged}
-          />
+          {props.tab === 'excluded' ? (
+            <div id="pmx-models-panel" role="tabpanel" aria-labelledby="pmx-models-tab-excluded">
+              <ExcludedView
+                state={draft.base}
+                locked={!canEdit(page)}
+                dirty={isDirty(page)}
+                writing={props.writing ?? null}
+                routes={props.routes}
+                routesKnown={props.routesKnown}
+                filter={props.excludedFilter ?? { query: '', service: 'all' }}
+                onFilter={props.onExcludedFilter ?? (() => undefined)}
+                onWrite={props.onWriteExclusion ?? (async () => false)}
+              />
+            </div>
+          ) : (
+            <div id="pmx-models-panel" role="tabpanel" aria-labelledby="pmx-models-tab-names">
+              <ModelsBoard
+                draft={draft}
+                locked={!canEdit(page)}
+                busy={page.reading || page.saving}
+                routes={props.routes}
+                routesKnown={props.routesKnown}
+                routesError={props.routesError}
+                routesOffsetMs={props.routesOffsetMs}
+                lists={props.lists}
+                usage={props.usage}
+                details={props.details}
+                nowMs={props.nowMs}
+                filter={props.filter}
+                onFilter={props.onFilter}
+                edit={props.edit}
+                devin={props.devin}
+                onRoutesChanged={props.onRoutesChanged}
+                onShowExcluded={props.onShowExcluded}
+              />
+            </div>
+          )}
         </>
       )}
     </>

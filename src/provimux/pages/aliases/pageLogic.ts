@@ -106,6 +106,8 @@ export interface PageState {
   loadError: string | null;
   /** The edits not confirmed saved, until dismissed. */
   lost: LostNotice[];
+  /** An exclusion's write is pending (`saving` is set too, so nothing is editable). */
+  writing?: boolean;
 }
 
 export const INITIAL_PAGE: PageState = {
@@ -130,7 +132,13 @@ export type PageEvent =
   | { type: 'discarded' }
   | { type: 'save-started' }
   | { type: 'save-answered'; outcome: CommitOutcome }
-  | { type: 'dismissed'; key: number };
+  | { type: 'dismissed'; key: number }
+  /**
+   * An exclusion's write (models-page.md 6), sent at once: only over a draft with no edits, and nothing is
+   * editable until it ends; the page then reads again, which starts a new draft.
+   */
+  | { type: 'write-started' }
+  | { type: 'write-ended' };
 
 /** Whether the board takes input: a read is held, it has a tag, and nothing is pending. */
 export function canEdit(page: PageState): boolean {
@@ -266,5 +274,11 @@ export function pageStep(page: PageState, event: PageEvent): PageState {
     case 'dismissed':
       if (!page.lost.some((notice) => notice.key === event.key)) return page;
       return { ...page, lost: page.lost.filter((notice) => notice.key !== event.key) };
+    case 'write-started':
+      if (!canEdit(page) || isDirty(page)) return page;
+      return { ...page, saving: true, writing: true };
+    case 'write-ended':
+      if (!page.writing) return page;
+      return { ...page, saving: false, writing: false };
   }
 }

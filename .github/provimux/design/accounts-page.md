@@ -112,11 +112,17 @@ is followed by a new read.
 ## 6. Addresses and the menu
 
 The menu holds **Accounts** in the place of AI Providers, Auth Files and OAuth Login, then Routing, Models and Savings.
-The three original pages stay one click away, at the same addresses (`/ai-providers`, `/auth-files`, `/oauth`), in a
-small group of their own right after Gateway, **All settings**, named in the owner's words: **API keys** (AI
+The three original pages stay one click away, at the same addresses (`/ai-providers`, `/auth-files`, `/oauth`), in
+**Advanced settings**, a drawer at the end of the Gateway group, named in the owner's words: **API keys** (AI
 Providers), **Subscriptions** (Auth Files, with its count), **Ways to sign in** (OAuth Login); each item's description
 names the original page. They are upstream's own items (route, icon, badge), moved and renamed by `provimuxNav`
-(`nav.tsx`); MainLayout is not edited, and the group is not added when upstream has none of them. `/provimux/accounts?login=<file>` or
+(`nav.tsx`) into upstream's own kind of drawer (the plugin pages'), which is not added when upstream has none of them.
+The owner (2026-11-24): "what if we call them 'Advanced settings' and keep them collapsed". The drawer is closed until
+opened; one click opens or closes it, and the browser remembers that (local storage,
+`provimux.nav.advancedSettingsOpen`); while one of its pages is shown (a sub-page such as `/auth-files/oauth-excluded`
+included, also when reached by its address) it is open, and leaving brings back what was remembered (`navDrawer.ts`).
+MainLayout's drawer state is `useProvimuxDrawers()` instead of a bare `useState`, one seam line (and the setter in the
+toggle's dependency list); its drawer, toggle and rendering are upstream's. `/provimux/accounts?login=<file>` or
 `?account=<auth index>` opens an account's panel; `?add=<service>` (or `?add=1`) opens the add panel. Models links each
 login to Accounts (its account and its priority), and Models' empty state to adding an account; Models reads
 `?account=<auth index>`, a filter its menu names "Account: alex@example.com".
@@ -172,7 +178,7 @@ field. A save is one `PATCH /credentials/fields` with only the fields that chang
 
 The settings the file keeps (proxy, prefix, headers, models it never serves, weight, its own model names, error rules,
 cooling, xAI's API mode) are not edited here: a value he cannot see would invite overwriting it by mistake. One line
-under them says where they are, in the menu's words ("… are in Subscriptions, under All settings"), and **Open this
+under them says where they are, in the menu's words ("… are in Subscriptions, under Advanced settings"), and **Open this
 login there** opens Auth Files on that login (its search set to the file, as "More settings" does), after asking about
 unsaved changes. A proxy endpoint returning a login's non-secret fields would let Accounts show and edit them; it is on
 the owner's list for later.
@@ -195,13 +201,14 @@ to OAuth Login for anything.
 
 ## 8. Left on the original pages
 
-What cannot be done on Accounts, said in one line in each panel's "More settings"; the pages are in the menu under All
+What cannot be done on Accounts, said in one line in each panel's "More settings"; the pages are in the menu under Advanced
 settings (section 6):
 
 - **Auth Files** (Subscriptions): what a login's file keeps (section 7.2): proxy, prefix, headers, models it never
   serves, weight, its own model names, error rules, cooling, xAI's API mode; uploading or downloading the file; its
-  quota. Also, not one account's settings: batch actions, the model rules of all logins of a service
-  (`oauth-excluded-models`), manual refresh and verification.
+  quota. Also, not one account's settings: batch actions, the model aliases of all logins of a service, manual
+  refresh and verification. (The models every login of a service never serves, `oauth.excluded-models`, are also on
+  Models, Excluded models: models-page.md, section 6.)
 - **AI Providers** (API keys): testing a key against a model; editing all the keys of a connection together, a key's own value of
   a shared setting (inherit, empty or its own), and a connection's name; partner bundles (APIKEY.FUN, FennoAI, Qiniu
   Cloud, AICodeMirror, Kimi keys), which write one key into several families at once.

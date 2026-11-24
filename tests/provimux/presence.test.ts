@@ -5,10 +5,12 @@ import { readFileSync } from 'node:fs';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
+import i18next from 'i18next';
 import { apiClient } from '../../src/services/api/client';
 import { ProvimuxPageGate } from '../../src/provimux/components/ProvimuxPageGate';
 import { ProvimuxOpenRouterTag } from '../../src/provimux/components/ProvimuxOpenRouterTag';
-import { ALL_SETTINGS_GROUP, PROVIMUX_PAGES, provimuxNav } from '../../src/provimux/nav';
+import { PROVIMUX_PAGES, provimuxNav } from '../../src/provimux/nav';
+import { ADVANCED_SETTINGS_DRAWER } from '../../src/provimux/navDrawer';
 import { PROVIMUX_TRANSLATIONS } from '@/provimux/i18n';
 import {
   isListed,
@@ -185,8 +187,17 @@ describe('sidebar', () => {
     },
     { id: 'control', items: [{ path: '/system' }] },
   ];
+  /** Each group's items: a link by its path, a drawer as `drawer:<id>` with its children's paths. */
   const paths = (list: ReturnType<typeof groups>) =>
-    list.map((group) => group.items.map((item) => (item as { path: string }).path));
+    list.map((group) =>
+      group.items.map((item) => {
+        const drawer = item as { kind?: string; id?: string; children?: { path: string }[] };
+        return drawer.kind === 'drawer'
+          ? `drawer:${drawer.id}(${drawer.children!.map((child) => child.path).join(' ')})`
+          : (item as { path: string }).path;
+      })
+    );
+  const DRAWER = `drawer:${ADVANCED_SETTINGS_DRAWER}(/ai-providers /auth-files /oauth)`;
 
   test('Accounts in the place of AI Providers, Auth Files and OAuth Login; the others after Routing, Models first, Savings where its endpoint answers or fails', () => {
     const result = provimuxNav(groups(), {
@@ -196,8 +207,7 @@ describe('sidebar', () => {
     });
     expect(paths(result)).toEqual([
       ['/'],
-      ['/provimux/accounts', '/routing', '/provimux/models', '/provimux/savings', '/later'],
-      ['/ai-providers', '/auth-files', '/oauth'],
+      ['/provimux/accounts', '/routing', '/provimux/models', '/provimux/savings', '/later', DRAWER],
       ['/system'],
     ]);
     const accounts = result[1].items[0] as { labelKey: string; metaKey: string };
@@ -206,15 +216,27 @@ describe('sidebar', () => {
     const models = result[1].items[2] as { labelKey: string; metaKey: string };
     expect(models.labelKey).toBe('provimux.nav.models');
     expect(models.metaKey).toBe('provimux.nav_meta.models');
-    expect(provimuxNav(groups(), { savings: entry('error') })[1].items).toHaveLength(5);
+    expect(provimuxNav(groups(), { savings: entry('error') })[1].items).toHaveLength(6);
   });
 
-  test('the three original pages stay one click away, in a group of their own after Gateway, in plain words', () => {
+  test('the three original pages stay one click away, in "Advanced settings", a drawer closed until opened, in plain words', () => {
     const result = provimuxNav(groups(), { savings: entry('ready') });
-    const group = result[2] as { id: string; labelKey?: string; items: Record<string, unknown>[] };
-    expect(group.id).toBe(ALL_SETTINGS_GROUP);
-    expect(group.labelKey).toBe('provimux.nav_groups.all_settings');
-    expect(group.items).toEqual([
+    // No group of their own any more: the drawer ends Accounts' group, after Provimux's pages.
+    expect(result.map((group) => group.id)).toEqual(['operate', 'gateway', 'control']);
+    const gateway = result[1].items as Record<string, unknown>[];
+    const drawer = gateway[gateway.length - 1] as {
+      kind: string;
+      id: string;
+      label: string;
+      meta: string;
+      children: Record<string, unknown>[];
+    };
+    expect(drawer.kind).toBe('drawer');
+    expect(drawer.id).toBe(ADVANCED_SETTINGS_DRAWER);
+    // MainLayout shows a drawer's label as given: it is read in the current language.
+    expect(drawer.label).toBe(i18next.t('provimux.nav.advanced_settings'));
+    expect(drawer.meta).toBe(i18next.t('provimux.nav_meta.advanced_settings'));
+    expect(drawer.children).toEqual([
       {
         path: '/ai-providers',
         labelKey: 'provimux.nav.all_keys',
@@ -235,14 +257,16 @@ describe('sidebar', () => {
         icon: 'oauth',
       },
     ]);
-    // Accounts stays the main item, first in Gateway; without the original items, no group is added.
+    // Accounts stays the main item, first in Gateway; without the original items, no drawer is added.
     expect((result[1].items[0] as { path: string }).path).toBe('/provimux/accounts');
     const bare = provimuxNav([{ id: 'gateway', items: [{ path: '/routing' }] }], {});
-    expect(bare.map((g) => g.id)).toEqual(['gateway']);
-    // Every label and description is in the seven languages.
+    expect(paths(bare)).toEqual([['/provimux/accounts', '/routing', '/provimux/models']]);
+    // Every label and description is in the seven languages; the old group's name is gone.
     for (const own of Object.values(PROVIMUX_TRANSLATIONS)) {
       const strings = (own as { provimux: Record<string, Record<string, string>> }).provimux;
-      expect(strings.nav_groups.all_settings).toBeTruthy();
+      expect(strings.nav_groups).toBeUndefined();
+      expect(strings.nav.advanced_settings).toBeTruthy();
+      expect(strings.nav_meta.advanced_settings).toBeTruthy();
       for (const key of ['all_keys', 'all_logins', 'all_sign_in']) {
         expect(strings.nav[key]).toBeTruthy();
         expect(strings.nav_meta[key]).toBeTruthy();
@@ -259,8 +283,7 @@ describe('sidebar', () => {
       });
       expect(paths(result)).toEqual([
         ['/'],
-        ['/provimux/accounts', '/routing', '/provimux/models', '/later'],
-        ['/ai-providers', '/auth-files', '/oauth'],
+        ['/provimux/accounts', '/routing', '/provimux/models', '/later', DRAWER],
         ['/system'],
       ]);
     }
@@ -271,13 +294,20 @@ describe('sidebar', () => {
       modelLists: entry('ready'),
       savings: entry('unsupported'),
     });
-    expect(paths(one)[1]).toEqual(['/provimux/accounts', '/routing', '/provimux/models', '/later']);
+    expect(paths(one)[1]).toEqual([
+      '/provimux/accounts',
+      '/routing',
+      '/provimux/models',
+      '/later',
+      DRAWER,
+    ]);
     // An older presence record that knows no endpoint at all still lists Models.
     expect(paths(provimuxNav(groups(), {}))[1]).toEqual([
       '/provimux/accounts',
       '/routing',
       '/provimux/models',
       '/later',
+      DRAWER,
     ]);
   });
 

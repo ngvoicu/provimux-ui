@@ -28,6 +28,7 @@ import {
   type Section,
 } from './catalog';
 import { accountsAddressToAdd } from '../shared/accountsLink';
+import { placesExcluding, readExclusions, type Exclusion } from '../excluded/exclusions';
 import { NameCard } from './NameCard';
 import { NameComposer } from './NameEditor';
 import { ModelsSettings } from './ModelsSettings';
@@ -52,6 +53,8 @@ export interface ModelsBoardProps {
   edit: (change: (draft: AliasDraft) => AliasDraft) => void;
   devin: DevinCooling;
   onRoutesChanged: () => void;
+  /** A name's "excluded" mark: Excluded models, searched for that name. */
+  onShowExcluded?: (model: string) => void;
 }
 
 /** How many of the other models are drawn at once; the rest on "Show more". */
@@ -78,6 +81,17 @@ export function ModelsBoard(props: ModelsBoardProps) {
     [draft, routes, lists, usage, nowMs, details]
   );
   const summary = useMemo(() => summarizeNames(items), [items]);
+  // Where each name is excluded (by its name or a model it sends upstream), for its mark and link.
+  const exclusions = useMemo(() => readExclusions(draft.base).exclusions, [draft.base]);
+  const excludedByName = useMemo(() => {
+    const byName = new Map<string, Exclusion[]>();
+    if (!exclusions.length) return byName;
+    for (const item of items) {
+      const found = placesExcluding(exclusions, [item.name, ...item.lines.map((l) => l.upstream)]);
+      if (found.length) byName.set(item.key, found);
+    }
+    return byName;
+  }, [exclusions, items]);
   const visible = useMemo(
     () => items.filter((item) => matches(item, filter, entries)),
     [items, filter, entries]
@@ -166,6 +180,8 @@ export function ModelsBoard(props: ModelsBoardProps) {
       key={item.key}
       id={cardIdOf(item.key)}
       item={item}
+      excludedIn={excludedByName.get(item.key)}
+      onShowExcluded={props.onShowExcluded}
       draft={draft}
       entries={entries}
       routes={routes}

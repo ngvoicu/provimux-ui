@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
+import type { BlockerFunction } from 'react-router';
 import { Button } from '@/components/ui/Button';
 import { IconRefreshCw } from '@/components/ui/icons';
 import { FloatingSaveBar } from '@/features/config/components/FloatingSaveBar';
@@ -27,6 +28,10 @@ import {
 } from '../aliases/pageLogic';
 import { blockedEntries, planCommit } from '../aliases/plan';
 import type { AliasDraft, CommitOutcome } from '../aliases/types';
+import { EMPTY_EXCLUDED_FILTER, readExclusions, type ExcludedFilter } from '../excluded/exclusions';
+import { exclusionsApi, ExclusionRequestError } from '../excluded/exclusionsApi';
+import type { ExclusionWriteRequest } from '../excluded/ExcludedView';
+import { ExclusionWriteError } from '../excluded/writes';
 import type { ProvimuxModelListsResponse } from '../../api/types';
 import { usePageClock } from '../shared/clocks';
 import { useProvimuxResource } from '../shared/useProvimuxResource';
@@ -40,7 +45,8 @@ import {
   usageByName,
   type ModelsFilter,
 } from './catalog';
-import { ModelsBody } from './ModelsBody';
+import { ModelsBody, type ModelsTab } from './ModelsBody';
+import { tabOf } from './address';
 import shared from '../shared/Shared.module.scss';
 import styles from './ModelsPage.module.scss';
 
@@ -62,7 +68,7 @@ const fetchUsage = (client: Parameters<typeof provimuxApi.modelUsage>[0]) =>
  */
 export function ModelsPage() {
   const { t, i18n } = useTranslation();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const connectionStatus = useAuthStore((state) => state.connectionStatus);
   const showNotification = useNotificationStore((state) => state.showNotification);
   const showConfirmation = useNotificationStore((state) => state.showConfirmation);
@@ -79,6 +85,35 @@ export function ModelsPage() {
     return next;
   }, []);
   const [filter, setFilter] = useState<ModelsFilter>(() => initialModelsFilter(searchParams));
+  // The view shown: read from the address when the page opens (`?tab=excluded&model=…`, so a name's mark
+  // is a link that works in a new tab), then kept here and written back to the address. The page keeps the
+  // location it opened with while only its query changes (upstream's page transition), so a change of the
+  // query alone never reaches it: switching is this state, not a navigation.
+  const [tab, setTab] = useState<ModelsTab>(() => tabOf(searchParams));
+  const [excludedFilter, setExcludedFilter] = useState<ExcludedFilter>(() => ({
+    ...EMPTY_EXCLUDED_FILTER,
+    query: searchParams.get('model') ?? '',
+  }));
+  const [writing, setWriting] = useState<string | null>(null);
+  const showTab = useCallback(
+    (next: ModelsTab, model?: string) => {
+      setTab(next);
+      if (model !== undefined) setExcludedFilter({ ...EMPTY_EXCLUDED_FILTER, query: model });
+      setSearchParams(
+        (current) => {
+          const params = new URLSearchParams(current);
+          params.delete('model');
+          if (next === 'excluded') params.set('tab', 'excluded');
+          else params.delete('tab');
+          if (next === 'excluded' && model) params.set('model', model);
+          return params;
+        },
+        { replace: true }
+      );
+    },
+    [setSearchParams]
+  );
+  const showExcluded = useCallback((model: string) => showTab('excluded', model), [showTab]);
 
   const devin = useDevinCooling();
   const routes = useProvimuxResource('modelRoutes', fetchRoutes, POLL_MS, devin.read, {
@@ -126,6 +161,11 @@ export function ModelsPage() {
 
   const { draft } = page;
   const dirty = isDirty(page);
+  const base = draft?.base ?? null;
+  const excludedCount = useMemo(
+    () => (base ? readExclusions(base).exclusions.length : null),
+    [base]
+  );
   const editable = canEdit(page);
   const changes = useMemo(() => (draft ? changeCount(draft) : 0), [draft]);
   const blocked = useMemo(() => (draft ? blockedEntries(draft).length > 0 : false), [draft]);
@@ -153,8 +193,14 @@ export function ModelsPage() {
 
   // The list of edits not saved is the only copy of what was typed: leaving asks first, as with edits.
   const guarded = leaveGuarded(page);
+  // Switching between names and excluded models keeps the draft: only leaving the page asks.
+  const leaving = useCallback<BlockerFunction>(
+    ({ currentLocation, nextLocation }) =>
+      guarded && currentLocation.pathname !== nextLocation.pathname,
+    [guarded]
+  );
   useUnsavedChangesGuard({
-    shouldBlock: guarded,
+    shouldBlock: leaving,
     dialog: dirty
       ? {
           title: t('provimux.aliases.unsaved_title'),
@@ -212,6 +258,58 @@ export function ModelsPage() {
     [send]
   );
 
+  /**
+   * One exclusion added or removed (models-page.md 6): written at once, with If-Match on the page's read, and
+   * only over a draft with no edits. The page then reads again, whatever the answer.
+   */
+  const writeExclusion = useCallback(
+    async ({ change, model, place }: ExclusionWriteRequest, id: string): Promise<boolean> => {
+      const before = pageRef.current;
+      const base = before.draft?.base;
+      if (!base) return false;
+      const started = send({ type: 'write-started' });
+      if (started === before) return false;
+      setWriting(id);
+      let done = false;
+      try {
+        await exclusionsApi.write(base, change);
+        done = true;
+        showNotification(
+          t(change.excluded ? 'provimux.excluded.added' : 'provimux.excluded.removed', {
+            model,
+            place,
+          }),
+          'success'
+        );
+      } catch (error) {
+        const reason =
+          error instanceof ExclusionRequestError
+            ? error.reason
+            : error instanceof ExclusionWriteError
+              ? error.code === 'not-found'
+                ? 'changed'
+                : 'refused'
+              : 'error';
+        const message =
+          reason === 'changed'
+            ? t('provimux.excluded.write_changed')
+            : reason === 'no-tag'
+              ? t('provimux.excluded.write_no_tag')
+              : reason === 'refused'
+                ? t('provimux.excluded.write_refused', { message: getErrorMessage(error) })
+                : t('provimux.excluded.write_failed', { message: getErrorMessage(error) });
+        showNotification(message, reason === 'changed' ? 'warning' : 'error');
+      } finally {
+        setWriting(null);
+        send({ type: 'write-ended' });
+        useConfigStore.getState().clearCache();
+      }
+      await Promise.all([read(), loadRoutes()]);
+      return done;
+    },
+    [loadRoutes, read, send, showNotification, t]
+  );
+
   const statusText = page.saving
     ? t('provimux.aliases.saving')
     : blocked
@@ -249,7 +347,39 @@ export function ModelsPage() {
         </div>
       </header>
 
+      <div className={styles.tabs} role="tablist" aria-label={t('provimux.models.tabs_label')}>
+        <button
+          type="button"
+          role="tab"
+          id="pmx-models-tab-names"
+          aria-selected={tab === 'names'}
+          aria-controls="pmx-models-panel"
+          className={styles.tab}
+          onClick={() => showTab('names')}
+        >
+          {t('provimux.models.tab_names')}
+        </button>
+        <button
+          type="button"
+          role="tab"
+          id="pmx-models-tab-excluded"
+          aria-selected={tab === 'excluded'}
+          aria-controls="pmx-models-panel"
+          className={styles.tab}
+          onClick={() => showTab('excluded')}
+        >
+          {t('provimux.models.tab_excluded')}
+          {excludedCount !== null ? <span className={styles.tabCount}>{excludedCount}</span> : null}
+        </button>
+      </div>
+
       <ModelsBody
+        tab={tab}
+        excludedFilter={excludedFilter}
+        onExcludedFilter={setExcludedFilter}
+        writing={writing}
+        onWriteExclusion={writeExclusion}
+        onShowExcluded={showExcluded}
         page={page}
         routes={routes.data}
         routesKnown={routesStatus === 'unsupported' ? false : routes.data !== null ? true : null}

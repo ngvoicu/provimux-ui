@@ -46,6 +46,10 @@ export function applyBody(doc: Doc, path: string, body: unknown): Doc {
     next.oauth = { ...((next.oauth as Doc) ?? {}), 'model-alias': structuredClone(body) };
     return next;
   }
+  if (path === '/config/oauth/excluded-models') {
+    next.oauth = { ...((next.oauth as Doc) ?? {}), 'excluded-models': structuredClone(body) };
+    return next;
+  }
   throw new Error(`fakeProxy: unexpected PUT ${path}`);
 }
 

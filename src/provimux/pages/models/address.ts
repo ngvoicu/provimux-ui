@@ -26,3 +26,14 @@ export function modelsAddressFor(pathname: string, search: string): string {
   const query = to.toString();
   return query ? `${MODELS_PATH}?${query}` : MODELS_PATH;
 }
+
+/** The view the Models page shows: its names, or the models accounts never serve (`?tab=excluded`). */
+export const tabOf = (params: URLSearchParams): 'names' | 'excluded' =>
+  params.get('tab') === 'excluded' ? 'excluded' : 'names';
+
+/** Models' excluded models, searched for one model (its name, or a pattern that takes it out). */
+export function excludedAddress(model?: string): string {
+  const params = new URLSearchParams({ tab: 'excluded' });
+  if (model?.trim()) params.set('model', model.trim());
+  return `${MODELS_PATH}?${params.toString()}`;
+}

@@ -5,17 +5,16 @@
       "models": "Model",
       "all_keys": "API key",
       "all_logins": "Gói đăng ký",
-      "all_sign_in": "Cách đăng nhập"
+      "all_sign_in": "Cách đăng nhập",
+      "advanced_settings": "Cài đặt nâng cao"
     },
     "nav_meta": {
       "accounts": "Gói đăng ký và API key của bạn: thêm, sửa, tắt",
       "models": "Mọi tên model bạn có thể gửi, và nguồn phục vụ nó",
       "all_keys": "Mọi cài đặt của từng API key, ở trang AI Provider gốc",
       "all_logins": "Tệp đăng nhập của từng gói: tải lên, tải xuống, hạn mức và mọi cài đặt, ở trang File xác thực gốc",
-      "all_sign_in": "Mọi cách đăng nhập, ở trang Đăng nhập OAuth gốc"
-    },
-    "nav_groups": {
-      "all_settings": "Mọi cài đặt"
+      "all_sign_in": "Mọi cách đăng nhập, ở trang Đăng nhập OAuth gốc",
+      "advanced_settings": "API key, gói đăng ký và cách đăng nhập, trên các trang gốc"
     },
     "common": {
       "loading": "Đang tải…",
@@ -108,8 +107,8 @@
         "more_login": "Mở ở Gói đăng ký",
         "more_key": "Mở ở API key",
         "remove": "Xóa tài khoản",
-        "more_login_only": "Ở Gói đăng ký (trong Mọi cài đặt): proxy, tiền tố, header, model nó không phục vụ, trọng số, tên model riêng, tệp và hạn mức của nó.",
-        "more_key_only": "Chỉ ở API key (trong Mọi cài đặt): kiểm tra key với một model, và sửa mọi key của một kết nối cùng lúc."
+        "more_login_only": "Ở Gói đăng ký (trong Cài đặt nâng cao): proxy, tiền tố, header, model nó không phục vụ, trọng số, tên model riêng, tệp và hạn mức của nó.",
+        "more_key_only": "Chỉ ở API key (trong Cài đặt nâng cao): kiểm tra key với một model, và sửa mọi key của một kết nối cùng lúc."
       },
       "remove_title": "Xóa {{name}}?",
       "remove_login": "Tệp đăng nhập của nó sẽ bị xóa khỏi Provimux. Muốn dùng lại gói đăng ký này, hãy đăng nhập lại.",
@@ -182,12 +181,12 @@
         "eyebrow": "Cài đặt · {{service}}",
         "heading": "Cài đặt",
         "lede_key": "Địa chỉ, proxy, model, model nó không phục vụ, header, tiền tố, trọng số, thử lại.",
-        "lede_login": "Ghi chú và thử lại ở đây; proxy, tiền tố, header và phần còn lại ở Gói đăng ký, trong Mọi cài đặt.",
+        "lede_login": "Ghi chú và thử lại ở đây; proxy, tiền tố, header và phần còn lại ở Gói đăng ký, trong Cài đặt nâng cao.",
         "open": "Đổi cài đặt",
         "back": "Quay lại tài khoản",
         "save": "Lưu cài đặt",
         "saved": "Đã lưu cài đặt của {{name}}.",
-        "partner": "Key này thuộc gói của đối tác; cài đặt của nó ở API key, trong Mọi cài đặt.",
+        "partner": "Key này thuộc gói của đối tác; cài đặt của nó ở API key, trong Cài đặt nâng cao.",
         "shared_title": "Các key khác của kết nối này cũng dùng nó",
         "shared_tag": "dùng chung",
         "shared_note_other": "Key này dùng chung kết nối “{{name}}” với {{count}} key khác: cài đặt có nhãn “dùng chung” cũng đổi cho chúng.",
@@ -262,7 +261,7 @@
         "retries_hint": "Provimux thử lại bao nhiêu lần một yêu cầu thất bại với lần đăng nhập này.",
         "use_siwc": "Dùng Đăng nhập bằng ChatGPT",
         "use_siwc_hint": "Yêu cầu Codex của lần đăng nhập này dùng liên kết Đăng nhập bằng ChatGPT của nó. Tắt vẫn giữ liên kết.",
-        "elsewhere": "Proxy, tiền tố, header, model nó không phục vụ, trọng số, tên model riêng và các cài đặt khác của nó nằm ở Gói đăng ký, trong Mọi cài đặt.",
+        "elsewhere": "Proxy, tiền tố, header, model nó không phục vụ, trọng số, tên model riêng và các cài đặt khác của nó nằm ở Gói đăng ký, trong Cài đặt nâng cao.",
         "elsewhere_link": "Mở lần đăng nhập này ở đó"
       },
       "siwc": {
@@ -423,7 +422,12 @@
       "open_providers": "Mở AI Provider",
       "create": "Tạo",
       "source_account": "Tài khoản: {{name}}",
-      "empty_link_accounts": "Thêm tài khoản"
+      "empty_link_accounts": "Thêm tài khoản",
+      "tabs_label": "Trang Model hiển thị gì",
+      "tab_names": "Tên",
+      "tab_excluded": "Model bị loại trừ",
+      "excluded_mark_other": "Bị loại trừ ở {{count}} nơi",
+      "excluded_mark_title": "Không bao giờ được phục vụ bởi: {{places}}. Mở trong Model bị loại trừ."
     },
     "aliases": {
       "load_failed": "Không đọc được cấu hình",
@@ -481,6 +485,71 @@
       "aliases_link": "Đặt tên trên trang Model",
       "row_alias_label": "Bí danh:",
       "row_alias_title": "Bí danh, đặt trên trang Bí danh"
+    },
+    "excluded": {
+      "intro": "Những model mà một tài khoản không bao giờ phục vụ, kể cả khi client gọi đúng tên. Mỗi thay đổi được lưu ngay.",
+      "summary_label": "Model bị loại trừ qua các con số",
+      "count_exclusions_other": "{{count}} loại trừ",
+      "count_models_other": "{{count}} model và mẫu",
+      "count_nowhere_other": "{{count}} hiện không được phục vụ ở đâu",
+      "dirty": "Các thay đổi về tên chưa được lưu. Hãy lưu hoặc bỏ chúng trước: một loại trừ được lưu ngay khi bạn tạo.",
+      "search_placeholder": "Tìm model hoặc mẫu",
+      "service_label": "Dịch vụ",
+      "service_all": "Mọi dịch vụ",
+      "add": "Loại trừ một model",
+      "empty_title": "Không có model nào bị loại trừ",
+      "empty_text": "Mọi tài khoản đều phục vụ mọi model nó có. Loại trừ một model để tài khoản không phục vụ nó, kể cả khi client gọi đúng tên.",
+      "no_match": "Không có loại trừ nào khớp với tìm kiếm và dịch vụ.",
+      "pattern": "mẫu",
+      "pattern_title": "* thay cho ký tự bất kỳ: mọi model có tên khớp đều bị loại trừ.",
+      "served_nowhere": "Hiện không được phục vụ ở đâu",
+      "served_nowhere_title": "Hiện không có tài khoản nào phục vụ model khớp với nó.",
+      "still_served_other": "Vẫn được {{count}} tài khoản phục vụ",
+      "served_by": "Vẫn được phục vụ bởi {{names}}.",
+      "served_by_more": "Vẫn được phục vụ bởi {{names}} và {{count}} nơi khác.",
+      "routes_unknown": "Không biết tài khoản khác còn phục vụ nó không: proxy không báo các tuyến của nó.",
+      "place_logins": "Mọi gói đăng ký {{service}}",
+      "place_logins_inline": "mọi gói đăng ký {{service}}",
+      "place_logins_count_other": "hiện có {{count}} đăng nhập",
+      "place_logins_none": "Hiện không có gói đăng ký",
+      "place_logins_unknown": "Không rõ số đăng nhập",
+      "place_key": "API key {{service}} {{key}}",
+      "place_key_shared_other": "từ kết nối “{{name}}”, dùng chung bởi {{count}} key",
+      "place_key_off": "đã tắt",
+      "route_key": "API key {{provider}} · {{who}}",
+      "remove": "Bỏ",
+      "remove_label": "Thôi loại trừ {{model}} cho {{place}}",
+      "added": "{{model}} giờ bị loại trừ cho {{place}}.",
+      "removed": "{{model}} không còn bị loại trừ cho {{place}}.",
+      "unread_other": "{{count}} phần cấu hình có loại trừ không đọc được ở đây; chúng được giữ nguyên:",
+      "login_files": "Một gói đăng ký cũng có thể giữ danh sách riêng trong tệp đăng nhập, cạnh các token. Tệp đó không bao giờ được tải về ở đây, nên danh sách ấy không hiển thị; gói đăng ký có danh sách riêng sẽ dùng nó thay cho danh sách chung.",
+      "login_files_link": "Xem trong Gói đăng ký",
+      "login_files_link_service": "Xem của {{service}} trong Gói đăng ký",
+      "compatible_note": "Mục tương thích OpenAI ({{names}}) không có loại trừ: chúng chỉ phục vụ các model trong danh sách của mình. Hãy bỏ model khỏi danh sách đó trong API key.",
+      "write_changed": "Cấu hình đã bị thay đổi ở nơi khác kể từ khi trang này đọc, nên không có gì được ghi. Trang đã đọc lại: hãy thử lại.",
+      "write_no_tag": "Proxy không gửi thẻ phiên bản cùng cấu hình, nên trang này không thể thay đổi nó an toàn.",
+      "write_refused": "Proxy từ chối thay đổi: {{message}}",
+      "write_failed": "Chưa lưu: {{message}}",
+      "composer": {
+        "title": "Loại trừ một model",
+        "model": "Model",
+        "model_placeholder": "claude-opus-4-1, hoặc một mẫu như gpt-5-*",
+        "model_hint": "Chọn từ danh sách hoặc gõ vào; * thay cho ký tự bất kỳ.",
+        "where": "Ở đâu",
+        "logins_hint": "{{detail}}, và mọi gói thêm sau này",
+        "already": "đã loại trừ",
+        "no_places": "Chưa có tài khoản nào có thể đặt loại trừ.",
+        "no_places_link": "Thêm tài khoản",
+        "preview": "{{model}} sẽ không còn được phục vụ bởi {{place}}.",
+        "preview_nowhere": "Hiện không có tài khoản nào khác phục vụ nó: nó sẽ không được phục vụ ở đâu.",
+        "preview_still_other": "Vẫn còn {{count}} tài khoản khác phục vụ nó.",
+        "problem_reserved": "Chỉ * sẽ tắt tài khoản: hãy dùng công tắc của nó trên trang Tài khoản.",
+        "problem_invalid": "Tên model không có khoảng trắng hay dấu phẩy.",
+        "problem_exists": "Đã loại trừ ở đó rồi.",
+        "problem_covered": "Đã bị loại trừ ở đó bởi mẫu {{pattern}}.",
+        "submit": "Loại trừ",
+        "cancel": "Hủy"
+      }
     }
   }
 }

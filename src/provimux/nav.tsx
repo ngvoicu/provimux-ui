@@ -1,13 +1,17 @@
 import type { ReactElement } from 'react';
+import i18next from 'i18next';
+import { IconSlidersHorizontal } from '@/components/ui/icons';
 import { IconAccounts, IconModelRoutes, IconSavings } from './components/ProvimuxIcons';
+import { ADVANCED_SETTINGS_DRAWER } from './navDrawer';
 import { isListed, type PresenceEntry, type ProvimuxEndpoint } from './presence';
 import { hideSponsorNav } from './sponsors';
 
 /**
  * Provimux's pages in the sidebar. Accounts takes the place of upstream's AI Providers, Auth Files and OAuth
- * Login; those three move, with their icons and Auth Files' count, to a small group of their own right after
- * it, "All settings", named in the owner's words (API keys, Subscriptions, Ways to sign in), so every original
- * setting stays one click away. The others go in the Gateway group, after Routing. An item with an endpoint is listed only while that endpoint answers, or fails
+ * Login; those three move, with their icons and Auth Files' count, into "Advanced settings", a drawer at the
+ * end of Accounts' group, closed until opened (navDrawer.ts remembers it), named in the owner's words (API
+ * keys, Subscriptions, Ways to sign in), so every original setting stays one click away. The others go in the
+ * Gateway group, after Routing. An item with an endpoint is listed only while that endpoint answers, or fails
  * for another reason than 404; an item without one (Accounts and Models read the configuration and the
  * credentials, and show Provimux's endpoints where the proxy has them) is always listed.
  */
@@ -47,9 +51,9 @@ export const PROVIMUX_PAGES: ReadonlyArray<{
 const GROUP = 'gateway';
 const AFTER = '/routing';
 
-/** The group the pages Accounts replaces move to, and their names there. */
-export const ALL_SETTINGS_GROUP = 'provimux-all-settings';
-const ALL_SETTINGS_LABEL = 'provimux.nav_groups.all_settings';
+/** The drawer the pages Accounts replaces move to (`ADVANCED_SETTINGS_DRAWER`), and their names there. */
+const ADVANCED_SETTINGS_LABEL = 'provimux.nav.advanced_settings';
+const ADVANCED_SETTINGS_META = 'provimux.nav_meta.advanced_settings';
 const ALL_SETTINGS_NAMES: Readonly<Record<string, { labelKey: string; metaKey: string }>> = {
   '/ai-providers': { labelKey: 'provimux.nav.all_keys', metaKey: 'provimux.nav_meta.all_keys' },
   '/auth-files': { labelKey: 'provimux.nav.all_logins', metaKey: 'provimux.nav_meta.all_logins' },
@@ -95,8 +99,10 @@ function replaceItems<G extends { id: string; items: object[] }>(
 }
 
 /**
- * The upstream items a page replaced, in a group of their own right after the page's group: the same items
- * (route, icon, badge), named in the owner's words. Nothing is added when none were there.
+ * The upstream items a page replaced, in a drawer at the end of the page's group, "Advanced settings": the
+ * same items (route, icon, badge), named in the owner's words. The drawer is upstream's own kind of item (the
+ * plugin pages' drawer); its label is read in the current language, since MainLayout shows a drawer's label as
+ * given. Nothing is added when none were there.
  */
 function keepReachable<G extends { id: string; items: object[] }>(
   groups: G[],
@@ -104,13 +110,21 @@ function keepReachable<G extends { id: string; items: object[] }>(
   after: G | undefined
 ) {
   if (removed.length === 0) return;
-  const items = removed.map((item) => {
+  const children = removed.map((item) => {
     const names = ALL_SETTINGS_NAMES[pathOf(item) ?? ''];
     return names ? { ...item, ...names } : item;
   });
-  const at = after ? groups.indexOf(after) + 1 : groups.length;
-  const group = { ...(after ?? groups[0]), id: ALL_SETTINGS_GROUP, labelKey: ALL_SETTINGS_LABEL, items };
-  groups.splice(at, 0, group as G);
+  const home = after ?? groups[0];
+  if (!home) return;
+  const drawer = {
+    kind: 'drawer' as const,
+    id: ADVANCED_SETTINGS_DRAWER,
+    label: i18next.t(ADVANCED_SETTINGS_LABEL),
+    meta: i18next.t(ADVANCED_SETTINGS_META),
+    icon: <IconSlidersHorizontal size={18} />,
+    children,
+  };
+  home.items = [...home.items, drawer] as G['items'];
 }
 
 /**

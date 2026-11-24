@@ -406,9 +406,9 @@ describe("a login's settings: what the proxy lists, edited in place; the rest on
     }
     // The line names the menu's words, and its link opens this login on the original page (Auth Files).
     await i18n.changeLanguage('en');
-    expect(i18n.t('provimux.accounts.login.elsewhere')).toContain('Subscriptions, under All settings');
+    expect(i18n.t('provimux.accounts.login.elsewhere')).toContain('Subscriptions, under Advanced settings');
     expect(i18n.t('provimux.nav.all_logins')).toBe('Subscriptions');
-    expect(i18n.t('provimux.nav_groups.all_settings')).toBe('All settings');
+    expect(i18n.t('provimux.nav.advanced_settings')).toBe('Advanced settings');
     expect(read('src/provimux/pages/accounts/AccountSheet.tsx')).toMatch(
       /onOpenOriginal=\{\(\) =>\s+void confirmDiscard\(\)\.then\(\(ok\) => \{\s+if \(ok\) props\.onMoreSettings\(account\);/
     );

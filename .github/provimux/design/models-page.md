@@ -79,3 +79,60 @@ quota pause only with a Devin login, and OpenRouter only with an OpenRouter entr
 
 Not carried over: Model routes' per-route limit and reasoning chips (a name's Details hold its sizes and levels), and
 Model lists' per-model table of which source stated each value (Details say it per name).
+
+## 6. Excluded models
+
+The owner (2026-11-24): "In the Models page, shouldn't I have the exclude models? And a list with all excluded and its
+provider, nicely done?" Models has two views, **Names** (sections 1 to 5) and **Excluded models**: tabs under the
+title, the view in the address (`?tab=excluded`, `&model=<name>` to search one model). The page keeps the location it
+opened with while only its query changes (upstream's page transition), so the view is the page's own state, read from
+the address when it opens and written back to it; a tab or a name's mark switches it without a navigation.
+
+### 6.1 What is excluded where
+
+`exclusions.ts` reads the page's one read of the configuration (no other request): places, and the rules on them.
+
+| Place | Stored in | How the proxy applies it |
+| --- | --- | --- |
+| One API key (Gemini, Interactions, Claude, Codex, xAI, Meta, Vertex) | the key's `excluded-models`, else its connection's (`api-keys.<family>[g]`) | the key's list replaces the connection's; `*` alone is the key's off switch (Accounts' switch), not listed |
+| Every subscription of a login type | `oauth.excluded-models.<type>` (`oauth-excluded-models` before v8; Auth Files' "Excluded models" page) | applies to every login of the type, unless the login's own file has a list, which then replaces it (`sdk/cliproxy/service_models.go`) |
+| A login's own list | `excluded_models` in its login file, next to its tokens | never read here: one line says so and links to Subscriptions (Auth Files filtered to the service's type) |
+
+OpenAI-compatible entries (OpenRouter and the owner's own) have no exclusions in the proxy (`OpenAICompatibility` has no
+such field; their registration never applies one): they serve only the models in their list, and one line says so.
+Matching is upstream's (`matchesExcludedRule`): case does not matter and `*` stands for any characters; the proxy
+matches the served name and the upstream model. A part of the file the page cannot read whole (a list that is not a
+list, a number the browser cannot hold) is named in one line, not listed and never written.
+
+### 6.2 The view
+
+One card per model or pattern, in name order; in it one row per place (the service's icon, "Every Claude subscription
+· 1 login now" or "Claude API key st******a1 · anthropic", the kind as on Accounts, **Remove**). A key's row links to its
+account on Accounts; a key that uses its connection's list says "from its connection “anthropic”, shared by 2 keys".
+Where the proxy reports its routes, each card says whether something still serves a model the rule matches: **Served
+nowhere now** (the one inverse mark, and the card's left edge), or "Still served by 1 account" with who (a key by its
+masked tail). Without routes it says that this is not known. Above: the counts (exclusions, models and patterns, served
+nowhere), the search (a model's name finds the patterns that take it out), the services with exclusions as a filter,
+and **Exclude a model**. On Names, a name a rule takes out (by its name or a model it sends) carries "Excluded in 2
+places", linking to the view searched for it.
+
+**Exclude a model**: the model (the service's built-in list from `GET /routing/model-definitions/<channel>` and the
+served names offered, free text and patterns allowed), the service, then where: every subscription of it ("and any
+added later") or one of its keys. Before writing, one line says what it will mean ("will no longer be served by every
+Claude subscription. No other account serves it now: it will be served nowhere"). Refused, with why: `*` alone (the off
+switch, on Accounts), a space or a comma (the proxy keeps a key's rules joined by commas), a rule the place has, a model
+a pattern of the place already takes out.
+
+### 6.3 Writes
+
+Each change is written at once, one request, the original pages' own for the field, from the page's read and with
+`If-Match` set to its tag (`writes.ts`, `exclusionsApi.ts`); the page then reads again, whatever the answer.
+
+| Change | Request | Body |
+| --- | --- | --- |
+| Every subscription of a type | `PUT /config/oauth/excluded-models` (Auth Files' `saveOauthExcludedModels` path) | the map as read; the type's list with the rule added or taken out, its other spellings folded in; a list left empty is removed |
+| One key | `PUT /config/api-keys/<family>` (as AI Providers and Accounts write a key) | the family's list as read with one list changed: the key's own when it has one (an emptied own list stays, so the key still does not use its connection's); the connection's when no other key uses it; otherwise the key gets its own, the connection's with the change (as `applyNativeDisabled` does). `*` and anything not a string stay |
+
+A file changed since the read is refused (412) and nothing is written: the page says so and has read again. A read
+without a tag writes nothing. While the names have edits not saved, no exclusion is written (one line says to save or
+discard them first): a write changes the file's tag, which the names' save is conditional on.

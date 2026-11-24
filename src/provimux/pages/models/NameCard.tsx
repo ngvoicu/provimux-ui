@@ -1,4 +1,5 @@
 import { memo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import {
@@ -10,6 +11,9 @@ import {
   IconTimer,
 } from '@/components/ui/icons';
 import type { ProvimuxModelRoutesResponse, ProvimuxRecordedCooldown } from '../../api/types';
+import { IconExcluded } from '../../components/ProvimuxIcons';
+import type { Exclusion } from '../excluded/exclusions';
+import { placeInline } from '../excluded/labels';
 import { setKeyPriority } from '../aliases/priority';
 import type { AliasDraft, AliasEntry } from '../aliases/types';
 import { formatTokens } from '../modelRoutes/logic';
@@ -21,12 +25,17 @@ import { formatDuration, formatExact, formatRelative, serverNow, timeMs } from '
 import { usePageClock, useSecondClock } from '../shared/clocks';
 import type { LimitSource, ModelDetail, NameItem, RouteLine } from './catalog';
 import { NameEditor } from './NameEditor';
+import { excludedAddress } from './address';
 import { providerName } from './labels';
 import styles from './ModelsPage.module.scss';
 
 export interface NameCardProps {
   id: string;
   item: NameItem;
+  /** The exclusions that take this name out somewhere (by its name or a model it sends upstream). */
+  excludedIn?: readonly Exclusion[];
+  /** Opens Excluded models searched for this name; without it the mark is a plain link. */
+  onShowExcluded?: (model: string) => void;
   draft: AliasDraft;
   entries: readonly AliasEntry[];
   routes: ProvimuxModelRoutesResponse | null;
@@ -83,6 +92,9 @@ export const NameCard = memo(function NameCard(props: NameCardProps) {
               <IconAlertTriangle size={12} />
               {t('provimux.models.tag_problem')}
             </span>
+          ) : null}
+          {props.excludedIn?.length ? (
+            <ExcludedMark name={item.name} in={props.excludedIn} onShow={props.onShowExcluded} />
           ) : null}
         </div>
         <p className={styles.nameMeta}>{meta.join(' · ')}</p>
@@ -164,6 +176,41 @@ export const NameCard = memo(function NameCard(props: NameCardProps) {
     </article>
   );
 });
+
+/**
+ * "Excluded in 2 places": the places that never serve this name, as a link to them on Excluded models. A
+ * click switches the page's view (`onShow`); the address stays for a new tab or a copied link.
+ */
+function ExcludedMark({
+  name,
+  in: exclusions,
+  onShow,
+}: {
+  name: string;
+  in: readonly Exclusion[];
+  onShow?: (model: string) => void;
+}) {
+  const { t } = useTranslation();
+  const places = new Map(exclusions.map((exclusion) => [exclusion.place.id, exclusion.place]));
+  const where = [...places.values()].map((place) => placeInline(t, place)).join('; ');
+  return (
+    <Link
+      to={excludedAddress(name)}
+      onClick={(event) => {
+        if (!onShow || event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0)
+          return;
+        event.preventDefault();
+        onShow(name);
+      }}
+      className={`${styles.tag} ${styles.tagLink}`}
+      data-tone="excluded"
+      title={t('provimux.models.excluded_mark_title', { places: where })}
+    >
+      <IconExcluded size={12} />
+      {t('provimux.models.excluded_mark', { count: places.size })}
+    </Link>
+  );
+}
 
 /**
  * A name's details, shown on request: what clients are told about the model's size (context and output)

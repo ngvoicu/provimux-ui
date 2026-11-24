@@ -5,17 +5,16 @@
       "models": "모델",
       "all_keys": "API 키",
       "all_logins": "구독",
-      "all_sign_in": "로그인 방법"
+      "all_sign_in": "로그인 방법",
+      "advanced_settings": "고급 설정"
     },
     "nav_meta": {
       "accounts": "구독과 API 키: 추가, 수정, 끄기",
       "models": "보낼 수 있는 모든 모델 이름과 이를 제공하는 곳",
       "all_keys": "모든 API 키의 전체 설정, 원래의 AI 공급자 페이지에서",
       "all_logins": "각 구독의 로그인 파일: 업로드, 다운로드, 할당량과 전체 설정, 원래의 인증 파일 페이지에서",
-      "all_sign_in": "모든 로그인 방법, 원래의 OAuth 로그인 페이지에서"
-    },
-    "nav_groups": {
-      "all_settings": "전체 설정"
+      "all_sign_in": "모든 로그인 방법, 원래의 OAuth 로그인 페이지에서",
+      "advanced_settings": "API 키, 구독, 로그인 방법을 원래 페이지에서"
     },
     "common": {
       "loading": "불러오는 중…",
@@ -108,8 +107,8 @@
         "more_login": "구독에서 열기",
         "more_key": "API 키에서 열기",
         "remove": "계정 삭제",
-        "more_login_only": "전체 설정의 구독에 있는 것: 프록시, 접두사, 헤더, 제공하지 않는 모델, 가중치, 자체 모델 이름, 파일과 할당량.",
-        "more_key_only": "전체 설정의 API 키에만 있는 것: 모델로 키 테스트하기, 한 연결의 모든 키를 함께 편집하기."
+        "more_login_only": "고급 설정의 구독에 있는 것: 프록시, 접두사, 헤더, 제공하지 않는 모델, 가중치, 자체 모델 이름, 파일과 할당량.",
+        "more_key_only": "고급 설정의 API 키에만 있는 것: 모델로 키 테스트하기, 한 연결의 모든 키를 함께 편집하기."
       },
       "remove_title": "{{name}}을(를) 삭제할까요?",
       "remove_login": "로그인 파일이 Provimux에서 삭제됩니다. 이 구독을 다시 사용하려면 다시 로그인하세요.",
@@ -182,12 +181,12 @@
         "eyebrow": "설정 · {{service}}",
         "heading": "설정",
         "lede_key": "주소, 프록시, 모델, 제공하지 않는 모델, 헤더, 접두사, 가중치, 재시도.",
-        "lede_login": "메모와 재시도는 여기서, 프록시·접두사·헤더 등 나머지는 전체 설정의 구독에서.",
+        "lede_login": "메모와 재시도는 여기서, 프록시·접두사·헤더 등 나머지는 고급 설정의 구독에서.",
         "open": "설정 변경",
         "back": "계정으로 돌아가기",
         "save": "설정 저장",
         "saved": "{{name}}의 설정을 저장했습니다.",
-        "partner": "이 키는 파트너 번들에 속하며, 설정은 전체 설정의 API 키에 있습니다.",
+        "partner": "이 키는 파트너 번들에 속하며, 설정은 고급 설정의 API 키에 있습니다.",
         "shared_title": "이 연결의 다른 키들도 사용합니다",
         "shared_tag": "공유",
         "shared_note_other": "이 키는 연결 “{{name}}”을 다른 키 {{count}}개와 함께 씁니다. “공유” 표시가 있는 설정은 그 키들에도 바뀝니다.",
@@ -262,7 +261,7 @@
         "retries_hint": "이 로그인으로 실패한 요청을 Provimux가 몇 번 다시 시도할지입니다.",
         "use_siwc": "ChatGPT로 로그인 사용",
         "use_siwc_hint": "이 로그인의 Codex 요청이 연결된 ChatGPT 로그인을 씁니다. 꺼도 연결은 유지됩니다.",
-        "elsewhere": "프록시, 접두사, 헤더, 제공하지 않는 모델, 가중치, 자체 모델 이름 등 나머지 설정은 전체 설정의 구독에 있습니다.",
+        "elsewhere": "프록시, 접두사, 헤더, 제공하지 않는 모델, 가중치, 자체 모델 이름 등 나머지 설정은 고급 설정의 구독에 있습니다.",
         "elsewhere_link": "거기서 이 로그인 열기"
       },
       "siwc": {
@@ -423,7 +422,12 @@
       "open_providers": "AI 공급자 열기",
       "create": "만들기",
       "source_account": "계정: {{name}}",
-      "empty_link_accounts": "계정 추가"
+      "empty_link_accounts": "계정 추가",
+      "tabs_label": "모델 페이지에 표시할 내용",
+      "tab_names": "이름",
+      "tab_excluded": "제외된 모델",
+      "excluded_mark_other": "{{count}}곳에서 제외됨",
+      "excluded_mark_title": "제공하지 않는 곳: {{places}}. 제외된 모델에서 엽니다."
     },
     "aliases": {
       "load_failed": "구성을 읽을 수 없습니다",
@@ -481,6 +485,71 @@
       "aliases_link": "모델 페이지에서 이름 설정",
       "row_alias_label": "별칭:",
       "row_alias_title": "별칭, 별칭 페이지에서 설정"
+    },
+    "excluded": {
+      "intro": "클라이언트가 이름으로 요청해도 계정이 절대 제공하지 않는 모델입니다. 변경은 바로 저장됩니다.",
+      "summary_label": "제외된 모델 요약",
+      "count_exclusions_other": "제외 {{count}}개",
+      "count_models_other": "모델과 패턴 {{count}}개",
+      "count_nowhere_other": "지금 어디서도 제공되지 않음 {{count}}개",
+      "dirty": "이름 변경이 아직 저장되지 않았습니다. 먼저 저장하거나 취소하세요. 제외는 추가하는 즉시 저장됩니다.",
+      "search_placeholder": "모델이나 패턴 검색",
+      "service_label": "서비스",
+      "service_all": "모든 서비스",
+      "add": "모델 제외",
+      "empty_title": "제외된 모델이 없습니다",
+      "empty_text": "모든 계정이 가진 모델을 모두 제공합니다. 모델을 제외하면 클라이언트가 이름으로 요청해도 그 계정은 제공하지 않습니다.",
+      "no_match": "검색과 서비스에 맞는 제외가 없습니다.",
+      "pattern": "패턴",
+      "pattern_title": "*는 임의의 문자입니다. 이름이 일치하는 모든 모델이 제외됩니다.",
+      "served_nowhere": "지금 어디서도 제공되지 않음",
+      "served_nowhere_title": "지금 이와 일치하는 모델을 제공하는 계정이 없습니다.",
+      "still_served_other": "아직 {{count}}개 계정이 제공",
+      "served_by": "아직 {{names}}에서 제공합니다.",
+      "served_by_more": "아직 {{names}} 외 {{count}}곳에서 제공합니다.",
+      "routes_unknown": "다른 계정이 아직 제공하는지 알 수 없습니다. 프록시가 경로를 알려 주지 않습니다.",
+      "place_logins": "모든 {{service}} 구독",
+      "place_logins_inline": "모든 {{service}} 구독",
+      "place_logins_count_other": "현재 로그인 {{count}}개",
+      "place_logins_none": "현재 구독 없음",
+      "place_logins_unknown": "로그인 수 알 수 없음",
+      "place_key": "{{service}} API 키 {{key}}",
+      "place_key_shared_other": "연결 “{{name}}”에서 설정, 키 {{count}}개가 공유",
+      "place_key_off": "꺼짐",
+      "route_key": "{{provider}} API 키 · {{who}}",
+      "remove": "제거",
+      "remove_label": "{{place}}에서 {{model}} 제외 해제",
+      "added": "이제 {{place}}에서 {{model}}을(를) 제외합니다.",
+      "removed": "더 이상 {{place}}에서 {{model}}을(를) 제외하지 않습니다.",
+      "unread_other": "제외가 들어 있는 설정 {{count}}곳을 여기서 읽을 수 없어 그대로 둡니다:",
+      "login_files": "구독은 로그인 파일에 토큰과 함께 자체 목록을 둘 수도 있습니다. 그 파일은 여기서 절대 내려받지 않으므로 그 목록은 보이지 않으며, 목록이 있는 구독은 모든 구독용 목록 대신 그 목록을 씁니다.",
+      "login_files_link": "구독에서 보기",
+      "login_files_link_service": "구독에서 {{service}} 목록 보기",
+      "compatible_note": "OpenAI 호환 항목({{names}})에는 제외가 없습니다. 자체 목록의 모델만 제공합니다. 모델을 빼려면 API 키에서 그 목록에서 제거하세요.",
+      "write_changed": "이 페이지가 읽은 뒤 다른 곳에서 설정이 바뀌어 아무것도 쓰지 않았습니다. 페이지가 다시 읽었으니 한 번 더 시도하세요.",
+      "write_no_tag": "프록시가 설정과 함께 버전 태그를 보내지 않아 이 페이지에서 안전하게 바꿀 수 없습니다.",
+      "write_refused": "프록시가 변경을 거부했습니다: {{message}}",
+      "write_failed": "저장되지 않음: {{message}}",
+      "composer": {
+        "title": "모델 제외",
+        "model": "모델",
+        "model_placeholder": "claude-opus-4-1 또는 gpt-5-* 같은 패턴",
+        "model_hint": "목록에서 고르거나 입력하세요. *는 임의의 문자입니다.",
+        "where": "위치",
+        "logins_hint": "{{detail}}, 나중에 추가되는 구독도 포함",
+        "already": "이미 제외됨",
+        "no_places": "아직 제외를 설정할 수 있는 계정이 없습니다.",
+        "no_places_link": "계정 추가",
+        "preview": "{{place}}에서 더 이상 {{model}}을(를) 제공하지 않습니다.",
+        "preview_nowhere": "지금 이 모델을 제공하는 다른 계정이 없어 어디서도 제공되지 않게 됩니다.",
+        "preview_still_other": "다른 계정 {{count}}개가 아직 제공합니다.",
+        "problem_reserved": "*만 쓰면 계정이 꺼집니다. 계정 페이지의 스위치를 사용하세요.",
+        "problem_invalid": "모델 이름에는 공백이나 쉼표가 없습니다.",
+        "problem_exists": "이미 그곳에서 제외되어 있습니다.",
+        "problem_covered": "이미 그곳에서 패턴 {{pattern}}(으)로 제외되어 있습니다.",
+        "submit": "제외",
+        "cancel": "취소"
+      }
     }
   }
 }

@@ -86,3 +86,13 @@ export function IconAccounts({ size = 20, ...props }: IconProps) {
     </svg>
   );
 }
+
+/** A circle struck through: a model an account never serves. */
+export function IconExcluded({ size = 20, ...props }: IconProps) {
+  return (
+    <svg {...base} width={size} height={size} {...props}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M5.7 5.7l12.6 12.6" />
+    </svg>
+  );
+}

@@ -36,7 +36,7 @@ import {
   IconSidebarSystem,
   IconChevronDown,
 } from '@/components/ui/icons';
-import { INLINE_LOGO_JPEG, PROVIMUX_BRAND, ProvimuxFooter, ProvimuxTagline, provimuxNav, useProvimuxPages } from '@/provimux';
+import { INLINE_LOGO_JPEG, PROVIMUX_BRAND, ProvimuxFooter, ProvimuxTagline, provimuxNav, useProvimuxDrawers, useProvimuxPages } from '@/provimux';
 import {
   useAuthStore,
   useLoginTransitionStore,
@@ -355,9 +355,7 @@ export function MainLayout() {
       : null;
   const pluginResources = currentPluginData?.resources ?? [];
   const pluginRequestRef = useRef(0);
-  const [expandedPluginResourceIDs, setExpandedPluginResourceIDs] = useState<Set<string>>(
-    () => new Set()
-  );
+  const [expandedPluginResourceIDs, setExpandedPluginResourceIDs] = useProvimuxDrawers();
   const contentRef = useRef<HTMLDivElement | null>(null);
   const authFilesCountRequestRef = useRef(0);
   const railTooltipRef = useRef<HTMLDivElement | null>(null);
@@ -796,7 +794,7 @@ export function MainLayout() {
       }
       return next;
     });
-  }, []);
+  }, [setExpandedPluginResourceIDs]);
 
   const showRailTooltip = useCallback(
     (event: SyntheticEvent<HTMLElement>, targetID: string, label: string, meta?: string) => {

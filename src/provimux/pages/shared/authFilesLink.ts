@@ -21,3 +21,26 @@ export function useOpenInAuthFiles() {
     [navigate]
   );
 }
+
+/** Auth Files showing one login type's files (every type when null): its type filter set, search cleared. */
+export function openAuthFilesTypeState(type: string | null) {
+  const current = readAuthFilesUiState() ?? {};
+  return {
+    ...current,
+    search: '',
+    filter: type ?? 'all',
+    statusFilterMode: 'all' as const,
+    page: 1,
+  };
+}
+
+export function useOpenAuthFilesOfType() {
+  const navigate = useNavigate();
+  return useCallback(
+    (type: string | null) => {
+      writeAuthFilesUiState(openAuthFilesTypeState(type));
+      navigate('/auth-files');
+    },
+    [navigate]
+  );
+}

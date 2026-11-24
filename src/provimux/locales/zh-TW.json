@@ -5,17 +5,16 @@
       "models": "模型",
       "all_keys": "API 金鑰",
       "all_logins": "訂閱",
-      "all_sign_in": "登入方式"
+      "all_sign_in": "登入方式",
+      "advanced_settings": "進階設定"
     },
     "nav_meta": {
       "accounts": "你的訂閱和 API 金鑰：新增、修復、停用",
       "models": "你可以傳送的每個模型名稱，以及由誰提供",
       "all_keys": "每個 API 金鑰的全部設定，在原來的「AI 供應商」頁",
       "all_logins": "每個訂閱的登入檔案：上傳、下載、配額和全部設定，在原來的「驗證檔案」頁",
-      "all_sign_in": "所有登入方式，在原來的「OAuth 登入」頁"
-    },
-    "nav_groups": {
-      "all_settings": "全部設定"
+      "all_sign_in": "所有登入方式，在原來的「OAuth 登入」頁",
+      "advanced_settings": "API 金鑰、訂閱和登入方式，在原來的頁面上"
     },
     "common": {
       "loading": "載入中…",
@@ -108,8 +107,8 @@
         "more_login": "在「訂閱」中開啟",
         "more_key": "在「API 金鑰」中開啟",
         "remove": "移除帳戶",
-        "more_login_only": "在「全部設定」下的「訂閱」中：它的代理、前綴、請求標頭、不提供的模型、權重、它自己的模型名稱、它的檔案和配額。",
-        "more_key_only": "僅在「全部設定」下的「API 金鑰」中：用某個模型測試金鑰，以及一起編輯一個連線的所有金鑰。"
+        "more_login_only": "在「進階設定」下的「訂閱」中：它的代理、前綴、請求標頭、不提供的模型、權重、它自己的模型名稱、它的檔案和配額。",
+        "more_key_only": "僅在「進階設定」下的「API 金鑰」中：用某個模型測試金鑰，以及一起編輯一個連線的所有金鑰。"
       },
       "remove_title": "移除 {{name}}？",
       "remove_login": "它的登入檔案會從 Provimux 中刪除。要再次使用這個訂閱，需要重新登入。",
@@ -182,12 +181,12 @@
         "eyebrow": "設定 · {{service}}",
         "heading": "設定",
         "lede_key": "位址、代理、模型、不提供的模型、請求標頭、前綴、權重、重試。",
-        "lede_login": "備註和重試在這裡；代理、前綴、請求標頭等其餘設定在「全部設定」下的「訂閱」中。",
+        "lede_login": "備註和重試在這裡；代理、前綴、請求標頭等其餘設定在「進階設定」下的「訂閱」中。",
         "open": "修改設定",
         "back": "返回帳戶",
         "save": "儲存設定",
         "saved": "已儲存 {{name}} 的設定。",
-        "partner": "此金鑰屬於合作夥伴的方案，其設定在「全部設定」下的「API 金鑰」中。",
+        "partner": "此金鑰屬於合作夥伴的方案，其設定在「進階設定」下的「API 金鑰」中。",
         "shared_title": "此連線中的其他金鑰也使用它",
         "shared_tag": "共用",
         "shared_note_other": "此金鑰與另外 {{count}} 個金鑰共用連線「{{name}}」：標為「共用」的設定也會對它們生效。",
@@ -262,7 +261,7 @@
         "retries_hint": "使用此登入失敗的請求，Provimux 重試幾次。",
         "use_siwc": "使用 ChatGPT 登入",
         "use_siwc_hint": "此登入的 Codex 請求使用它綁定的 ChatGPT 登入。關閉後綁定仍保留。",
-        "elsewhere": "它的代理、前綴、請求標頭、不提供的模型、權重、它自己的模型名稱等設定在「全部設定」下的「訂閱」中。",
+        "elsewhere": "它的代理、前綴、請求標頭、不提供的模型、權重、它自己的模型名稱等設定在「進階設定」下的「訂閱」中。",
         "elsewhere_link": "在那裡開啟此登入"
       },
       "siwc": {
@@ -423,7 +422,12 @@
       "open_providers": "開啟 AI 供應商",
       "create": "建立",
       "source_account": "帳戶：{{name}}",
-      "empty_link_accounts": "新增帳戶"
+      "empty_link_accounts": "新增帳戶",
+      "tabs_label": "模型頁顯示的內容",
+      "tab_names": "名稱",
+      "tab_excluded": "已排除的模型",
+      "excluded_mark_other": "在 {{count}} 處被排除",
+      "excluded_mark_title": "不提供它的地方：{{places}}。在「已排除的模型」中開啟。"
     },
     "aliases": {
       "load_failed": "無法讀取設定",
@@ -481,6 +485,71 @@
       "aliases_link": "在模型頁面設定名稱",
       "row_alias_label": "別名：",
       "row_alias_title": "別名，於別名頁面設定"
+    },
+    "excluded": {
+      "intro": "帳戶永遠不提供的模型，即使用戶端按名稱請求也一樣。每次變更都會立即儲存。",
+      "summary_label": "已排除模型的數字",
+      "count_exclusions_other": "{{count}} 條排除",
+      "count_models_other": "{{count}} 個模型和模式",
+      "count_nowhere_other": "{{count}} 個現在無處提供",
+      "dirty": "你對名稱的變更還沒有儲存。請先儲存或捨棄：排除一經新增就會立即儲存。",
+      "search_placeholder": "搜尋模型或模式",
+      "service_label": "服務",
+      "service_all": "全部服務",
+      "add": "排除模型",
+      "empty_title": "沒有排除任何模型",
+      "empty_text": "每個帳戶都會提供它擁有的每個模型。排除一個模型，可讓某個帳戶不再提供它，即使用戶端按名稱請求也一樣。",
+      "no_match": "沒有符合搜尋和服務的排除。",
+      "pattern": "模式",
+      "pattern_title": "* 代表任意字元：名稱符合的每個模型都會被排除。",
+      "served_nowhere": "現在無處提供",
+      "served_nowhere_title": "現在沒有帳戶提供與之相符的模型。",
+      "still_served_other": "仍有 {{count}} 個帳戶提供",
+      "served_by": "仍由 {{names}} 提供。",
+      "served_by_more": "仍由 {{names}} 及另外 {{count}} 個提供。",
+      "routes_unknown": "無法得知是否還有其他帳戶提供它：代理不回報它的路由。",
+      "place_logins": "每個 {{service}} 訂閱",
+      "place_logins_inline": "每個 {{service}} 訂閱",
+      "place_logins_count_other": "現有 {{count}} 個登入",
+      "place_logins_none": "現在沒有訂閱",
+      "place_logins_unknown": "登入數未知",
+      "place_key": "{{service}} API 金鑰 {{key}}",
+      "place_key_shared_other": "來自其連線「{{name}}」，{{count}} 個金鑰共用",
+      "place_key_off": "已關閉",
+      "route_key": "{{provider}} API 金鑰 · {{who}}",
+      "remove": "移除",
+      "remove_label": "不再為{{place}}排除 {{model}}",
+      "added": "已為{{place}}排除 {{model}}。",
+      "removed": "已不再為{{place}}排除 {{model}}。",
+      "unread_other": "設定中有 {{count}} 處含有排除的內容無法在此讀取，將保持原樣：",
+      "login_files": "訂閱還可以在它的登入檔案中保存自己的清單，與它的權杖放在一起。這裡從不下載該檔案，所以不會顯示該清單；有自己清單的訂閱會用它代替針對所有訂閱的清單。",
+      "login_files_link": "在「訂閱」中查看",
+      "login_files_link_service": "在「訂閱」中查看 {{service}} 的",
+      "compatible_note": "OpenAI 相容項目（{{names}}）沒有排除：它們只提供自己清單中的模型。要去掉某個模型，請在「API 金鑰」中從該清單移除。",
+      "write_changed": "自本頁讀取以來，設定已在別處變更，因此沒有寫入任何內容。本頁已重新讀取：請再試一次。",
+      "write_no_tag": "代理沒有隨設定傳送版本標籤，因此本頁無法安全地變更它。",
+      "write_refused": "代理拒絕了變更：{{message}}",
+      "write_failed": "未儲存：{{message}}",
+      "composer": {
+        "title": "排除模型",
+        "model": "模型",
+        "model_placeholder": "claude-opus-4-1，或像 gpt-5-* 這樣的模式",
+        "model_hint": "從清單中選擇或直接輸入；* 代表任意字元。",
+        "where": "位置",
+        "logins_hint": "{{detail}}，以及之後新增的",
+        "already": "已排除",
+        "no_places": "還沒有可以設定排除的帳戶。",
+        "no_places_link": "新增帳戶",
+        "preview": "{{place}}將不再提供 {{model}}。",
+        "preview_nowhere": "現在沒有其他帳戶提供它：它將無處提供。",
+        "preview_still_other": "仍有 {{count}} 個其他帳戶提供它。",
+        "problem_reserved": "單獨的 * 會關閉帳戶：請使用「帳戶」頁上的開關。",
+        "problem_invalid": "模型名稱不含空格或逗號。",
+        "problem_exists": "那裡已經排除了。",
+        "problem_covered": "那裡已被模式 {{pattern}} 排除。",
+        "submit": "排除",
+        "cancel": "取消"
+      }
     }
   }
 }
