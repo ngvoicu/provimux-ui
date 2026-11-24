@@ -21,6 +21,7 @@ import { ModelsBody } from '@/provimux/pages/models/ModelsBody';
 import { excludedAddress, tabOf } from '@/provimux/pages/models/address';
 import {
   excludedModels,
+  familyExcludes,
   filterExcluded,
   placesExcluding,
   placesToOffer,
@@ -165,6 +166,32 @@ describe('reading where models are excluded', () => {
     ]);
     expect(read.loginMapWritable).toBe(true);
     expect(read.unread).toEqual([]);
+  });
+
+  test('OpenAI-compatible entries have no exclusions yet: one switch, no place, no write, named in one line', () => {
+    // The proxy has no excluded-models for them yet; a coming release adds it, and `familyExcludes` is the switch.
+    expect(familyExcludes('openai-compatibility')).toBe(false);
+    for (const family of ['claude', 'codex', 'gemini', 'interactions', 'vertex', 'xai', 'meta'] as const) {
+      expect(familyExcludes(family)).toBe(true);
+    }
+    const state = stateOf(config());
+    const read = readExclusions(state);
+    expect(read.withoutExclusions.map((entry) => entry.groupName)).toEqual(['openrouter']);
+    expect(read.places.some((p) => p.kind === 'key' && p.entry.family === 'openai-compatibility')).toBe(false);
+    const entry = read.withoutExclusions[0];
+    const asPlace: KeyPlace = {
+      kind: 'key',
+      id: entry.id,
+      entry,
+      service: 'openrouter',
+      storedOn: 'group',
+      sharing: 1,
+      rules: [],
+      off: false,
+    };
+    expect(() => planExclusion(config(), { place: asPlace, rule: 'x', excluded: true })).toThrow(
+      ExclusionWriteError
+    );
   });
 
   test("a key's list is its own when it has one, else its connection's, shared with the keys that use it", () => {

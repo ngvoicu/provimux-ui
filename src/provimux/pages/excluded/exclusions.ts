@@ -4,8 +4,8 @@
  *
  * - an API key's `excluded-models` (`api-keys.<family>`): the key's own list when it has one, else its
  *   connection's (the group's), as the proxy and AI Providers read it. `*` alone is the key's off switch
- *   (Accounts' switch), not an exclusion. OpenAI-compatible entries have no such list: they serve only the
- *   models in their list.
+ *   (Accounts' switch), not an exclusion. OpenAI-compatible entries have no such list yet: they serve only
+ *   the models in their list (`familyExcludes` is the one switch for when the proxy adds it).
  * - every subscription of a login type: `oauth.excluded-models.<type>` (`oauth-excluded-models` before v8),
  *   the list Auth Files' "Excluded models" page edits. A login whose own file has a list uses that list
  *   instead; the file is never read here (it holds the tokens).
@@ -66,6 +66,8 @@ export interface Exclusion {
 export interface ExclusionState {
   places: Place[];
   exclusions: Exclusion[];
+  /** API keys and entries of a family without exclusions (`familyExcludes`): the view says so in one line. */
+  withoutExclusions: KeyEntry[];
   /** The map of `oauth.excluded-models` can be written whole: no subscription place without it. */
   loginMapWritable: boolean;
   /** Parts of the file holding exclusions the page cannot read (they stay as they are). */
@@ -76,6 +78,18 @@ export const LOGINS_EXCLUDED_KEY = 'excluded-models';
 
 export const ruleKey = (rule: string): string => rule.trim().toLowerCase();
 export const isPattern = (rule: string): boolean => rule.includes('*');
+
+/**
+ * Whether the proxy applies an API key's `excluded-models` in this family. OpenAI-compatible entries have none
+ * yet (`OpenAICompatibility` in the proxy has no such field, and their registration applies none); a coming
+ * Provimux release adds it. This is the one switch: when that release is the one the console runs against,
+ * return true for them here. Their entries then become places (`keyPlaces`: an entry is one place,
+ * `keyIndex === null`, so `storedListOf` and `familyWithKeyRule` take the entry's own list, at the level the
+ * release stores it), they get a model list to offer (`KEY_CHANNEL`, or the entry's own models), and the line
+ * saying they have none (`withoutExclusions`) is empty by itself.
+ */
+export const familyExcludes = (family: ProviderFamily): boolean =>
+  family !== 'openai-compatibility';
 
 /** The model-definition channel that lists a family's models (`GET /routing/model-definitions/<channel>`). */
 const KEY_CHANNEL: Partial<Record<ProviderFamily, string>> = {
@@ -157,7 +171,7 @@ export function inheritingKeys(group: Readonly<Record<string, unknown>>): number
 function keyPlaces(entries: readonly KeyEntry[], unread: string[]): KeyPlace[] {
   const places: KeyPlace[] = [];
   for (const entry of entries) {
-    if (entry.keyIndex === null) continue;
+    if (!familyExcludes(entry.family) || entry.keyIndex === null) continue;
     const { list, storedOn } = storedListOf(entry);
     if (list !== undefined && list !== null && !Array.isArray(list)) {
       const at = `api-keys.${entry.family}[${entry.groupIndex}]`;
@@ -249,10 +263,8 @@ export function placeOrder(a: Place, b: Place): number {
 /** Every place an exclusion can be, and every exclusion, from the Models page's read. */
 export function readExclusions(state: Pick<AliasState, 'document' | 'entries'>): ExclusionState {
   const unread: string[] = [];
-  const keys = keyPlaces(
-    state.entries.filter((entry): entry is KeyEntry => entry.store === 'api-key'),
-    unread
-  );
+  const keyEntries = state.entries.filter((entry): entry is KeyEntry => entry.store === 'api-key');
+  const keys = keyPlaces(keyEntries, unread);
   const logins = loginPlaces(
     state.document,
     state.entries.filter((entry): entry is LoginEntry => entry.store === 'login'),
@@ -267,7 +279,13 @@ export function readExclusions(state: Pick<AliasState, 'document' | 'entries'>):
       place,
     }))
   );
-  return { places, exclusions, loginMapWritable: logins.writable, unread };
+  return {
+    places,
+    exclusions,
+    withoutExclusions: keyEntries.filter((entry) => !familyExcludes(entry.family)),
+    loginMapWritable: logins.writable,
+    unread,
+  };
 }
 
 // --- One model, every place it is excluded -------------------------------------------------------------

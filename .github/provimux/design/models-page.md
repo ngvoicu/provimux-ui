@@ -99,7 +99,10 @@ the address when it opens and written back to it; a tab or a name's mark switche
 | A login's own list | `excluded_models` in its login file, next to its tokens | never read here: one line says so and links to Subscriptions (Auth Files filtered to the service's type) |
 
 OpenAI-compatible entries (OpenRouter and the owner's own) have no exclusions in the proxy (`OpenAICompatibility` has no
-such field; their registration never applies one): they serve only the models in their list, and one line says so.
+such field; their registration never applies one): they serve only the models in their list, and one line says so. A
+coming Provimux release adds them. The one switch is `familyExcludes` in `exclusions.ts`: places, the write guard and
+that line all follow it; switching it on also needs the entry-level list in `storedListOf` and `familyWithKeyRule`
+(an entry is one place) and a model list to offer, at the level the release stores it. Not built until then.
 Matching is upstream's (`matchesExcludedRule`): case does not matter and `*` stands for any characters; the proxy
 matches the served name and the upstream model. A part of the file the page cannot read whole (a list that is not a
 list, a number the browser cannot hold) is named in one line, not listed and never written.

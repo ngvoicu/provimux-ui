@@ -93,10 +93,8 @@ export function ExcludedView(props: ExcludedViewProps) {
     () => state.entries.filter((entry): entry is KeyEntry => entry.store === 'api-key'),
     [state.entries]
   );
-  const compatible = state.entries.filter(
-    (entry): entry is KeyEntry =>
-      entry.store === 'api-key' && entry.family === 'openai-compatibility'
-  );
+  // Keys of a family the proxy has no exclusions for (OpenAI-compatible, for now): one line names them.
+  const compatible = read.withoutExclusions;
   const loginTypes = read.places.filter(
     (place): place is LoginsPlace => place.kind === 'logins' && (place.loginCount ?? 1) > 0
   );

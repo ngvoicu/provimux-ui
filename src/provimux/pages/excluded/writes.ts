@@ -17,6 +17,7 @@ import { familyGroups } from '../aliases/rows';
 import type { KeyEntry } from '../aliases/types';
 import {
   LOGINS_EXCLUDED_KEY,
+  familyExcludes,
   inheritingKeys,
   loginsMapIn,
   loginsMapWritable,
@@ -61,7 +62,10 @@ export function familyWithKeyRule(
   rule: string,
   excluded: boolean
 ): unknown[] {
-  if (entry.keyIndex === null) throw new ExclusionWriteError('invalid');
+  // A family without exclusions (OpenAI-compatible, until the proxy has them: `familyExcludes`) takes none.
+  if (!familyExcludes(entry.family) || entry.keyIndex === null) {
+    throw new ExclusionWriteError('invalid');
+  }
   const groups = [...familyGroups(document, entry.family)];
   const group = groups[entry.groupIndex];
   if (!isRecord(group) || !Array.isArray(group.keys)) throw new ExclusionWriteError('not-found');
