@@ -53,7 +53,7 @@ it) and **Savings**:
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/models-desktop-dark.png">
-  <img alt="The Models page. Chips read 40 names, 13 of yours, 4 on several routes, 2 cooling down, 1 needs a look. Below a search field, a filter by what serves a name, the views All, Several routes, Cooling down and Needs a look, and a New name button, the section Your names: opus, served by a Claude subscription, 1840 requests in 30 days; claude-opus-5-5, served in this order by a Claude subscription at priority 10, a Devin subscription at priority 5 that is cooling down, and a Claude API key and OpenRouter sharing priority 0; sonnet, marked Needs a look, with a second route Provimux ignores because the login type already uses the name." src="assets/models-desktop-light.png">
+  <img alt="The Models page. Chips read 41 names, 13 of yours, 4 on several routes, 2 cooling down, 1 needs a look. Below a search field, a filter by what serves a name, the views All, Several routes, Cooling down and Needs a look, and a New name button, the section Your names: opus, served by a Claude subscription, 1840 requests in 30 days; claude-opus-5-5, served in this order by a Claude subscription at priority 10, a Devin subscription at priority 5 that is cooling down, and a Claude API key and OpenRouter sharing priority 0; sonnet, marked Needs a look, with a second route Provimux ignores because the login type already uses the name." src="assets/models-desktop-light.png">
 </picture>
 
 **Models.** Every model name a client can send is a row: the models your subscriptions and keys serve under their own
@@ -62,8 +62,8 @@ last 30 days, then the rest (folded). Under each name, the routes that serve it 
 (among the routes that can take a new request, a higher priority first; routes that share one share the requests):
 subscription in green, API key in amber, the provider, the login as Auth Files names it (it opens there) or the key's
 host, the model it sends upstream, its priority, the cooldown Provimux recorded on it, counting down (a record, not a
-verdict on availability), and for a login its list: its provider's live list, the published list or the built-in
-catalog, and how old it is.
+verdict on availability), and for a login where its list of models comes from and how old it is ("Claude's model
+list, 2 hours ago"). A model only the login's own list has yet carries "new: limits estimated", with one line on why.
 
 **New name** makes a name and puts models under it; on a name, **Edit** renames it, adds or takes out models, or
 removes it. A row Provimux would ignore, or never use, says so in one sentence. An API key's priority is edited on its

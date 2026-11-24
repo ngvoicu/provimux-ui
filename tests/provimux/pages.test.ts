@@ -110,7 +110,7 @@ describe('model routes', () => {
     expect(text).toContain('api.anthropic.com');
     expect(text).toContain('priority 10');
     expect(html).toContain('Cooldown recorded until');
-    expect(html).toContain('quota · HTTP 429 · this model · backoff level 2');
+    expect(html).toContain('quota · HTTP 429 · this model · retry step 2');
     expect(html).toContain('data-access="sub"');
     expect(html).toContain('data-access="api"');
     expect(opus.lines.map((line) => line.rank)).toEqual([1, 2]);

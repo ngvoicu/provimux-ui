@@ -198,7 +198,7 @@ describe('1, 2. Refresh lists now: one request, its answer, nothing followed', (
       /outcome\.kind === 'unconfirmed'[\s\S]*?t\('provimux\.live\.refresh_unconfirmed'\)/
     );
     expect(i18n.t('provimux.live.refresh_unconfirmed')).toBe(
-      'Could not confirm the refresh request — the server may still be refreshing; the rows below update on the next status read.'
+      "Could not confirm the request: the server may still be refreshing. Each login's list on its routes updates on the next read."
     );
     expect(i18n.t('provimux.live.refresh_failed', { message: 'x' })).toBe(
       'Refresh not requested: x'

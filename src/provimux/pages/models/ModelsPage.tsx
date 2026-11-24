@@ -27,11 +27,18 @@ import {
 } from '../aliases/pageLogic';
 import { blockedEntries, planCommit } from '../aliases/plan';
 import type { AliasDraft, CommitOutcome } from '../aliases/types';
+import type { ProvimuxModelListsResponse } from '../../api/types';
 import { usePageClock } from '../shared/clocks';
 import { useProvimuxResource } from '../shared/useProvimuxResource';
 import { formatClock, formatExact, screenNow } from '../time';
 import { useDevinCooling } from '../modelRoutes/useDevinCooling';
-import { initialModelsFilter, usageByName, type ModelsFilter } from './catalog';
+import {
+  initialModelsFilter,
+  learnedByLogin,
+  loginsWithLearned,
+  usageByName,
+  type ModelsFilter,
+} from './catalog';
 import { ModelsBody } from './ModelsBody';
 import shared from '../shared/Shared.module.scss';
 import styles from './ModelsPage.module.scss';
@@ -88,6 +95,7 @@ export function ModelsPage() {
   const { load: loadUsage } = usage;
   const now = screenNow(usePageClock(), routes.loadedAt, routes.offsetMs);
   const usageMap = useMemo(() => usageByName(usage.data), [usage.data]);
+  const learned = useLearned(lists.data);
 
   const requestRef = useRef(0);
   /** The page's one read of the configuration (aliases-page.md 3.4). Nothing is editable until it answers. */
@@ -248,6 +256,7 @@ export function ModelsPage() {
         routesOffsetMs={routes.offsetMs}
         lists={lists.data}
         usage={usageMap}
+        learned={learned}
         nowMs={now}
         filter={filter}
         onFilter={setFilter}
@@ -270,4 +279,34 @@ export function ModelsPage() {
       />
     </div>
   );
+}
+
+/**
+ * The models each login's own list offers that the built-in list lacks: asked per login (`?auth_index=`),
+ * only for logins whose list has such models, and again only when that list changed. A failed ask leaves
+ * the login out: its routes then carry no "limits estimated" mark.
+ */
+function useLearned(lists: ProvimuxModelListsResponse | null): Record<string, string[]> {
+  const [learned, setLearned] = useState<Record<string, string[]>>({});
+  const asked = useRef(new Map<string, string>());
+  const logins = useMemo(() => loginsWithLearned(lists), [lists]);
+  useEffect(() => {
+    const revision = apiClient.getConnectionRevision();
+    const isCurrent = () => revision === apiClient.getConnectionRevision();
+    for (const { authIndex, version } of logins) {
+      if (asked.current.get(authIndex) === version) continue;
+      asked.current.set(authIndex, version);
+      provimuxApi
+        .modelLists(apiClient.captureConnection(isCurrent), authIndex)
+        .then((answer) => {
+          if (!isCurrent()) return;
+          const ids = learnedByLogin([answer])[authIndex] ?? [];
+          setLearned((prev) => ({ ...prev, [authIndex]: ids }));
+        })
+        .catch(() => {
+          // A detail only: without it the routes carry no mark.
+        });
+    }
+  }, [logins]);
+  return learned;
 }

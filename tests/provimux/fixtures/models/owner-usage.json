@@ -29,7 +29,7 @@
     }
   },
   "totals": {
-    "requests": 4489,
+    "requests": 4519,
     "failures": 0,
     "tokens": {
       "input": {
@@ -351,6 +351,41 @@
         {
           "model": "gemini-3-flash",
           "requests": 40,
+          "failures": 0,
+          "tokens": {
+            "input": {
+              "uncached": 0,
+              "cache_read": 0,
+              "cache_write": 0,
+              "cache_write_5m": 0,
+              "cache_write_1h": 0,
+              "total": 0
+            },
+            "output": {
+              "total": 0,
+              "reasoning": 0
+            },
+            "unclassified": 0
+          },
+          "cache_hit_rate": null,
+          "estimate": {
+            "cost_usd": 0,
+            "cost_without_cache_usd": 0,
+            "saved_by_caching_usd": 0,
+            "priced_requests": 0,
+            "unpriced_requests": 0,
+            "unpriced_tokens": 0,
+            "floating_requests": 0
+          },
+          "reported_cost": {
+            "usd": 0,
+            "byok_upstream_usd": 0,
+            "requests": 0
+          }
+        },
+        {
+          "model": "gpt-6.2-sol",
+          "requests": 30,
           "failures": 0,
           "tokens": {
             "input": {

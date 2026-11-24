@@ -6,6 +6,8 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter, matchRoutes } from 'react-router-dom';
 import i18n from '../../src/i18n/index';
+import { readModelLists } from '@/provimux/api/normalize';
+import { buildNames } from '@/provimux/pages/models/catalog';
 import { startDraft } from '@/provimux/pages/aliases/draft';
 import {
   INITIAL_PAGE,
@@ -22,7 +24,9 @@ import {
   addToName,
   candidatesFor,
   initialModelsFilter,
+  learnedByLogin,
   listlessKeys,
+  loginsWithLearned,
   matches,
   removable,
   removeName,
@@ -66,7 +70,7 @@ describe('the list', () => {
   test('every name the proxy serves: his names first, then the ones used in 30 days, then the rest', () => {
     const items = ownerNames();
     const parts = sections(items);
-    expect(items).toHaveLength(40);
+    expect(items).toHaveLength(41);
     // His names: the aliases of the configuration, most used first, then by name.
     expect(keys(parts.yours)).toEqual([
       'opus',
@@ -88,10 +92,11 @@ describe('the list', () => {
       'claude-haiku-5-5',
       'gpt-6.1-codex',
       'gemini-3-flash',
+      'gpt-6.2-sol',
       'swe-2-flash',
     ]);
     expect(parts.rest).toHaveLength(23);
-    expect(summarizeNames(items)).toMatchObject({ names: 40, yours: 13, cooling: 2, problems: 1 });
+    expect(summarizeNames(items)).toMatchObject({ names: 41, yours: 13, cooling: 2, problems: 1 });
     expect(nameOf(items, 'opus').requests).toBe(1840);
   });
 
@@ -128,7 +133,7 @@ describe('the list', () => {
     const text = textOf(renderCard(sonnet, draft));
     expect(text).toContain('Needs a look');
     expect(text).toContain(
-      'Provimux ignores this route: this login type already uses the name for another model, earlier in its list.'
+      'Provimux ignores this route: your Claude subscription already uses this name for another model.'
     );
   });
 
@@ -146,6 +151,36 @@ describe('the list', () => {
     // A name only API keys serve: their priorities are in the configuration, so its order is known.
     expect(nameOf(items, 'deepseek').lines[0]).toMatchObject({ rank: 1, priority: 0 });
     expect(nameOf(items, 'opus').requests).toBeNull();
+  });
+});
+
+describe('a model only the login’s own list has (owner: “wtf is this”)', () => {
+  const learned = () => learnedByLogin([readModelLists(ownerFixture('model-lists-codex'))]);
+
+  test('the logins to ask, and what they answer', () => {
+    expect(loginsWithLearned(ownerLists()).map((login) => login.authIndex)).toEqual(['li-codex-1']);
+    expect(learned()).toEqual({ 'li-codex-1': ['gpt-6.2-sol'] });
+  });
+
+  test('its route says so in plain words, with one line on why', async () => {
+    await i18n.changeLanguage('en');
+    const draft = startDraft(ownerState());
+    const items = buildNames({
+      draft,
+      routes: ownerRoutes(),
+      lists: ownerLists(),
+      usage: null,
+      nowMs: OWNER_NOW,
+      learned: learned(),
+    });
+    expect(nameOf(items, 'gpt-6.2-sol').lines[0].estimated).toBe(true);
+    expect(nameOf(items, 'terra').lines[0].estimated).toBe(false);
+    const html = renderCard(nameOf(items, 'gpt-6.2-sol'), draft);
+    expect(textOf(html)).toContain('new: limits estimated');
+    expect(html).toContain(
+      'title="Codex&#x27;s own list offers this model, but Provimux&#x27;s built-in list doesn&#x27;t have it yet, so its context, output and reasoning limits come from Codex&#x27;s list or from defaults."'
+    );
+    expect(textOf(html)).not.toMatch(/catalog/i);
   });
 });
 
@@ -451,11 +486,11 @@ describe('the page', () => {
     await i18n.changeLanguage('en');
     const text = textOf(renderBody(pageWith(ownerState())));
     expect(text).toContain('Your names 13');
-    expect(text).toContain('Show 27 other models');
+    expect(text).toContain('Show 28 other models');
     expect(text).toContain('Settings');
     expect(text).toContain('Devin: quota pause per model');
     expect(text).toContain('OpenRouter, built in');
-    expect(text).toContain('Live lists');
+    expect(text).toContain("Each login's own model list");
     expect(text).toContain('among the routes that can take a new request');
     // The stored groups hold the keys: none is rendered.
     expect(renderBody(pageWith(ownerState()))).not.toContain('fixture-key-');
@@ -502,11 +537,10 @@ describe('the page', () => {
     expect(html.match(/title="Open [^"]* on Auth Files/g)).toHaveLength(2);
     expect(html.match(/title="This API key[^"]*"/g)).toHaveLength(2);
     expect(text).toContain('devin/claude-opus-5-5');
-    expect(text).toContain('built in');
     expect(text).toContain('priority 10');
-    expect(text).toContain('live list');
+    expect(text).toContain("Claude's model list, 2 hours ago");
     expect(text).toMatch(/cooling down, [^,(]+ left \(quota\)/);
-    expect(html).toContain('quota · HTTP 429 · this model · backoff level 3');
+    expect(html).toContain('quota · HTTP 429 · this model · retry step 3');
     expect(text).not.toMatch(/\b(available|unavailable)\b/i);
   });
 
@@ -523,6 +557,8 @@ describe('the page', () => {
     expect(text).toContain('Add a model to claude-opus-5-5');
     expect(text).toContain('Remove this name');
     expect(text).toContain('Gemini API key');
+    // The Claude subscription serves the name by itself: plain words, no "built in".
+    expect(text).toContain("can't be taken out here");
   });
 });
 
@@ -560,7 +596,7 @@ describe('the settings cards (Devin and OpenRouter only when configured)', () =>
     const none = render(false, false);
     expect(none).not.toContain('Devin');
     expect(none).not.toContain('OpenRouter');
-    expect(none).toContain('Live lists');
+    expect(none).toContain("Each login's own model list");
     expect(render(false, false, false)).toBe('');
   });
 });

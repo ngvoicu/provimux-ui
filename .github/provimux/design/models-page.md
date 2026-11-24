@@ -16,6 +16,7 @@ only by an API key's priority (section 4 below).
 | `GET /config` (with its `ETag`) and `GET /credentials` | the draft: rows, entries, issues | the page cannot load |
 | `GET /provimux/model-routes`, every 30 s | every name the proxy serves, each route's priority and cooldown | only the configuration's names; no order where a priority is unknown; one line says so |
 | `GET /provimux/model-lists`, every 30 s | each login's list source and age, on its routes; the live-lists switch | no list detail, no switch |
+| `GET /provimux/model-lists?auth_index=…`, per login whose list has models the built-in list lacks, again when that list changes | which models get "new: limits estimated" | no such mark |
 | `GET /provimux/savings?period=30d&group=model` | requests per name in 30 days, to find the names he uses | no "used" section |
 
 `catalog.ts` (pure) joins them: a served route is matched to its configuration row (an API key by `auth_index`, a
@@ -33,6 +34,13 @@ under a name gets a line of its own: new, moved, ignored, or not reported.
 - Problems, one sentence each: a row Provimux ignores (`incomplete`, `same-as-name`, `duplicate`), a row a key never
   uses (`shadowed`), one service answering the name with different models (`several-models`, not a pool). A name
   served by several services is not a problem: it is a pool.
+
+Words. The owner reads quickly and does not know the proxy's internals, so every label says what it means
+(he asked "wtf is this" of Model lists' "17 not in the catalog yet"). A route of a model that only the login's own
+list has (the built-in list lacks it) carries **new: limits estimated**, with one line on why: its context, output
+and reasoning limits come from that list or from defaults. A login's list reads "Claude's model list, 2 hours ago",
+"built-in model list" or "providers.dev model list"; a name a subscription offers by itself "can't be taken out
+here"; no label says catalog, alias row, login type or backoff.
 
 ## 3. Edits
 

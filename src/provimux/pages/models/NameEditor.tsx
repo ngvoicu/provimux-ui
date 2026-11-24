@@ -194,7 +194,7 @@ function RowOptions({ row, name, edit }: { row: AliasRow; name: string; edit: Ed
             edit((d) => changeRow(d, row.id, { forceMapping: event.target.checked }))
           }
         />
-        <span>{t('provimux.models.option_force', { name })}</span>
+        <span>{t('provimux.models.option_force', { name, model: row.upstream.trim() })}</span>
       </label>
       {login ? (
         <label className={styles.optionText}>

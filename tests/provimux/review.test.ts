@@ -136,8 +136,12 @@ describe('4. Refresh on Model routes reads the Devin switch again', () => {
 
   test('Models passes the Devin read to the routes, and its button and the header use them', () => {
     const page = read('src/provimux/pages/models/ModelsPage.tsx');
-    expect(page).toContain("useProvimuxResource('modelRoutes', fetchRoutes, POLL_MS, devin.read, {");
-    expect(page).toContain('const others = Promise.all([refreshRoutes(), loadLists(), loadUsage()]);');
+    expect(page).toContain(
+      "useProvimuxResource('modelRoutes', fetchRoutes, POLL_MS, devin.read, {"
+    );
+    expect(page).toContain(
+      'const others = Promise.all([refreshRoutes(), loadLists(), loadUsage()]);'
+    );
     expect(page).toContain('onClick={() => void refresh()}');
     expect(page).toContain('useHeaderRefresh(refresh);');
   });
@@ -172,15 +176,15 @@ describe('5. a Devin login without routes is not "no login"', () => {
   test('an enabled login whose models are all excluded: no registered routes, not "add one"', async () => {
     await i18n.changeLanguage('en');
     const card = render({ enabled: 1, disabled: 0 });
-    expect(card).toContain('No registered Devin routes');
+    expect(card).toContain('The Devin login is on but serves no model right now');
     expect(card).toContain('Check it on Auth Files');
     expect(card).not.toContain('add one');
   });
 
   test('a disabled login, and a list that could not be read, say no routes too', async () => {
     await i18n.changeLanguage('en');
-    expect(render({ enabled: 0, disabled: 1 })).toContain('the Devin login is disabled');
-    expect(render(null)).toContain('No registered Devin routes');
+    expect(render({ enabled: 0, disabled: 1 })).toContain('it is turned off');
+    expect(render(null)).toContain('The Devin login serves no model right now');
     expect(render(null)).not.toContain('add one');
   });
 
@@ -253,7 +257,10 @@ describe('9. a route links to its login on Auth Files', () => {
     const draft = startDraft({ ...readAliasState({ 'config-version': 8 }, []), etag: '"t"' });
     const [opus] = buildNames({
       draft,
-      routes: { observed_at: null, models: routes.models.filter((m) => m.id === 'claude-opus-5-5') },
+      routes: {
+        observed_at: null,
+        models: routes.models.filter((m) => m.id === 'claude-opus-5-5'),
+      },
       lists: null,
       usage: null,
       nowMs: 0,

@@ -42,6 +42,7 @@ export interface ModelsBoardProps {
   routesOffsetMs: number;
   lists: ProvimuxModelListsResponse | null;
   usage: Record<string, number> | null;
+  learned?: Record<string, readonly string[]>;
   nowMs: number;
   filter: ModelsFilter;
   onFilter: (next: ModelsFilter) => void;
@@ -68,9 +69,10 @@ export function ModelsBoard(props: ModelsBoardProps) {
   const [focusKey, setFocusKey] = useState<string | null>(null);
 
   const entries = useMemo(() => draftEntries(draft), [draft]);
+  const { learned } = props;
   const items = useMemo(
-    () => buildNames({ draft, routes, lists, usage, nowMs }),
-    [draft, routes, lists, usage, nowMs]
+    () => buildNames({ draft, routes, lists, usage, nowMs, learned }),
+    [draft, routes, lists, usage, nowMs, learned]
   );
   const summary = useMemo(() => summarizeNames(items), [items]);
   const visible = useMemo(

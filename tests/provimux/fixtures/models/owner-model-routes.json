@@ -976,6 +976,35 @@
       ]
     },
     {
+      "id": "gpt-6.2-sol",
+      "display_name": null,
+      "owned_by": null,
+      "limits": {
+        "context": 400000,
+        "output": 128000
+      },
+      "routes": [
+        {
+          "auth_index": "li-codex-1",
+          "provider": "codex",
+          "kind": "oauth",
+          "priority": 10,
+          "host": null,
+          "login": {
+            "name": "codex-office@providers.dev.json",
+            "email": "office@providers.dev",
+            "label": "office@providers.dev"
+          },
+          "limits": {
+            "context": 400000,
+            "output": 128000
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        }
+      ]
+    },
+    {
       "id": "grok",
       "display_name": null,
       "owned_by": null,
