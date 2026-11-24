@@ -1,57 +1,48 @@
 import { Fragment, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { IconAlertTriangle, IconInfo } from '@/components/ui/icons';
 import { Skeleton } from '@/components/ui/Skeleton';
-import { AliasesBoard, type BoardActions } from './AliasesBoard';
-import { LostEdits } from './LostEdits';
-import { canEdit, type AliasFilter, type PageState } from './pageLogic';
-import type { AliasDraft, ServedNames } from './types';
+import type { ProvimuxModelListsResponse, ProvimuxModelRoutesResponse } from '../../api/types';
+import { LostEdits } from '../aliases/LostEdits';
+import { canEdit, type PageState } from '../aliases/pageLogic';
+import type { AliasDraft } from '../aliases/types';
+import type { DevinCooling } from '../modelRoutes/useDevinCooling';
+import type { ModelsFilter } from './catalog';
+import { ModelsBoard } from './ModelsBoard';
 import shared from '../shared/Shared.module.scss';
-import styles from './AliasesPage.module.scss';
+import styles from './ModelsPage.module.scss';
 
-export interface AliasesBodyProps {
+export interface ModelsBodyProps {
   page: PageState;
-  /** undefined while the first answer is awaited. */
-  served: ServedNames | undefined;
-  filter: AliasFilter;
-  onFilter: (next: AliasFilter) => void;
-  suggestions: Record<string, string[]>;
-  focusRowId: string | null;
-  actions: BoardActions;
+  routes: ProvimuxModelRoutesResponse | null;
+  /** true: the proxy reports its routes; false: it has no such endpoint; null: not answered yet. */
+  routesKnown: boolean | null;
+  routesError: string | null;
+  routesOffsetMs: number;
+  lists: ProvimuxModelListsResponse | null;
+  usage: Record<string, number> | null;
+  nowMs: number;
+  filter: ModelsFilter;
+  onFilter: (next: ModelsFilter) => void;
+  edit: (change: (draft: AliasDraft) => AliasDraft) => void;
+  devin: DevinCooling;
+  onRoutesChanged: () => void;
   /** The load error's retry. */
   onRetry: () => void;
   onDismiss: (key: number) => void;
 }
 
-const isEmpty = (draft: AliasDraft) => draft.base.entries.length === 0 && draft.rows.length === 0;
-
 /**
- * What the page shows below its header (design 3.6), always in this order, each part independent of the
- * others:
- *
- * 1. the edits not confirmed saved, in every phase (reading, load error, empty, board);
- * 2. while a read is held: the line that the page cannot save (a read without a tag), and the line
- *    naming what the page cannot read (2.5);
- * 3. the body: the skeleton, the load error with its retry, the empty state, or the board.
- *
- * The empty state stands in for the board and for nothing else. Plain values only, so it renders in a
- * test without a request.
+ * What the page shows below its header, always in this order (aliases-page.md 3.6): the edits not
+ * confirmed saved, in every phase; while a read is held, the line that the page cannot save and the line
+ * naming what it cannot read; then the skeleton, the load error with its retry, or the board. Plain values
+ * only, so it renders in a test without a request.
  */
-export function AliasesBody({
-  page,
-  served,
-  filter,
-  onFilter,
-  suggestions,
-  focusRowId,
-  actions,
-  onRetry,
-  onDismiss,
-}: AliasesBodyProps) {
+export function ModelsBody(props: ModelsBodyProps) {
   const { t } = useTranslation();
+  const { page, onRetry, onDismiss } = props;
   const { draft } = page;
   return (
     <>
@@ -83,8 +74,8 @@ export function AliasesBody({
             aria-label={t('provimux.common.loading')}
           >
             <Skeleton height={44} />
-            <Skeleton height={120} />
-            <Skeleton height={260} />
+            <Skeleton height={140} />
+            <Skeleton height={320} />
           </div>
         )
       ) : (
@@ -99,40 +90,23 @@ export function AliasesBody({
               {t('provimux.aliases.reload_failed', { message: page.loadError })}
             </p>
           ) : null}
-          {isEmpty(draft) ? (
-            <EmptyState
-              title={
-                draft.base.unread.length
-                  ? t('provimux.aliases.empty_title_unread')
-                  : t('provimux.aliases.empty_title')
-              }
-              description={t('provimux.aliases.empty_text')}
-              action={
-                <div className={styles.emptyLinks}>
-                  <Link to="/ai-providers" className={styles.link}>
-                    {t('provimux.aliases.empty_link_providers')}
-                  </Link>
-                  <Link to="/oauth" className={styles.link}>
-                    {t('provimux.aliases.empty_link_logins')}
-                  </Link>
-                </div>
-              }
-            />
-          ) : (
-            <div className={styles.board} aria-busy={page.reading || page.saving || undefined}>
-              <AliasesBoard
-                draft={draft}
-                served={served}
-                filter={filter}
-                onFilter={onFilter}
-                texts={page.texts}
-                suggestions={suggestions}
-                focusRowId={focusRowId}
-                locked={!canEdit(page)}
-                actions={actions}
-              />
-            </div>
-          )}
+          <ModelsBoard
+            draft={draft}
+            locked={!canEdit(page)}
+            busy={page.reading || page.saving}
+            routes={props.routes}
+            routesKnown={props.routesKnown}
+            routesError={props.routesError}
+            routesOffsetMs={props.routesOffsetMs}
+            lists={props.lists}
+            usage={props.usage}
+            nowMs={props.nowMs}
+            filter={props.filter}
+            onFilter={props.onFilter}
+            edit={props.edit}
+            devin={props.devin}
+            onRoutesChanged={props.onRoutesChanged}
+          />
         </>
       )}
     </>
@@ -142,10 +116,7 @@ export function AliasesBody({
 /** How many unread paths the line names before "N more". */
 const UNREAD_SHOWN = 3;
 
-/**
- * 2.5: the parts of the file the page cannot read, in one line. They give no entry or row here and are
- * left in the file as they are.
- */
+/** aliases-page.md 2.5: the parts of the file the page cannot read, in one line; the file keeps them. */
 function UnreadLine({ paths }: { paths: readonly string[] }) {
   const { t } = useTranslation();
   const [all, setAll] = useState(false);
@@ -168,7 +139,7 @@ function UnreadLine({ paths }: { paths: readonly string[] }) {
             {' '}
             <button
               type="button"
-              className={styles.unreadMore}
+              className={styles.textButton}
               aria-expanded={all}
               onClick={() => setAll((prev) => !prev)}
             >

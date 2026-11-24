@@ -178,7 +178,7 @@ describe('sidebar', () => {
   const paths = (list: ReturnType<typeof groups>) =>
     list.map((group) => group.items.map((item) => (item as { path: string }).path));
 
-  test('pages go after Routing, Aliases first, the others where their endpoint answers or fails', () => {
+  test('pages go after Routing, Models first, Savings where its endpoint answers or fails', () => {
     const result = provimuxNav(groups(), {
       modelRoutes: entry('ready'),
       liveLists: entry('error'),
@@ -186,26 +186,16 @@ describe('sidebar', () => {
     });
     expect(paths(result)).toEqual([
       ['/'],
-      [
-        '/ai-providers',
-        '/routing',
-        '/provimux/aliases',
-        '/provimux/model-routes',
-        '/provimux/live-lists',
-        '/provimux/savings',
-        '/later',
-      ],
+      ['/ai-providers', '/routing', '/provimux/models', '/provimux/savings', '/later'],
       ['/system'],
     ]);
-    const item = result[1].items[3] as { labelKey: string; metaKey: string };
-    expect(item.labelKey).toBe('provimux.nav.model_routes');
-    expect(item.metaKey).toBe('provimux.nav_meta.model_routes');
-    const aliases = result[1].items[2] as { labelKey: string; metaKey: string };
-    expect(aliases.labelKey).toBe('provimux.nav.aliases');
-    expect(aliases.metaKey).toBe('provimux.nav_meta.aliases');
+    const models = result[1].items[2] as { labelKey: string; metaKey: string };
+    expect(models.labelKey).toBe('provimux.nav.models');
+    expect(models.metaKey).toBe('provimux.nav_meta.models');
+    expect(provimuxNav(groups(), { savings: entry('error') })[1].items).toHaveLength(5);
   });
 
-  test('absent (404) or not yet probed: no item but Aliases, which needs no endpoint; Quick Start stays hidden', () => {
+  test('absent (404) or not yet probed: no item but Models, which needs no endpoint; Quick Start stays hidden', () => {
     for (const status of ['unsupported', 'unknown', 'probing'] as const) {
       const result = provimuxNav(groups(), {
         modelRoutes: entry(status),
@@ -214,27 +204,23 @@ describe('sidebar', () => {
       });
       expect(paths(result)).toEqual([
         ['/'],
-        ['/ai-providers', '/routing', '/provimux/aliases', '/later'],
+        ['/ai-providers', '/routing', '/provimux/models', '/later'],
         ['/system'],
       ]);
     }
+    // Model routes, live lists and model lists are no pages of their own any more: Models shows them.
     const one = provimuxNav(groups(), {
-      modelRoutes: entry('unsupported'),
+      modelRoutes: entry('ready'),
       liveLists: entry('ready'),
+      modelLists: entry('ready'),
       savings: entry('unsupported'),
     });
-    expect(paths(one)[1]).toEqual([
-      '/ai-providers',
-      '/routing',
-      '/provimux/aliases',
-      '/provimux/live-lists',
-      '/later',
-    ]);
-    // An older presence record that knows no endpoint at all still lists Aliases (F-5).
+    expect(paths(one)[1]).toEqual(['/ai-providers', '/routing', '/provimux/models', '/later']);
+    // An older presence record that knows no endpoint at all still lists Models.
     expect(paths(provimuxNav(groups(), {}))[1]).toEqual([
       '/ai-providers',
       '/routing',
-      '/provimux/aliases',
+      '/provimux/models',
       '/later',
     ]);
   });
@@ -309,7 +295,7 @@ describe('OpenRouter tag on AI Providers', () => {
 
   test('only for an entry on openrouter.ai, and only on a server with the endpoints', () => {
     expect(render('https://openrouter.ai/api/v1', true)).toContain(
-      'href="/provimux/model-routes?provider=openrouter"'
+      'href="/provimux/models?provider=openrouter"'
     );
     expect(render('https://openrouter.ai/api/v1', false)).toBe('');
     expect(render('https://llm.lab.example/v1', true)).toBe('');

@@ -11,11 +11,13 @@ import i18n from '../../src/i18n/index';
 import { apiClient } from '../../src/services/api/client';
 import { provimuxApi } from '../../src/provimux/api/provimuxApi';
 import { readModelRoutes } from '../../src/provimux/api/normalize';
-import type { ProvimuxLiveListLogin, ProvimuxModel } from '../../src/provimux/api/types';
+import type { ProvimuxModel } from '../../src/provimux/api/types';
 import { ProvimuxOpenRouterTag } from '../../src/provimux/components/ProvimuxOpenRouterTag';
-import { failureHint, liveSummary } from '../../src/provimux/pages/liveLists/logic';
 import { DevinCoolingCard } from '../../src/provimux/pages/modelRoutes/DevinCoolingCard';
-import { ModelCard } from '../../src/provimux/pages/modelRoutes/ModelCard';
+import { startDraft } from '../../src/provimux/pages/aliases/draft';
+import { readAliasState } from '../../src/provimux/pages/aliases/rows';
+import { buildNames } from '../../src/provimux/pages/models/catalog';
+import { renderCard } from './support/models';
 import { useProvimuxResource } from '../../src/provimux/pages/shared/useProvimuxResource';
 import { useProvimuxPresence, type PresenceStatus } from '../../src/provimux/presence';
 
@@ -99,7 +101,7 @@ describe('2. a catalog failure does not stop the refresh', () => {
   });
 
   test('the page says what the answer says, and follows nothing (T-79: the follower was removed)', () => {
-    const page = read('src/provimux/pages/liveLists/LiveListsPage.tsx');
+    const page = read('src/provimux/pages/models/ModelsSettings.tsx');
     expect(page).toContain("t('provimux.live.refresh_catalog_failed'");
     expect(page).toContain('requestRefresh(refreshGuard');
     expect(page).not.toContain('followRefresh');
@@ -132,11 +134,12 @@ describe('4. Refresh on Model routes reads the Devin switch again', () => {
     expect([fetched, alsoRead]).toEqual([1, 1]);
   });
 
-  test('Model routes passes the Devin read to it, and its button and the header use it', () => {
-    const page = read('src/provimux/pages/modelRoutes/ModelRoutesPage.tsx');
-    expect(page).toContain("useProvimuxResource('modelRoutes', fetchRoutes, POLL_MS, devin.read)");
-    expect(page).toContain('onClick={() => void resource.refresh()}');
-    expect(page).not.toContain('onClick={() => void resource.load()}');
+  test('Models passes the Devin read to the routes, and its button and the header use them', () => {
+    const page = read('src/provimux/pages/models/ModelsPage.tsx');
+    expect(page).toContain("useProvimuxResource('modelRoutes', fetchRoutes, POLL_MS, devin.read, {");
+    expect(page).toContain('const others = Promise.all([refreshRoutes(), loadLists(), loadUsage()]);');
+    expect(page).toContain('onClick={() => void refresh()}');
+    expect(page).toContain('useHeaderRefresh(refresh);');
   });
 });
 
@@ -205,36 +208,7 @@ describe('5. a Devin login without routes is not "no login"', () => {
   });
 });
 
-describe('6. a provider 403 is not "sign in again"', () => {
-  test('401 asks to sign in; 403 says access was denied', async () => {
-    await i18n.changeLanguage('en');
-    expect(failureHint({ category: 'http_status', http_status: 401 })).toBe('signin');
-    expect(failureHint({ category: 'http_status', http_status: 403 })).toBe('denied');
-    expect(i18n.t('provimux.live.hint.denied')).toContain('denied');
-    expect(i18n.t('provimux.live.hint.denied')).not.toMatch(/sign it in again/);
-  });
-});
-
 describe('7. unknown values stay unknown', () => {
-  const row = (source: string): ProvimuxLiveListLogin => ({
-    auth_index: 'a',
-    provider: 'claude',
-    login: { name: 'a.json', email: null, label: null },
-    disabled: false,
-    source,
-    fetching: false,
-    fetched_at: null,
-    listed_models: null,
-    registered_models: 1,
-    last_failure: null,
-  });
-
-  test('a source this console does not know is not counted as catalog', () => {
-    const summary = liveSummary([row('federated'), row('catalog')]) as { catalog: number };
-    expect(summary.catalog).toBe(1);
-    expect(summary).toMatchObject({ unknown: 1 });
-  });
-
   test('a missing priority is not priority 0', () => {
     const answer = readModelRoutes({
       models: [{ id: 'm', routes: [{ provider: 'claude' }, { provider: 'codex', priority: -5 }] }],
@@ -245,7 +219,7 @@ describe('7. unknown values stay unknown', () => {
   test('an unknown live-lists switch is not described as on', async () => {
     await i18n.changeLanguage('en');
     expect(i18n.t('provimux.live.unknown_text')).not.toMatch(/^On/);
-    const page = read('src/provimux/pages/liveLists/LiveListsPage.tsx');
+    const page = read('src/provimux/pages/models/ModelsSettings.tsx');
     expect(page).toContain("t('provimux.live.unknown_text')");
   });
 });
@@ -264,10 +238,10 @@ describe('8. the OpenRouter tag only where Model routes exists', () => {
       );
     expect(tag({ modelRoutes: 'unsupported', liveLists: 'ready' })).toBe('');
     expect(tag({ modelRoutes: 'error', liveLists: 'ready' })).toContain(
-      'href="/provimux/model-routes?provider=openrouter"'
+      'href="/provimux/models?provider=openrouter"'
     );
     expect(tag({ modelRoutes: 'ready', liveLists: 'unsupported' })).toContain(
-      'href="/provimux/model-routes?provider=openrouter"'
+      'href="/provimux/models?provider=openrouter"'
     );
   });
 });
@@ -275,25 +249,30 @@ describe('8. the OpenRouter tag only where Model routes exists', () => {
 describe('9. a route links to its login on Auth Files', () => {
   test('a login the credentials page lists opens it there; a key does not pretend to', async () => {
     await i18n.changeLanguage('en');
-    const model = readModelRoutes(
-      JSON.parse(read('tests/provimux/fixtures/model-routes.json'))
-    ).models.find((candidate) => candidate.id === 'claude-opus-5-5')!;
-    const html = renderToStaticMarkup(
-      createElement(MemoryRouter, null, createElement(ModelCard, { model, offsetMs: 0, nowMs: 0 }))
-    );
+    const routes = readModelRoutes(JSON.parse(read('tests/provimux/fixtures/model-routes.json')));
+    const draft = startDraft({ ...readAliasState({ 'config-version': 8 }, []), etag: '"t"' });
+    const [opus] = buildNames({
+      draft,
+      routes: { observed_at: null, models: routes.models.filter((m) => m.id === 'claude-opus-5-5') },
+      lists: null,
+      usage: null,
+      nowMs: 0,
+    });
+    const html = renderCard(opus, draft, routes);
     expect(html).toContain(
       'title="Open claude-ada@example.com.json on Auth Files (auth_index a8d167b7d82c8c15)"'
     );
-    expect(html.match(/<button/g)).toHaveLength(1);
+    // The key's account is plain text: only the login opens on Auth Files.
+    expect(html.match(/title="Open [^"]* on Auth Files/g)).toHaveLength(1);
   });
 });
 
 describe('10. the priority wording', () => {
-  test('higher priority first only among the routes that can serve a new request', async () => {
+  test('higher priority first only among the routes that can take a new request', async () => {
     await i18n.changeLanguage('en');
-    const note = i18n.t('provimux.routes.note');
-    expect(note).toContain('Among the routes that can serve a new request');
-    expect(note).toContain('a session already on a route may stay there');
+    const note = i18n.t('provimux.models.order_note');
+    expect(note).toContain('among the routes that can take a new request');
+    expect(note).toContain('a conversation already on a route may stay there');
   });
 });
 

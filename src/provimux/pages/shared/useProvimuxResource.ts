@@ -27,12 +27,15 @@ export type LoadResult<T> = { ok: true; data: T } | { ok: false; error: unknown 
  * `pollMs`, while the tab is visible (never while hidden). Every answer reports to the presence store, so a 404 hides
  * the page. Answers that arrive after the connection changed, or after a newer load, are dropped.
  * `alsoOnRefresh` runs with every manual refresh, for what the page shows beside the endpoint (a config switch).
+ * A page that reads several endpoints passes `headerRefresh: false` to all but one, or to all and registers
+ * its own: the header holds one refresh handler.
  */
 export function useProvimuxResource<T extends { observed_at: string | null }>(
   endpoint: ProvimuxEndpoint,
   fetcher: (client: typeof apiClient) => Promise<T>,
   pollMs: number | null,
-  alsoOnRefresh?: () => Promise<unknown>
+  alsoOnRefresh?: () => Promise<unknown>,
+  options: { headerRefresh?: boolean } = {}
 ) {
   const connectionStatus = useAuthStore((state) => state.connectionStatus);
   const [state, setState] = useState<ResourceState<T>>({
@@ -109,7 +112,7 @@ export function useProvimuxResource<T extends { observed_at: string | null }>(
   const refresh = useCallback(async () => {
     await Promise.all([load(), alsoRef.current?.()]);
   }, [load]);
-  useHeaderRefresh(refresh);
+  useHeaderRefresh(refresh, options.headerRefresh !== false);
 
   return { ...state, load, refresh };
 }

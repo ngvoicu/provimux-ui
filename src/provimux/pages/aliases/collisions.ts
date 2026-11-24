@@ -49,19 +49,6 @@ export function clientNames(
   return forceModelPrefix && prefix !== base ? [prefixed] : [base, prefixed];
 }
 
-/** The distinct client names of the draft's rows, as written: what `loadServedNames` asks about. */
-export function draftClientNames(draft: AliasDraft): string[] {
-  const entries = new Map(draftEntries(draft).map((entry) => [entry.id, entry]));
-  const names = new Set<string>();
-  for (const row of draft.rows) {
-    const entry = entries.get(row.entryId);
-    if (!entry || isBlankNewRow(row)) continue;
-    for (const name of clientNames(row, entry, draft.base.forceModelPrefix))
-      if (name) names.add(name);
-  }
-  return [...names];
-}
-
 /**
  * 4.4: whether the base state accounts for a route of a name: it has a row answering under that name in
  * the route's entry (API key: the entry whose `authIndexes` include the route's index; login: the channel

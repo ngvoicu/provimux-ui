@@ -1,11 +1,12 @@
-// The Aliases page (design aliases-page.md, section 8). U1: its filter, what it marks, what it renders for
-// a draft, its route and nav item (the U1 part of F-5), and its strings in the seven languages. U4: the
-// page after a save (3.6), G-1 to G-4 of section 7; P-4 is in aliases-page-property.test.ts.
+// The page state of design aliases-page.md (section 8), which the Models page (models-page.md) now holds:
+// what it marks and counts, its strings in the seven languages, the page after a save (3.6, U4), and G-1 to
+// G-4 of section 7 drawn by the Models page's body; P-4 is in aliases-page-property.test.ts. The Models
+// page's own list, edits, addresses and menu are in models-page.test.ts.
 import { afterAll, describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { MemoryRouter, matchRoutes } from 'react-router-dom';
+import { MemoryRouter } from 'react-router-dom';
 import i18n from '../../src/i18n/index';
 import { normalizeAuthFilesResponse } from '@/services/api/authFiles';
 import type { AuthFilesResponse } from '@/types/authFile';
@@ -16,42 +17,30 @@ import {
   changeRow,
   editsOf,
   removeRow,
-  rowIssues,
   startDraft,
 } from '@/provimux/pages/aliases/draft';
-import { groupOfRow, nameGroups } from '@/provimux/pages/aliases/collisions';
 import {
-  EMPTY_FILTER,
   INITIAL_PAGE,
-  aliasesAddressFor,
   canEdit,
   changeCount,
-  initialFilter,
-  keyListUnread,
   leaveGuarded,
   pageStep,
   removedCounts,
   rowMarks,
   saveBarShown,
-  visibleRows,
-  type AliasFilter,
   type PageState,
 } from '@/provimux/pages/aliases/pageLogic';
-import { AliasesBoard, type BoardActions } from '@/provimux/pages/aliases/AliasesBoard';
-import { AliasesBody } from '@/provimux/pages/aliases/AliasesBody';
 import { LostEdits } from '@/provimux/pages/aliases/LostEdits';
-import { AliasesPage } from '@/provimux/pages/aliases/AliasesPage';
-import { PROVIMUX_ROUTES } from '@/provimux/routes';
-import { AliasesRedirect } from '@/provimux/pages/aliases/AliasesRedirect';
-import { buildModelRulesPath } from '@/features/authFiles/modelRules/useModelRulesRoute';
-import { PROVIMUX_PAGES } from '@/provimux/nav';
+import { ModelsBody } from '@/provimux/pages/models/ModelsBody';
+import {
+  EMPTY_MODELS_FILTER,
+  candidatesFor,
+  keyListUnread,
+  listlessKeys,
+  rowEditable,
+} from '@/provimux/pages/models/catalog';
 import { PROVIMUX_TRANSLATIONS, overlayStrings } from '@/provimux/i18n';
-import type {
-  AliasDraft,
-  AliasState,
-  SaveFailure,
-  ServedNames,
-} from '@/provimux/pages/aliases/types';
+import type { AliasDraft, AliasState, KeyEntry, SaveFailure } from '@/provimux/pages/aliases/types';
 
 type Tree = { [key: string]: unknown };
 const fixture = (name: string): unknown =>
@@ -66,29 +55,6 @@ const loaded = (etag: string | null = '"e1"') => ({
 const initialLanguage = i18n.language;
 afterAll(async () => {
   await i18n.changeLanguage(initialLanguage);
-});
-
-describe('initial filter', () => {
-  const of = (query: string) => initialFilter(new URLSearchParams(query));
-
-  test('?store, ?channel and ?family open the page on a part of it', () => {
-    expect(of('')).toEqual(EMPTY_FILTER);
-    expect(of('store=login')).toMatchObject({ store: 'login', provider: 'all' });
-    expect(of('store=api-key')).toMatchObject({ store: 'api-key', provider: 'all' });
-    // The old login address's `provider` becomes `channel`, normalized as the data layer does.
-    expect(of('store=login&channel=anti_gravity')).toMatchObject({
-      store: 'login',
-      provider: 'login:antigravity',
-    });
-    expect(of('family=openai-compatibility')).toMatchObject({
-      store: 'api-key',
-      provider: 'family:openai-compatibility',
-    });
-  });
-
-  test('unknown values are ignored', () => {
-    expect(of('store=everything&family=nope')).toEqual(EMPTY_FILTER);
-  });
 });
 
 describe('marks and counts', () => {
@@ -112,143 +78,6 @@ describe('marks and counts', () => {
   });
 });
 
-describe('visible rows', () => {
-  const run = (draft: AliasDraft, filter: Partial<AliasFilter>, texts = {}) => {
-    const groups = nameGroups(draft);
-    return visibleRows({
-      draft,
-      filter: { ...EMPTY_FILTER, ...filter },
-      issues: rowIssues(draft),
-      groups,
-      groupOfRow: groupOfRow(groups),
-      marks: rowMarks(draft),
-      haystacks: {},
-      texts,
-    });
-  };
-
-  test('everything, entries without rows included, when nothing narrows', () => {
-    const draft = startDraft(loaded());
-    const all = run(draft, {});
-    expect(all.shown).toBe(draft.rows.length);
-    expect(all.entries.map((entry) => entry.id)).toContain('interactions/0/0');
-    expect(all.entries.map((entry) => entry.id)).toContain('login/kimi');
-  });
-
-  test('"With an alias" keeps a row whose alias the user is clearing', () => {
-    const draft = changeRow(startDraft(loaded()), 'gemini/0/0#0', { alias: '' });
-    const ids = [...run(draft, { view: 'aliased' }).rows.values()].flat().map((row) => row.id);
-    expect(ids).toContain('gemini/0/0#0');
-    // A stored row that never had an alias is left out.
-    expect(ids).not.toContain('claude/0/0#2');
-  });
-
-  test('"Needs a look" holds the issues and the names on several services', () => {
-    const draft = startDraft(loaded());
-    const ids = [...run(draft, { view: 'attention' }).rows.values()].flat().map((row) => row.id);
-    const issues = rowIssues(draft);
-    for (const id of Object.keys(issues)) expect(ids).toContain(id);
-    expect(ids).toContain('openai-compatibility/0/g#0');
-  });
-
-  test('a name from the name check shows only its rows', () => {
-    const draft = startDraft(loaded());
-    const result = run(draft, { name: 'opus' });
-    const group = nameGroups(draft).find((g) => g.key === 'opus')!;
-    expect([...result.rows.values()].flat().map((row) => row.id)).toEqual(group.rowIds);
-  });
-
-  test('the search matches model, alias and the alias text being typed', () => {
-    const draft = startDraft(loaded());
-    expect(run(draft, { query: 'grok' }).shown).toBe(1);
-    expect(run(draft, { query: 'zzz-typed' }, { 'xai/0/0#0': 'zzz-typed' }).shown).toBe(1);
-  });
-});
-
-const noop = () => undefined;
-const actions: BoardActions = {
-  setAlias: noop,
-  setUpstream: noop,
-  setDisplayName: noop,
-  setFork: noop,
-  setForceMapping: noop,
-  addKeyAlias: noop,
-  addLoginAlias: noop,
-  removeRow: noop,
-  undoEntry: noop,
-  wantSuggestions: noop,
-};
-
-function render(
-  draft: AliasDraft,
-  served: ServedNames | undefined = { known: true, byName: {} },
-  extra: Partial<Parameters<typeof AliasesBoard>[0]> = {}
-) {
-  return renderToStaticMarkup(
-    createElement(
-      MemoryRouter,
-      null,
-      createElement(AliasesBoard, {
-        draft,
-        served,
-        filter: EMPTY_FILTER,
-        onFilter: noop,
-        texts: {},
-        suggestions: {},
-        focusRowId: null,
-        locked: false,
-        actions,
-        ...extra,
-      })
-    )
-  );
-}
-
-describe('the board', () => {
-  test('shows every entry, the statement on login files and why a key without a list has no rows', async () => {
-    await i18n.changeLanguage('en');
-    const html = render(startDraft(loaded()));
-    expect(html).toContain('A login can also carry aliases of its own.');
-    expect(html).toContain('href="/auth-files"');
-    expect(html).toContain('No model list: this key serves the provider');
-    expect(html).toContain('Alias for gemini-2.5-pro');
-    expect(html).toContain('Claude logins');
-    // The stored groups hold the keys: none is rendered, only the masked preview.
-    expect(html).not.toContain('fixture-key-');
-  });
-
-  test('says which names are on several services, and the issues', async () => {
-    await i18n.changeLanguage('en');
-    // A second "opus" on the key that already answers as opus: it never answers.
-    const html = render(addKeyAlias(startDraft(loaded()), 'claude/1/0', 'claude-opus-5-5', 'opus'));
-    expect(html).toContain('One name, several services');
-    expect(html).toMatch(/\d services/);
-    expect(html).toContain('The alias equals the model name; the proxy ignores the row.');
-    expect(html).toContain('Never answers: an earlier row of this key has the same name.');
-  });
-
-  test('on a proxy without /provimux/model-routes, one line says native names were not checked', async () => {
-    await i18n.changeLanguage('en');
-    const line = 'were not checked: this proxy does not report them';
-    expect(render(startDraft(loaded()), { known: false, byName: {} })).toContain(line);
-    expect(render(startDraft(loaded()))).not.toContain(line);
-  });
-});
-
-describe('route and nav (F-5, the U1 part)', () => {
-  test('/provimux/aliases is the page, not behind an endpoint gate', () => {
-    const route = PROVIMUX_ROUTES.find((r) => r.path === '/provimux/aliases');
-    expect(route).toBeDefined();
-    expect(route!.element.type).toBe(AliasesPage);
-  });
-
-  test('the nav item needs no endpoint', () => {
-    const page = PROVIMUX_PAGES.find((p) => p.path === '/provimux/aliases');
-    expect(page?.endpoint).toBeNull();
-    expect(PROVIMUX_PAGES[0].path).toBe('/provimux/aliases');
-  });
-});
-
 describe('strings in seven languages', () => {
   type Tree = { [key: string]: string | Tree };
   const en = JSON.parse(readFileSync('src/provimux/locales/en.json', 'utf8')) as Tree;
@@ -257,7 +86,7 @@ describe('strings in seven languages', () => {
   const baseOf = (key: string) => key.replace(/_(zero|one|two|few|many|other)$/, '');
 
   // The page's strings, and the provider forms' line (U3).
-  for (const block of ['aliases', 'forms'] as const) {
+  for (const block of ['aliases', 'models', 'forms'] as const) {
     test(`every language has every key of provimux.${block}, in its own plural forms, with the same placeholders`, () => {
       const source = (en.provimux as Tree)[block] as Tree;
       const plural = new Set(
@@ -296,16 +125,21 @@ describe('strings in seven languages', () => {
   test('each language shows the page in its words, and keeps the other Provimux strings', async () => {
     for (const language of Object.keys(PROVIMUX_TRANSLATIONS)) {
       await i18n.changeLanguage(language);
-      expect(i18n.t('provimux.aliases.title')).not.toBe('Aliases');
-      expect(i18n.t('provimux.nav.aliases')).not.toBe('Aliases');
+      expect(i18n.t('provimux.models.lede')).not.toBe(
+        'Every model name your tools can send, and what serves it, in the order Provimux tries. Give models names of your own, put several under one name, and save once.'
+      );
+      expect(i18n.t('provimux.nav_meta.models')).not.toBe(
+        'Every model name you can send, and what serves it'
+      );
       expect(i18n.t('provimux.aliases.unsaved', { count: 3 })).toContain('3');
+      expect(i18n.t('provimux.models.count_names', { count: 3 })).toContain('3');
       // The shared words the page uses are translated; the other Provimux strings stay English.
       expect(i18n.t('provimux.common.reload')).not.toBe('Reload');
       expect(i18n.t('provimux.common.refresh')).toBe('Refresh');
       expect(i18n.t('provimux.nav.savings')).toBe('Savings');
     }
     await i18n.changeLanguage('en');
-    expect(i18n.t('provimux.aliases.count_aliases', { count: 1 })).toBe('1 alias');
+    expect(i18n.t('provimux.models.count_names', { count: 1 })).toBe('1 name');
   });
 
   test('a language file laid over English replaces only what it holds', () => {
@@ -329,22 +163,35 @@ const emptyRead = (etag: string | null = '"e2"'): AliasState => ({
   etag,
 });
 
-function renderBody(
-  page: PageState,
-  served: ServedNames | undefined = { known: true, byName: {} }
-) {
+const noop = () => undefined;
+
+/** The Models page's body over a page state, without Provimux's endpoints (they are not read here). */
+function renderBody(page: PageState) {
   return renderToStaticMarkup(
     createElement(
       MemoryRouter,
       null,
-      createElement(AliasesBody, {
+      createElement(ModelsBody, {
         page,
-        served,
-        filter: EMPTY_FILTER,
+        routes: null,
+        routesKnown: null,
+        routesError: null,
+        routesOffsetMs: 0,
+        lists: null,
+        usage: null,
+        nowMs: 0,
+        filter: EMPTY_MODELS_FILTER,
         onFilter: noop,
-        suggestions: {},
-        focusRowId: null,
-        actions,
+        edit: noop,
+        devin: {
+          value: false,
+          readError: null,
+          logins: null,
+          saving: false,
+          read: async () => undefined,
+          set: async () => ({ ok: true }),
+        },
+        onRoutesChanged: noop,
         onRetry: noop,
         onDismiss: noop,
       })
@@ -422,8 +269,8 @@ describe('G-1 the frame: the notices stand above the body, whatever the body is'
     expect(html).toContain('Gemini · gemini-1');
     expect(html).toContain('g-pro-2');
     expect(html).toContain('Codex logins');
-    expect(html).toContain('No API key or login yet');
-    expect(html.indexOf('g-pro-2')).toBeLessThan(html.indexOf('No API key or login yet'));
+    expect(html).toContain('No model yet');
+    expect(html.indexOf('g-pro-2')).toBeLessThan(html.indexOf('No model yet'));
   });
 
   test('a read with no entry and a path it cannot read: the path, then the empty state', async () => {
@@ -657,27 +504,18 @@ function addKeyAliasDraft(): AliasDraft {
 }
 
 describe('G-4 the remove control', () => {
-  test('after typing then removing a model’s only row, no text is kept and the box shows the draft, empty', async () => {
-    await i18n.changeLanguage('en');
-    // The alias box of the row, wherever React puts its `value` among the attributes.
-    const box = (html: string) =>
-      html
-        .match(/<input[^>]*aria-label="Alias for gemini-2\.5-pro[^>]*>/)?.[0]
-        .match(/ value="([^"]*)"/)?.[1];
+  test('after typing then removing a model’s only row, no text is kept and the draft holds no alias', () => {
     let page = pageWith(loaded());
-    expect(box(renderBody(page))).toBe('g-pro');
     page = pageStep(page, {
       type: 'alias-typed',
       rowId: 'gemini/0/0#0',
       text: 'typed-then-removed',
     });
     expect(page.texts['gemini/0/0#0']).toBe('typed-then-removed');
-    expect(box(renderBody(page))).toBe('typed-then-removed');
     page = pageStep(page, { type: 'row-removed', rowId: 'gemini/0/0#0' });
     expect('gemini/0/0#0' in page.texts).toBe(false);
-    // The model's only row stays, with no alias (3.2): the box shows that.
+    // The model's only row stays, with no alias (3.2).
     expect(page.draft!.rows.find((row) => row.id === 'gemini/0/0#0')?.alias).toBeNull();
-    expect(box(renderBody(page))).toBe('');
   });
 });
 
@@ -698,66 +536,35 @@ describe('what the page cannot read', () => {
     expect(renderBody(pageWith({ ...loaded(), unread: [] }))).not.toContain('left in it untouched');
   });
 
-  test('a key whose model list is unreadable says so, not "no model list"', async () => {
-    await i18n.changeLanguage('en');
+  test('a key whose model list is unreadable is not offered, nor called a key without a list', () => {
     const state = unreadable();
-    const xai = state.entries.find((e) => e.store === 'api-key' && e.family === 'xai');
-    expect(xai && keyListUnread(xai as never, state.unread)).toBe(true);
-    expect(render(startDraft(state))).toContain('Its model list cannot be read here');
+    const xai = state.entries.find((e) => e.store === 'api-key' && e.family === 'xai') as KeyEntry;
+    expect(keyListUnread(xai, state.unread)).toBe(true);
+    const draft = startDraft(state);
+    expect(listlessKeys(draft).map((entry) => entry.id)).not.toContain(xai.id);
+    expect(candidatesFor(draft, null, 'x').some((c) => c.entryId === xai.id)).toBe(false);
   });
 
-  test('a login type partly unreadable shows its rows, locked, without "Add an alias"', async () => {
-    await i18n.changeLanguage('en');
+  test('a login type partly unreadable: its rows are shown, take no edit, and nothing is added to it', () => {
     const document = fixture('config-full.json') as { oauth: { 'model-alias': Tree } };
     document.oauth['model-alias'].CODEX = 'not-a-list';
     const state = { ...readAliasState(document, files()), etag: '"u2"' };
     const codex = state.entries.find((e) => e.id === 'login/codex');
     expect(codex?.store === 'login' && codex.unread).toBe(true);
-    const html = render(startDraft(state));
-    const card = html.slice(html.indexOf('aria-label="Codex logins"'));
-    const cardEnd = card.indexOf('</article>');
-    const codexCard = card.slice(0, cardEnd);
-    expect(codexCard).toContain('cannot be read here, so it cannot be edited on this page');
-    expect(codexCard).toContain('value="g55"');
-    expect(codexCard).toMatch(/value="g55"[^>]*disabled=""|disabled=""[^>]*value="g55"/);
-    expect(codexCard).not.toContain('Add an alias');
+    const draft = startDraft(state);
+    const rows = draft.rows.filter((row) => row.entryId === 'login/codex');
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) expect(rowEditable(draft, row.id)).toBe(false);
+    expect(candidatesFor(draft, null, 'x').some((c) => c.entryId === 'login/codex')).toBe(false);
+    expect(rowEditable(draft, 'gemini/0/0#0')).toBe(true);
   });
 
-  test('an unreadable login map: no login alias can be edited or added', async () => {
-    await i18n.changeLanguage('en');
+  test('an unreadable login map: no login alias can be edited or added', () => {
     const document = fixture('config-full.json') as { oauth: Tree };
     document.oauth['model-alias'] = 'junk';
-    const html = render(startDraft({ ...readAliasState(document, files()), etag: '"u3"' }));
-    expect(html).toContain('The login alias map cannot be read here');
-    expect(html).not.toContain('Aliases for another login type');
+    const draft = startDraft({ ...readAliasState(document, files()), etag: '"u3"' });
+    expect(candidatesFor(draft, null, 'x').some((c) => c.store === 'login')).toBe(false);
+    expect(addLoginAlias(draft, 'claude', { upstream: 'm', alias: 'n' })).toBe(draft);
   });
 });
 
-describe('U2: the old login alias address (F-5)', () => {
-  test("/auth-files/oauth-model-alias is the redirect, and wins over upstream's route for it", () => {
-    const route = PROVIMUX_ROUTES.find((r) => r.path === '/auth-files/oauth-model-alias');
-    expect(route!.element.type).toBe(AliasesRedirect);
-    // The table as MainRoutes builds it: Provimux's routes first, then upstream's old editor.
-    const old = { path: '/auth-files/oauth-model-alias', element: 'upstream editor' };
-    const matched = matchRoutes([...PROVIMUX_ROUTES, old], '/auth-files/oauth-model-alias');
-    expect(matched?.[0].route.element).toBe(route!.element);
-    const read = readFileSync('src/router/MainRoutes.tsx', 'utf8');
-    expect(read.indexOf('...PROVIMUX_ROUTES,')).toBeLessThan(
-      read.indexOf("{ path: '/auth-files/oauth-model-alias'")
-    );
-  });
-
-  test('?provider= becomes &channel=, and the page opens on that login type', () => {
-    expect(aliasesAddressFor('')).toBe('/provimux/aliases?store=login');
-    expect(aliasesAddressFor('?provider=claude&view=graph')).toBe(
-      '/provimux/aliases?store=login&channel=claude'
-    );
-    // The Auth Files tile's own link, through the redirect, to the page's filter.
-    const tile = buildModelRulesPath('alias', 'anti_gravity');
-    const target = aliasesAddressFor(tile.slice(tile.indexOf('?')));
-    expect(initialFilter(new URLSearchParams(target.slice(target.indexOf('?'))))).toMatchObject({
-      store: 'login',
-      provider: 'login:antigravity',
-    });
-  });
-});

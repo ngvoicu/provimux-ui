@@ -1,0 +1,1287 @@
+{
+  "observed_at": "2026-11-24T14:00:00.000Z",
+  "models": [
+    {
+      "id": "claude-haiku-4-5",
+      "display_name": null,
+      "owned_by": null,
+      "limits": {
+        "context": 1000000,
+        "output": 128000
+      },
+      "routes": [
+        {
+          "auth_index": "li-claude-1",
+          "provider": "claude",
+          "kind": "oauth",
+          "priority": 10,
+          "host": null,
+          "login": {
+            "name": "claude-office@providers.dev.json",
+            "email": "office@providers.dev",
+            "label": "office@providers.dev"
+          },
+          "limits": {
+            "context": 1000000,
+            "output": 128000
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        }
+      ]
+    },
+    {
+      "id": "claude-haiku-5-5",
+      "display_name": null,
+      "owned_by": null,
+      "limits": {
+        "context": 1000000,
+        "output": 128000
+      },
+      "routes": [
+        {
+          "auth_index": "li-claude-1",
+          "provider": "claude",
+          "kind": "oauth",
+          "priority": 10,
+          "host": null,
+          "login": {
+            "name": "claude-office@providers.dev.json",
+            "email": "office@providers.dev",
+            "label": "office@providers.dev"
+          },
+          "limits": {
+            "context": 1000000,
+            "output": 128000
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        }
+      ]
+    },
+    {
+      "id": "claude-opus-4-1",
+      "display_name": null,
+      "owned_by": null,
+      "limits": {
+        "context": 1000000,
+        "output": 128000
+      },
+      "routes": [
+        {
+          "auth_index": "li-claude-1",
+          "provider": "claude",
+          "kind": "oauth",
+          "priority": 10,
+          "host": null,
+          "login": {
+            "name": "claude-office@providers.dev.json",
+            "email": "office@providers.dev",
+            "label": "office@providers.dev"
+          },
+          "limits": {
+            "context": 1000000,
+            "output": 128000
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        }
+      ]
+    },
+    {
+      "id": "claude-opus-4-5",
+      "display_name": null,
+      "owned_by": null,
+      "limits": {
+        "context": 1000000,
+        "output": 128000
+      },
+      "routes": [
+        {
+          "auth_index": "li-claude-1",
+          "provider": "claude",
+          "kind": "oauth",
+          "priority": 10,
+          "host": null,
+          "login": {
+            "name": "claude-office@providers.dev.json",
+            "email": "office@providers.dev",
+            "label": "office@providers.dev"
+          },
+          "limits": {
+            "context": 1000000,
+            "output": 128000
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        }
+      ]
+    },
+    {
+      "id": "claude-opus-5-5",
+      "display_name": null,
+      "owned_by": null,
+      "limits": {
+        "context": 1000000,
+        "output": 128000
+      },
+      "routes": [
+        {
+          "auth_index": "li-claude-1",
+          "provider": "claude",
+          "kind": "oauth",
+          "priority": 10,
+          "host": null,
+          "login": {
+            "name": "claude-office@providers.dev.json",
+            "email": "office@providers.dev",
+            "label": "office@providers.dev"
+          },
+          "limits": {
+            "context": 1000000,
+            "output": 128000
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        },
+        {
+          "auth_index": "li-devin-1",
+          "provider": "devin",
+          "kind": "oauth",
+          "priority": 5,
+          "host": null,
+          "login": {
+            "name": "devin-office@providers.dev.json",
+            "email": "office@providers.dev",
+            "label": "office@providers.dev"
+          },
+          "limits": {
+            "context": 1000000,
+            "output": 128000
+          },
+          "reasoning": null,
+          "recorded_cooldown": {
+            "scope": "model",
+            "model": "devin/claude-opus-5-5",
+            "reason": "quota",
+            "until": "2026-11-24T14:42:00.000Z",
+            "http_status": 429,
+            "backoff_level": 3
+          }
+        },
+        {
+          "auth_index": "ak-anthropic-1",
+          "provider": "claude",
+          "kind": "apikey",
+          "priority": 0,
+          "host": "api.anthropic.com",
+          "login": {
+            "name": null,
+            "email": null,
+            "label": "claude-apikey"
+          },
+          "limits": {
+            "context": 1000000,
+            "output": 128000
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        },
+        {
+          "auth_index": "ak-openrouter-1",
+          "provider": "openai-compatible-openrouter",
+          "kind": "apikey",
+          "priority": 0,
+          "host": "openrouter.ai",
+          "login": {
+            "name": null,
+            "email": null,
+            "label": "openrouter"
+          },
+          "limits": {
+            "context": 1000000,
+            "output": 128000
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        }
+      ]
+    },
+    {
+      "id": "claude-sonnet-4-5",
+      "display_name": null,
+      "owned_by": null,
+      "limits": {
+        "context": 1000000,
+        "output": 128000
+      },
+      "routes": [
+        {
+          "auth_index": "li-claude-1",
+          "provider": "claude",
+          "kind": "oauth",
+          "priority": 10,
+          "host": null,
+          "login": {
+            "name": "claude-office@providers.dev.json",
+            "email": "office@providers.dev",
+            "label": "office@providers.dev"
+          },
+          "limits": {
+            "context": 1000000,
+            "output": 128000
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        }
+      ]
+    },
+    {
+      "id": "claude-sonnet-5-5",
+      "display_name": null,
+      "owned_by": null,
+      "limits": {
+        "context": 1000000,
+        "output": 128000
+      },
+      "routes": [
+        {
+          "auth_index": "li-claude-1",
+          "provider": "claude",
+          "kind": "oauth",
+          "priority": 10,
+          "host": null,
+          "login": {
+            "name": "claude-office@providers.dev.json",
+            "email": "office@providers.dev",
+            "label": "office@providers.dev"
+          },
+          "limits": {
+            "context": 1000000,
+            "output": 128000
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        },
+        {
+          "auth_index": "ak-anthropic-1",
+          "provider": "claude",
+          "kind": "apikey",
+          "priority": 0,
+          "host": "api.anthropic.com",
+          "login": {
+            "name": null,
+            "email": null,
+            "label": "claude-apikey"
+          },
+          "limits": {
+            "context": 1000000,
+            "output": 128000
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        }
+      ]
+    },
+    {
+      "id": "codex",
+      "display_name": null,
+      "owned_by": null,
+      "limits": {
+        "context": 400000,
+        "output": 128000
+      },
+      "routes": [
+        {
+          "auth_index": "li-codex-1",
+          "provider": "codex",
+          "kind": "oauth",
+          "priority": 10,
+          "host": null,
+          "login": {
+            "name": "codex-office@providers.dev.json",
+            "email": "office@providers.dev",
+            "label": "office@providers.dev"
+          },
+          "limits": {
+            "context": 400000,
+            "output": 128000
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        }
+      ]
+    },
+    {
+      "id": "deepseek",
+      "display_name": null,
+      "owned_by": null,
+      "limits": {
+        "context": 262144,
+        "output": 32768
+      },
+      "routes": [
+        {
+          "auth_index": "ak-openrouter-1",
+          "provider": "openai-compatible-openrouter",
+          "kind": "apikey",
+          "priority": 0,
+          "host": "openrouter.ai",
+          "login": {
+            "name": null,
+            "email": null,
+            "label": "openrouter"
+          },
+          "limits": {
+            "context": 262144,
+            "output": 32768
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        }
+      ]
+    },
+    {
+      "id": "devin/claude-opus-5-5",
+      "display_name": null,
+      "owned_by": null,
+      "limits": {
+        "context": 1000000,
+        "output": 128000
+      },
+      "routes": [
+        {
+          "auth_index": "li-devin-1",
+          "provider": "devin",
+          "kind": "oauth",
+          "priority": 5,
+          "host": null,
+          "login": {
+            "name": "devin-office@providers.dev.json",
+            "email": "office@providers.dev",
+            "label": "office@providers.dev"
+          },
+          "limits": {
+            "context": 1000000,
+            "output": 128000
+          },
+          "reasoning": null,
+          "recorded_cooldown": {
+            "scope": "model",
+            "model": "devin/claude-opus-5-5",
+            "reason": "quota",
+            "until": "2026-11-24T14:42:00.000Z",
+            "http_status": 429,
+            "backoff_level": 3
+          }
+        }
+      ]
+    },
+    {
+      "id": "devin/claude-sonnet-5-5",
+      "display_name": null,
+      "owned_by": null,
+      "limits": {
+        "context": 1000000,
+        "output": 128000
+      },
+      "routes": [
+        {
+          "auth_index": "li-devin-1",
+          "provider": "devin",
+          "kind": "oauth",
+          "priority": 5,
+          "host": null,
+          "login": {
+            "name": "devin-office@providers.dev.json",
+            "email": "office@providers.dev",
+            "label": "office@providers.dev"
+          },
+          "limits": {
+            "context": 1000000,
+            "output": 128000
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        }
+      ]
+    },
+    {
+      "id": "devin/deepseek-v4",
+      "display_name": null,
+      "owned_by": null,
+      "limits": {
+        "context": 262144,
+        "output": 32768
+      },
+      "routes": [
+        {
+          "auth_index": "li-devin-1",
+          "provider": "devin",
+          "kind": "oauth",
+          "priority": 5,
+          "host": null,
+          "login": {
+            "name": "devin-office@providers.dev.json",
+            "email": "office@providers.dev",
+            "label": "office@providers.dev"
+          },
+          "limits": {
+            "context": 262144,
+            "output": 32768
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        }
+      ]
+    },
+    {
+      "id": "devin/gemini-3-pro",
+      "display_name": null,
+      "owned_by": null,
+      "limits": {
+        "context": 1048576,
+        "output": 65536
+      },
+      "routes": [
+        {
+          "auth_index": "li-devin-1",
+          "provider": "devin",
+          "kind": "oauth",
+          "priority": 5,
+          "host": null,
+          "login": {
+            "name": "devin-office@providers.dev.json",
+            "email": "office@providers.dev",
+            "label": "office@providers.dev"
+          },
+          "limits": {
+            "context": 1048576,
+            "output": 65536
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        }
+      ]
+    },
+    {
+      "id": "devin/glm-5",
+      "display_name": null,
+      "owned_by": null,
+      "limits": {
+        "context": 262144,
+        "output": 32768
+      },
+      "routes": [
+        {
+          "auth_index": "li-devin-1",
+          "provider": "devin",
+          "kind": "oauth",
+          "priority": 5,
+          "host": null,
+          "login": {
+            "name": "devin-office@providers.dev.json",
+            "email": "office@providers.dev",
+            "label": "office@providers.dev"
+          },
+          "limits": {
+            "context": 262144,
+            "output": 32768
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        }
+      ]
+    },
+    {
+      "id": "devin/gpt-6.1-terra",
+      "display_name": null,
+      "owned_by": null,
+      "limits": {
+        "context": 400000,
+        "output": 128000
+      },
+      "routes": [
+        {
+          "auth_index": "li-devin-1",
+          "provider": "devin",
+          "kind": "oauth",
+          "priority": 5,
+          "host": null,
+          "login": {
+            "name": "devin-office@providers.dev.json",
+            "email": "office@providers.dev",
+            "label": "office@providers.dev"
+          },
+          "limits": {
+            "context": 400000,
+            "output": 128000
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        }
+      ]
+    },
+    {
+      "id": "devin/kimi-k3",
+      "display_name": null,
+      "owned_by": null,
+      "limits": {
+        "context": 262144,
+        "output": 32768
+      },
+      "routes": [
+        {
+          "auth_index": "li-devin-1",
+          "provider": "devin",
+          "kind": "oauth",
+          "priority": 5,
+          "host": null,
+          "login": {
+            "name": "devin-office@providers.dev.json",
+            "email": "office@providers.dev",
+            "label": "office@providers.dev"
+          },
+          "limits": {
+            "context": 262144,
+            "output": 32768
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        }
+      ]
+    },
+    {
+      "id": "devin/qwen4-coder",
+      "display_name": null,
+      "owned_by": null,
+      "limits": {
+        "context": 262144,
+        "output": 32768
+      },
+      "routes": [
+        {
+          "auth_index": "li-devin-1",
+          "provider": "devin",
+          "kind": "oauth",
+          "priority": 5,
+          "host": null,
+          "login": {
+            "name": "devin-office@providers.dev.json",
+            "email": "office@providers.dev",
+            "label": "office@providers.dev"
+          },
+          "limits": {
+            "context": 262144,
+            "output": 32768
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        }
+      ]
+    },
+    {
+      "id": "gemini-2.5-flash",
+      "display_name": null,
+      "owned_by": null,
+      "limits": {
+        "context": 1048576,
+        "output": 65536
+      },
+      "routes": [
+        {
+          "auth_index": "ak-gemini-1",
+          "provider": "gemini",
+          "kind": "apikey",
+          "priority": 0,
+          "host": "generativelanguage.googleapis.com",
+          "login": {
+            "name": null,
+            "email": null,
+            "label": "gemini-apikey"
+          },
+          "limits": {
+            "context": 1048576,
+            "output": 65536
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        }
+      ]
+    },
+    {
+      "id": "gemini-2.5-pro",
+      "display_name": null,
+      "owned_by": null,
+      "limits": {
+        "context": 1048576,
+        "output": 65536
+      },
+      "routes": [
+        {
+          "auth_index": "ak-gemini-1",
+          "provider": "gemini",
+          "kind": "apikey",
+          "priority": 0,
+          "host": "generativelanguage.googleapis.com",
+          "login": {
+            "name": null,
+            "email": null,
+            "label": "gemini-apikey"
+          },
+          "limits": {
+            "context": 1048576,
+            "output": 65536
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        }
+      ]
+    },
+    {
+      "id": "gemini-3-flash",
+      "display_name": null,
+      "owned_by": null,
+      "limits": {
+        "context": 1048576,
+        "output": 65536
+      },
+      "routes": [
+        {
+          "auth_index": "ak-gemini-1",
+          "provider": "gemini",
+          "kind": "apikey",
+          "priority": 0,
+          "host": "generativelanguage.googleapis.com",
+          "login": {
+            "name": null,
+            "email": null,
+            "label": "gemini-apikey"
+          },
+          "limits": {
+            "context": 1048576,
+            "output": 65536
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        }
+      ]
+    },
+    {
+      "id": "gemini-3-flash-lite",
+      "display_name": null,
+      "owned_by": null,
+      "limits": {
+        "context": 1048576,
+        "output": 65536
+      },
+      "routes": [
+        {
+          "auth_index": "ak-gemini-1",
+          "provider": "gemini",
+          "kind": "apikey",
+          "priority": 0,
+          "host": "generativelanguage.googleapis.com",
+          "login": {
+            "name": null,
+            "email": null,
+            "label": "gemini-apikey"
+          },
+          "limits": {
+            "context": 1048576,
+            "output": 65536
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        }
+      ]
+    },
+    {
+      "id": "gemini-3-pro",
+      "display_name": null,
+      "owned_by": null,
+      "limits": {
+        "context": 1048576,
+        "output": 65536
+      },
+      "routes": [
+        {
+          "auth_index": "ak-gemini-1",
+          "provider": "gemini",
+          "kind": "apikey",
+          "priority": 0,
+          "host": "generativelanguage.googleapis.com",
+          "login": {
+            "name": null,
+            "email": null,
+            "label": "gemini-apikey"
+          },
+          "limits": {
+            "context": 1048576,
+            "output": 65536
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        }
+      ]
+    },
+    {
+      "id": "glm",
+      "display_name": null,
+      "owned_by": null,
+      "limits": {
+        "context": 262144,
+        "output": 32768
+      },
+      "routes": [
+        {
+          "auth_index": "ak-openrouter-1",
+          "provider": "openai-compatible-openrouter",
+          "kind": "apikey",
+          "priority": 0,
+          "host": "openrouter.ai",
+          "login": {
+            "name": null,
+            "email": null,
+            "label": "openrouter"
+          },
+          "limits": {
+            "context": 262144,
+            "output": 32768
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        }
+      ]
+    },
+    {
+      "id": "gpt-5.5",
+      "display_name": null,
+      "owned_by": null,
+      "limits": {
+        "context": 400000,
+        "output": 128000
+      },
+      "routes": [
+        {
+          "auth_index": "li-codex-1",
+          "provider": "codex",
+          "kind": "oauth",
+          "priority": 10,
+          "host": null,
+          "login": {
+            "name": "codex-office@providers.dev.json",
+            "email": "office@providers.dev",
+            "label": "office@providers.dev"
+          },
+          "limits": {
+            "context": 400000,
+            "output": 128000
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        }
+      ]
+    },
+    {
+      "id": "gpt-5.5-codex",
+      "display_name": null,
+      "owned_by": null,
+      "limits": {
+        "context": 400000,
+        "output": 128000
+      },
+      "routes": [
+        {
+          "auth_index": "li-codex-1",
+          "provider": "codex",
+          "kind": "oauth",
+          "priority": 10,
+          "host": null,
+          "login": {
+            "name": "codex-office@providers.dev.json",
+            "email": "office@providers.dev",
+            "label": "office@providers.dev"
+          },
+          "limits": {
+            "context": 400000,
+            "output": 128000
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        }
+      ]
+    },
+    {
+      "id": "gpt-6-chat",
+      "display_name": null,
+      "owned_by": null,
+      "limits": {
+        "context": 400000,
+        "output": 128000
+      },
+      "routes": [
+        {
+          "auth_index": "li-codex-1",
+          "provider": "codex",
+          "kind": "oauth",
+          "priority": 10,
+          "host": null,
+          "login": {
+            "name": "codex-office@providers.dev.json",
+            "email": "office@providers.dev",
+            "label": "office@providers.dev"
+          },
+          "limits": {
+            "context": 400000,
+            "output": 128000
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        }
+      ]
+    },
+    {
+      "id": "gpt-6-mini",
+      "display_name": null,
+      "owned_by": null,
+      "limits": {
+        "context": 400000,
+        "output": 128000
+      },
+      "routes": [
+        {
+          "auth_index": "li-codex-1",
+          "provider": "codex",
+          "kind": "oauth",
+          "priority": 10,
+          "host": null,
+          "login": {
+            "name": "codex-office@providers.dev.json",
+            "email": "office@providers.dev",
+            "label": "office@providers.dev"
+          },
+          "limits": {
+            "context": 400000,
+            "output": 128000
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        }
+      ]
+    },
+    {
+      "id": "gpt-6.1-codex",
+      "display_name": null,
+      "owned_by": null,
+      "limits": {
+        "context": 400000,
+        "output": 128000
+      },
+      "routes": [
+        {
+          "auth_index": "li-codex-1",
+          "provider": "codex",
+          "kind": "oauth",
+          "priority": 10,
+          "host": null,
+          "login": {
+            "name": "codex-office@providers.dev.json",
+            "email": "office@providers.dev",
+            "label": "office@providers.dev"
+          },
+          "limits": {
+            "context": 400000,
+            "output": 128000
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        }
+      ]
+    },
+    {
+      "id": "gpt-6.1-codex-mini",
+      "display_name": null,
+      "owned_by": null,
+      "limits": {
+        "context": 400000,
+        "output": 128000
+      },
+      "routes": [
+        {
+          "auth_index": "li-codex-1",
+          "provider": "codex",
+          "kind": "oauth",
+          "priority": 10,
+          "host": null,
+          "login": {
+            "name": "codex-office@providers.dev.json",
+            "email": "office@providers.dev",
+            "label": "office@providers.dev"
+          },
+          "limits": {
+            "context": 400000,
+            "output": 128000
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        }
+      ]
+    },
+    {
+      "id": "gpt-6.1-terra",
+      "display_name": null,
+      "owned_by": null,
+      "limits": {
+        "context": 400000,
+        "output": 128000
+      },
+      "routes": [
+        {
+          "auth_index": "li-codex-1",
+          "provider": "codex",
+          "kind": "oauth",
+          "priority": 10,
+          "host": null,
+          "login": {
+            "name": "codex-office@providers.dev.json",
+            "email": "office@providers.dev",
+            "label": "office@providers.dev"
+          },
+          "limits": {
+            "context": 400000,
+            "output": 128000
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        },
+        {
+          "auth_index": "ak-openrouter-1",
+          "provider": "openai-compatible-openrouter",
+          "kind": "apikey",
+          "priority": 0,
+          "host": "openrouter.ai",
+          "login": {
+            "name": null,
+            "email": null,
+            "label": "openrouter"
+          },
+          "limits": {
+            "context": 400000,
+            "output": 128000
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        }
+      ]
+    },
+    {
+      "id": "grok",
+      "display_name": null,
+      "owned_by": null,
+      "limits": {
+        "context": 262144,
+        "output": 32768
+      },
+      "routes": [
+        {
+          "auth_index": "ak-openrouter-1",
+          "provider": "openai-compatible-openrouter",
+          "kind": "apikey",
+          "priority": 0,
+          "host": "openrouter.ai",
+          "login": {
+            "name": null,
+            "email": null,
+            "label": "openrouter"
+          },
+          "limits": {
+            "context": 262144,
+            "output": 32768
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        }
+      ]
+    },
+    {
+      "id": "haiku",
+      "display_name": null,
+      "owned_by": null,
+      "limits": {
+        "context": 1000000,
+        "output": 128000
+      },
+      "routes": [
+        {
+          "auth_index": "ak-anthropic-1",
+          "provider": "claude",
+          "kind": "apikey",
+          "priority": 0,
+          "host": "api.anthropic.com",
+          "login": {
+            "name": null,
+            "email": null,
+            "label": "claude-apikey"
+          },
+          "limits": {
+            "context": 1000000,
+            "output": 128000
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        }
+      ]
+    },
+    {
+      "id": "kimi",
+      "display_name": null,
+      "owned_by": null,
+      "limits": {
+        "context": 262144,
+        "output": 32768
+      },
+      "routes": [
+        {
+          "auth_index": "li-devin-1",
+          "provider": "devin",
+          "kind": "oauth",
+          "priority": 5,
+          "host": null,
+          "login": {
+            "name": "devin-office@providers.dev.json",
+            "email": "office@providers.dev",
+            "label": "office@providers.dev"
+          },
+          "limits": {
+            "context": 262144,
+            "output": 32768
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        },
+        {
+          "auth_index": "ak-openrouter-1",
+          "provider": "openai-compatible-openrouter",
+          "kind": "apikey",
+          "priority": 0,
+          "host": "openrouter.ai",
+          "login": {
+            "name": null,
+            "email": null,
+            "label": "openrouter"
+          },
+          "limits": {
+            "context": 262144,
+            "output": 32768
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        }
+      ]
+    },
+    {
+      "id": "opus",
+      "display_name": null,
+      "owned_by": null,
+      "limits": {
+        "context": 1000000,
+        "output": 128000
+      },
+      "routes": [
+        {
+          "auth_index": "li-claude-1",
+          "provider": "claude",
+          "kind": "oauth",
+          "priority": 10,
+          "host": null,
+          "login": {
+            "name": "claude-office@providers.dev.json",
+            "email": "office@providers.dev",
+            "label": "office@providers.dev"
+          },
+          "limits": {
+            "context": 1000000,
+            "output": 128000
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        }
+      ]
+    },
+    {
+      "id": "qwen-coder",
+      "display_name": null,
+      "owned_by": null,
+      "limits": {
+        "context": 262144,
+        "output": 32768
+      },
+      "routes": [
+        {
+          "auth_index": "ak-openrouter-1",
+          "provider": "openai-compatible-openrouter",
+          "kind": "apikey",
+          "priority": 0,
+          "host": "openrouter.ai",
+          "login": {
+            "name": null,
+            "email": null,
+            "label": "openrouter"
+          },
+          "limits": {
+            "context": 262144,
+            "output": 32768
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        }
+      ]
+    },
+    {
+      "id": "sonnet",
+      "display_name": null,
+      "owned_by": null,
+      "limits": {
+        "context": 1000000,
+        "output": 128000
+      },
+      "routes": [
+        {
+          "auth_index": "li-claude-1",
+          "provider": "claude",
+          "kind": "oauth",
+          "priority": 10,
+          "host": null,
+          "login": {
+            "name": "claude-office@providers.dev.json",
+            "email": "office@providers.dev",
+            "label": "office@providers.dev"
+          },
+          "limits": {
+            "context": 1000000,
+            "output": 128000
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        }
+      ]
+    },
+    {
+      "id": "swe",
+      "display_name": null,
+      "owned_by": null,
+      "limits": {
+        "context": 262144,
+        "output": 32768
+      },
+      "routes": [
+        {
+          "auth_index": "li-devin-1",
+          "provider": "devin",
+          "kind": "oauth",
+          "priority": 5,
+          "host": null,
+          "login": {
+            "name": "devin-office@providers.dev.json",
+            "email": "office@providers.dev",
+            "label": "office@providers.dev"
+          },
+          "limits": {
+            "context": 262144,
+            "output": 32768
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        }
+      ]
+    },
+    {
+      "id": "swe-2",
+      "display_name": null,
+      "owned_by": null,
+      "limits": {
+        "context": 262144,
+        "output": 32768
+      },
+      "routes": [
+        {
+          "auth_index": "li-devin-1",
+          "provider": "devin",
+          "kind": "oauth",
+          "priority": 5,
+          "host": null,
+          "login": {
+            "name": "devin-office@providers.dev.json",
+            "email": "office@providers.dev",
+            "label": "office@providers.dev"
+          },
+          "limits": {
+            "context": 262144,
+            "output": 32768
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        }
+      ]
+    },
+    {
+      "id": "swe-2-flash",
+      "display_name": null,
+      "owned_by": null,
+      "limits": {
+        "context": 262144,
+        "output": 32768
+      },
+      "routes": [
+        {
+          "auth_index": "li-devin-1",
+          "provider": "devin",
+          "kind": "oauth",
+          "priority": 5,
+          "host": null,
+          "login": {
+            "name": "devin-office@providers.dev.json",
+            "email": "office@providers.dev",
+            "label": "office@providers.dev"
+          },
+          "limits": {
+            "context": 262144,
+            "output": 32768
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        }
+      ]
+    },
+    {
+      "id": "terra",
+      "display_name": null,
+      "owned_by": null,
+      "limits": {
+        "context": 400000,
+        "output": 128000
+      },
+      "routes": [
+        {
+          "auth_index": "li-codex-1",
+          "provider": "codex",
+          "kind": "oauth",
+          "priority": 10,
+          "host": null,
+          "login": {
+            "name": "codex-office@providers.dev.json",
+            "email": "office@providers.dev",
+            "label": "office@providers.dev"
+          },
+          "limits": {
+            "context": 400000,
+            "output": 128000
+          },
+          "reasoning": null,
+          "recorded_cooldown": null
+        }
+      ]
+    }
+  ]
+}

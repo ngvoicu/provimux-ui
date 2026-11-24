@@ -1,0 +1,469 @@
+import { memo, useState } from 'react';
+import type { TFunction } from 'i18next';
+import { useTranslation } from 'react-i18next';
+import { IconAlertTriangle, IconPencil, IconPlus, IconTimer } from '@/components/ui/icons';
+import type { ProvimuxModelRoutesResponse, ProvimuxRecordedCooldown } from '../../api/types';
+import { setKeyPriority } from '../aliases/priority';
+import type { AliasDraft, AliasEntry } from '../aliases/types';
+import { formatTokens } from '../modelRoutes/logic';
+import { listAge, sourceKind } from '../modelLists/logic';
+import { AccessBadge } from '../shared/AccessBadge';
+import { ProviderPill } from '../shared/ProviderPill';
+import { useOpenInAuthFiles } from '../shared/authFilesLink';
+import { formatDuration, formatExact, formatRelative, serverNow, timeMs } from '../time';
+import { usePageClock, useSecondClock } from '../shared/clocks';
+import type { NameItem, RouteLine } from './catalog';
+import { NameEditor } from './NameEditor';
+import styles from './ModelsPage.module.scss';
+
+export interface NameCardProps {
+  id: string;
+  item: NameItem;
+  draft: AliasDraft;
+  entries: readonly AliasEntry[];
+  routes: ProvimuxModelRoutesResponse | null;
+  /** The proxy reports its routes: lines carry an order and a "not served now". */
+  routesKnown: boolean;
+  offsetMs: number;
+  locked: boolean;
+  open: boolean;
+  onToggle: () => void;
+  onRenamed: (to: string) => void;
+  /** "Name it": the composer, with this model already chosen. */
+  onNewName: (item: NameItem) => void;
+  edit: (change: (draft: AliasDraft) => AliasDraft) => void;
+}
+
+/** One name: its routes in the order they are tried, what needs a look, and its editor when open. */
+export const NameCard = memo(function NameCard(props: NameCardProps) {
+  const { t, i18n } = useTranslation();
+  const { item, open, locked } = props;
+  const meta = [
+    item.active === 0
+      ? t('provimux.models.routes_none')
+      : t('provimux.models.routes_count', { count: item.active }),
+    item.requests !== null && item.requests > 0
+      ? t('provimux.models.requests', { count: item.requests })
+      : null,
+    item.limits?.context
+      ? t('provimux.models.context', { value: formatTokens(item.limits.context, i18n.language) })
+      : null,
+  ].filter(Boolean);
+
+  return (
+    <article
+      id={props.id}
+      className={styles.name}
+      data-own={item.own || undefined}
+      data-problem={item.problems.length > 0 || undefined}
+      data-open={open || undefined}
+      aria-label={item.name}
+    >
+      <header className={styles.nameHead}>
+        <div className={styles.nameTitle}>
+          <h3 className={styles.nameText}>{item.name}</h3>
+          {item.fresh ? (
+            <span className={styles.tag} data-tone="new">
+              {t('provimux.models.tag_unsaved')}
+            </span>
+          ) : item.own ? (
+            <span className={styles.tag} data-tone="own">
+              {t('provimux.models.tag_yours')}
+            </span>
+          ) : null}
+          {item.problems.length ? (
+            <span className={styles.tag} data-tone="problem">
+              <IconAlertTriangle size={12} />
+              {t('provimux.models.tag_problem')}
+            </span>
+          ) : null}
+        </div>
+        <p className={styles.nameMeta}>{meta.join(' · ')}</p>
+        <div className={styles.nameActions}>
+          {!item.own ? (
+            <button
+              type="button"
+              className={styles.ghost}
+              disabled={locked}
+              onClick={() => props.onNewName(item)}
+            >
+              <IconPlus size={13} />
+              {t('provimux.models.name_it')}
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className={styles.ghost}
+            aria-expanded={open}
+            onClick={props.onToggle}
+          >
+            <IconPencil size={13} />
+            {item.own ? t('provimux.models.edit') : t('provimux.models.add_models')}
+          </button>
+        </div>
+      </header>
+
+      <ol
+        className={styles.lines}
+        aria-label={t('provimux.models.lines_label', { name: item.name })}
+      >
+        {item.lines.map((line) => (
+          <Line
+            key={line.key}
+            line={line}
+            name={item.name}
+            routesKnown={props.routesKnown}
+            offsetMs={props.offsetMs}
+            locked={locked}
+            edit={props.edit}
+          />
+        ))}
+      </ol>
+      {item.problems.includes('mixed') ? (
+        <p className={styles.problem}>
+          <IconAlertTriangle size={13} />
+          <span>
+            {t('provimux.models.problem_mixed', {
+              name: item.name,
+              models: [...new Set(item.lines.map((l) => l.upstream))].join(', '),
+            })}
+          </span>
+        </p>
+      ) : null}
+
+      {open ? (
+        <NameEditor
+          item={item}
+          draft={props.draft}
+          entries={props.entries}
+          routes={props.routes}
+          edit={props.edit}
+          onRenamed={props.onRenamed}
+          onClose={props.onToggle}
+        />
+      ) : null}
+    </article>
+  );
+});
+
+/** The sentence a line's issue, or its state, reads as; null when there is nothing to say. */
+function lineSentence(t: TFunction, line: RouteLine, routesKnown: boolean): string | null {
+  if (line.state === 'removed') return null;
+  if (line.off) return t('provimux.models.line_off');
+  switch (line.issue) {
+    case 'incomplete':
+      return t('provimux.models.issue_incomplete');
+    case 'same-as-name':
+      return t('provimux.models.issue_same_as_name');
+    case 'duplicate':
+      return t('provimux.models.issue_duplicate');
+    case 'shadowed':
+      return t('provimux.models.issue_shadowed');
+    default:
+      break;
+  }
+  if (line.state === 'idle' && routesKnown) return t('provimux.models.line_not_served');
+  return null;
+}
+
+function Line({
+  line,
+  name,
+  routesKnown,
+  offsetMs,
+  locked,
+  edit,
+}: {
+  line: RouteLine;
+  name: string;
+  routesKnown: boolean;
+  offsetMs: number;
+  locked: boolean;
+  edit: NameCardProps['edit'];
+}) {
+  const { t } = useTranslation();
+  const openInAuthFiles = useOpenInAuthFiles();
+  const sentence = lineSentence(t, line, routesKnown);
+  const blocking =
+    line.issue === 'incomplete' || line.issue === 'same-as-name' || line.issue === 'duplicate';
+  const rankTitle =
+    line.rank === null
+      ? line.state === 'removed'
+        ? undefined
+        : routesKnown || line.priority !== null
+          ? t('provimux.models.rank_none')
+          : t('provimux.models.rank_unknown')
+      : line.sharesRank
+        ? t('provimux.models.rank_shared', { rank: line.rank })
+        : t('provimux.models.rank', { rank: line.rank });
+  const sameName = line.upstream.trim().toLowerCase() === name.trim().toLowerCase();
+  return (
+    <li
+      className={styles.line}
+      data-state={line.state}
+      data-off={line.off || undefined}
+      data-issue={line.issue ? (blocking ? 'error' : 'warn') : undefined}
+    >
+      <div className={styles.lineMain}>
+        <span
+          className={styles.rank}
+          data-shared={line.sharesRank || undefined}
+          data-tried={line.rank !== null || undefined}
+          title={rankTitle}
+          aria-label={rankTitle}
+        >
+          {line.rank ?? '–'}
+        </span>
+        <AccessBadge access={line.access} kind={null} />
+        <ProviderPill provider={line.provider} host={line.host} />
+        {line.account && line.loginFile ? (
+          <button
+            type="button"
+            className={`${styles.account} ${styles.accountLink}`}
+            title={t('provimux.models.open_login', {
+              name: line.loginFile,
+              index: line.authIndex ?? '?',
+            })}
+            onClick={() => openInAuthFiles(line.loginFile!)}
+          >
+            {line.account}
+          </button>
+        ) : line.account ? (
+          <span className={styles.account}>{line.account}</span>
+        ) : null}
+        <span className={styles.sends} data-same={sameName || undefined}>
+          <span aria-hidden="true">→</span>
+          <span className="visually-hidden">{t('provimux.models.sends')}</span>
+          <code>{line.upstream}</code>
+          {line.rowId === null ? (
+            <span className={styles.builtIn} title={t('provimux.models.built_in_hint')}>
+              {t('provimux.models.built_in')}
+            </span>
+          ) : null}
+        </span>
+        <span className={styles.lineEnd}>
+          {line.cooldown ? (
+            <Cooldown cooldown={line.cooldown} upstream={line.upstream} offsetMs={offsetMs} />
+          ) : null}
+          {line.list ? <ListAge line={line} offsetMs={offsetMs} /> : null}
+          <Priority line={line} locked={locked} edit={edit} />
+          {line.state === 'new' ? (
+            <span className={styles.tag} data-tone="new">
+              {t('provimux.models.tag_unsaved')}
+            </span>
+          ) : line.state === 'changed' ? (
+            <span className={styles.tag} data-tone="changed">
+              {t('provimux.models.tag_changed')}
+            </span>
+          ) : line.state === 'removed' ? (
+            <span className={styles.tag} data-tone="removed">
+              {t('provimux.models.tag_removed')}
+            </span>
+          ) : null}
+        </span>
+      </div>
+      {sentence ? (
+        <p className={styles.lineSentence} data-tone={line.issue || line.off ? 'warn' : undefined}>
+          {line.issue ? <IconAlertTriangle size={12} /> : null}
+          <span>{sentence}</span>
+        </p>
+      ) : null}
+    </li>
+  );
+}
+
+const KNOWN_REASONS = new Set([
+  'quota',
+  'credential_quota',
+  'transient_rate_limit',
+  'transient_error',
+  'unauthorized',
+  'payment_required',
+  'not_found',
+  'model_not_supported',
+  'invalid_grant',
+  'cloudflare_challenge',
+]);
+
+/** A cooldown's reason and details in words: "quota · HTTP 429 · this model · backoff level 2". */
+function cooldownDetails(
+  t: TFunction,
+  cooldown: ProvimuxRecordedCooldown,
+  upstream: string
+): { reason: string; details: string } {
+  const reason = KNOWN_REASONS.has(cooldown.reason)
+    ? t(`provimux.cooldown.reason.${cooldown.reason}`)
+    : t('provimux.cooldown.reason.unknown', { code: cooldown.reason });
+  const scope =
+    cooldown.scope === 'credential'
+      ? t('provimux.cooldown.scope_credential')
+      : cooldown.scope === 'model'
+        ? cooldown.model && cooldown.model !== upstream
+          ? t('provimux.cooldown.scope_model_as', { model: cooldown.model })
+          : t('provimux.cooldown.scope_model')
+        : t('provimux.cooldown.scope_unknown', { scope: cooldown.scope });
+  const details = [
+    reason,
+    cooldown.http_status !== null ? `HTTP ${cooldown.http_status}` : null,
+    scope,
+    cooldown.backoff_level !== null
+      ? t('provimux.cooldown.backoff', { level: cooldown.backoff_level })
+      : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  return { reason, details };
+}
+
+/**
+ * A cooldown Provimux recorded on the route, counting down: a record (when it ends, why), never a verdict
+ * that the route is unavailable.
+ */
+function Cooldown({
+  cooldown,
+  upstream,
+  offsetMs,
+}: {
+  cooldown: ProvimuxRecordedCooldown;
+  upstream: string;
+  offsetMs: number;
+}) {
+  const { t, i18n } = useTranslation();
+  const now = serverNow(useSecondClock(), offsetMs);
+  const until = timeMs(cooldown.until) ?? now;
+  const left = until - now;
+  const { reason, details } = cooldownDetails(t, cooldown, upstream);
+  return (
+    <span
+      className={styles.cooldown}
+      data-ended={left <= 0 || undefined}
+      title={`${t('provimux.cooldown.until', { time: formatExact(until, i18n.language) })} · ${details}`}
+    >
+      <IconTimer size={12} />
+      {left > 0
+        ? t('provimux.models.cooldown_left', { duration: formatDuration(left), reason })
+        : t('provimux.models.cooldown_ended')}
+    </span>
+  );
+}
+
+/** A login's model list: its source and how old it is (what the Model lists page showed per login). */
+function ListAge({ line, offsetMs }: { line: RouteLine; offsetMs: number }) {
+  const { t, i18n } = useTranslation();
+  const list = line.list!;
+  const now = serverNow(usePageClock(), offsetMs);
+  const kind = sourceKind(list.source);
+  const fetched = timeMs(list.live.fetched_at);
+  const source = t(`provimux.models.list_${kind === 'built-in' ? 'built_in' : kind}`);
+  // A held list a day old means its fetches have been failing; after 7 days the login no longer uses it.
+  const age = listAge(list, now);
+  const text =
+    kind === 'live' && fetched !== null
+      ? t('provimux.models.list_age', { source, age: formatRelative(fetched, now, i18n.language) })
+      : t('provimux.models.list_only', { source });
+  return (
+    <span
+      className={styles.listAge}
+      data-age={age === 'old' || age === 'expired' ? age : undefined}
+      title={
+        list.live.listed_models !== null
+          ? t('provimux.models.list_hint', { count: list.live.listed_models })
+          : undefined
+      }
+    >
+      {text}
+    </span>
+  );
+}
+
+/**
+ * The priority a route is tried with. An API key's is stored in the configuration this page writes, so it
+ * is edited here (it applies to every model of the key); a login's is in its login file, set on Auth Files.
+ */
+function Priority({
+  line,
+  locked,
+  edit,
+}: {
+  line: RouteLine;
+  locked: boolean;
+  edit: NameCardProps['edit'];
+}) {
+  const { t } = useTranslation();
+  const openInAuthFiles = useOpenInAuthFiles();
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState('');
+  const value = line.priority === null ? '?' : String(line.priority);
+  // A route of an API key the page knows (a login type's entry is never an 'api' route).
+  const keyEntry = line.access === 'api' && line.entryId !== null;
+
+  if (line.state === 'removed') return null;
+  if (keyEntry && editing) {
+    const parsed = /^-?\d+$/.test(text.trim()) ? Number(text.trim()) : null;
+    const apply = () => {
+      if (parsed === null) return;
+      edit((draft) => setKeyPriority(draft, line.entryId!, parsed));
+      setEditing(false);
+    };
+    return (
+      <span className={styles.priorityEdit}>
+        <label>
+          <span className="visually-hidden">{t('provimux.models.priority_label')}</span>
+          <input
+            className={styles.priorityInput}
+            value={text}
+            inputMode="numeric"
+            autoFocus
+            aria-invalid={parsed === null || undefined}
+            onChange={(event) => setText(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') apply();
+              if (event.key === 'Escape') setEditing(false);
+            }}
+          />
+        </label>
+        <button type="button" className={styles.ghost} disabled={parsed === null} onClick={apply}>
+          {t('provimux.models.apply')}
+        </button>
+        <button type="button" className={styles.ghost} onClick={() => setEditing(false)}>
+          {t('provimux.models.cancel')}
+        </button>
+        <span className={styles.priorityHint}>{t('provimux.models.priority_key_hint')}</span>
+      </span>
+    );
+  }
+  if (keyEntry) {
+    return (
+      <button
+        type="button"
+        className={styles.priority}
+        data-edited={line.priorityEdited || undefined}
+        disabled={locked}
+        title={t('provimux.models.priority_key_title')}
+        onClick={() => {
+          setText(line.priority === null ? '0' : String(line.priority));
+          setEditing(true);
+        }}
+      >
+        {t('provimux.models.priority', { value })}
+      </button>
+    );
+  }
+  if (line.access === 'sub' && line.loginFile) {
+    return (
+      <button
+        type="button"
+        className={styles.priority}
+        title={t('provimux.models.priority_login_title')}
+        onClick={() => openInAuthFiles(line.loginFile!)}
+      >
+        {t('provimux.models.priority', { value })}
+      </button>
+    );
+  }
+  return (
+    <span className={styles.priority} data-static title={t('provimux.models.priority_login_title')}>
+      {t('provimux.models.priority', { value })}
+    </span>
+  );
+}
