@@ -307,7 +307,7 @@ describe('3. the update source shows no credentials', () => {
   });
 });
 
-describe('9. a route opens Auth Files with its file name as the ordinary search', () => {
+describe('9. Auth Files opens on a login with its file name as the ordinary search', () => {
   test('the link sets the search to the file name, every provider and state, first page', () => {
     expect(openAuthFilesState('review-cl.json')).toMatchObject({
       search: 'review-cl.json',
@@ -325,8 +325,12 @@ describe('9. a route opens Auth Files with its file name as the ordinary search'
     );
     const link = read('src/provimux/pages/shared/authFilesLink.ts');
     expect(link).not.toMatch(/provimuxAuthTarget|setAuthFilesTarget|authIndex/);
+    // A route opens its login on Accounts; Accounts opens it on Auth Files for its other settings.
     expect(read('src/provimux/pages/models/NameCard.tsx')).toContain(
-      'openInAuthFiles(line.loginFile!)'
+      'openInAccounts(line.loginFile!)'
+    );
+    expect(read('src/provimux/pages/accounts/AccountsPage.tsx')).toContain(
+      'openInAuthFiles(account.fileName)'
     );
   });
 });

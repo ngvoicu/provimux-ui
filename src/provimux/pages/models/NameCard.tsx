@@ -16,7 +16,7 @@ import { formatTokens } from '../modelRoutes/logic';
 import { listAge, sourceKind } from '../modelLists/logic';
 import { AccessBadge } from '../shared/AccessBadge';
 import { ProviderPill } from '../shared/ProviderPill';
-import { useOpenInAuthFiles } from '../shared/authFilesLink';
+import { useOpenInAccounts } from '../shared/accountsLink';
 import { formatDuration, formatExact, formatRelative, serverNow, timeMs } from '../time';
 import { usePageClock, useSecondClock } from '../shared/clocks';
 import type { LimitSource, ModelDetail, NameItem, RouteLine } from './catalog';
@@ -282,7 +282,7 @@ function Line({
   edit: NameCardProps['edit'];
 }) {
   const { t } = useTranslation();
-  const openInAuthFiles = useOpenInAuthFiles();
+  const openInAccounts = useOpenInAccounts();
   const sentence = lineSentence(t, line, routesKnown);
   const blocking =
     line.issue === 'incomplete' || line.issue === 'same-as-name' || line.issue === 'duplicate';
@@ -320,11 +320,8 @@ function Line({
           <button
             type="button"
             className={`${styles.account} ${styles.accountLink}`}
-            title={t('provimux.models.open_login', {
-              name: line.loginFile,
-              index: line.authIndex ?? '?',
-            })}
-            onClick={() => openInAuthFiles(line.loginFile!)}
+            title={t('provimux.models.open_login', { name: line.account })}
+            onClick={() => openInAccounts(line.loginFile!)}
           >
             {line.account}
           </button>
@@ -497,7 +494,7 @@ function Priority({
   edit: NameCardProps['edit'];
 }) {
   const { t } = useTranslation();
-  const openInAuthFiles = useOpenInAuthFiles();
+  const openInAccounts = useOpenInAccounts();
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState('');
   const value = line.priority === null ? '?' : String(line.priority);
@@ -562,7 +559,7 @@ function Priority({
         type="button"
         className={styles.priority}
         title={t('provimux.models.priority_login_title')}
-        onClick={() => openInAuthFiles(line.loginFile!)}
+        onClick={() => openInAccounts(line.loginFile!)}
       >
         {t('provimux.models.priority', { value })}
       </button>

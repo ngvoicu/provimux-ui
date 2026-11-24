@@ -172,13 +172,22 @@ describe('Savings presence', () => {
 describe('sidebar', () => {
   const groups = () => [
     { id: 'operate', items: [{ path: '/' }, { path: '/quick-start' }] },
-    { id: 'gateway', items: [{ path: '/ai-providers' }, { path: '/routing' }, { path: '/later' }] },
+    {
+      id: 'gateway',
+      items: [
+        { path: '/ai-providers' },
+        { path: '/auth-files' },
+        { path: '/oauth' },
+        { path: '/routing' },
+        { path: '/later' },
+      ],
+    },
     { id: 'control', items: [{ path: '/system' }] },
   ];
   const paths = (list: ReturnType<typeof groups>) =>
     list.map((group) => group.items.map((item) => (item as { path: string }).path));
 
-  test('pages go after Routing, Models first, Savings where its endpoint answers or fails', () => {
+  test('Accounts in the place of AI Providers, Auth Files and OAuth Login; the others after Routing, Models first, Savings where its endpoint answers or fails', () => {
     const result = provimuxNav(groups(), {
       modelRoutes: entry('ready'),
       liveLists: entry('error'),
@@ -186,9 +195,12 @@ describe('sidebar', () => {
     });
     expect(paths(result)).toEqual([
       ['/'],
-      ['/ai-providers', '/routing', '/provimux/models', '/provimux/savings', '/later'],
+      ['/provimux/accounts', '/routing', '/provimux/models', '/provimux/savings', '/later'],
       ['/system'],
     ]);
+    const accounts = result[1].items[0] as { labelKey: string; metaKey: string };
+    expect(accounts.labelKey).toBe('provimux.nav.accounts');
+    expect(accounts.metaKey).toBe('provimux.nav_meta.accounts');
     const models = result[1].items[2] as { labelKey: string; metaKey: string };
     expect(models.labelKey).toBe('provimux.nav.models');
     expect(models.metaKey).toBe('provimux.nav_meta.models');
@@ -204,7 +216,7 @@ describe('sidebar', () => {
       });
       expect(paths(result)).toEqual([
         ['/'],
-        ['/ai-providers', '/routing', '/provimux/models', '/later'],
+        ['/provimux/accounts', '/routing', '/provimux/models', '/later'],
         ['/system'],
       ]);
     }
@@ -215,10 +227,10 @@ describe('sidebar', () => {
       modelLists: entry('ready'),
       savings: entry('unsupported'),
     });
-    expect(paths(one)[1]).toEqual(['/ai-providers', '/routing', '/provimux/models', '/later']);
+    expect(paths(one)[1]).toEqual(['/provimux/accounts', '/routing', '/provimux/models', '/later']);
     // An older presence record that knows no endpoint at all still lists Models.
     expect(paths(provimuxNav(groups(), {}))[1]).toEqual([
-      '/ai-providers',
+      '/provimux/accounts',
       '/routing',
       '/provimux/models',
       '/later',

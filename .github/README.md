@@ -35,9 +35,10 @@ repository) &nbsp;·&nbsp; **[providers.dev](https://providers.dev)**
 
 ## What provimux-ui adds
 
-- **[Provimux's own pages](#provimuxs-own-pages)**: **Models**, every model name you can send, with the API keys and
-  logins that serve it in the order they are tried, the cooldowns Provimux recorded and each login's list; your own
-  names (one model, or several under one name) made and saved there.
+- **[Provimux's own pages](#provimuxs-own-pages)**: **Accounts**, every subscription and API key in one list, whether
+  each works now and its priority, added, fixed, turned off or removed there; **Models**, every model name you can send,
+  with the API keys and logins that serve it in the order they are tried, the cooldowns Provimux recorded and each
+  login's list; your own names (one model, or several under one name) made and saved there.
 - **[The providers.dev look](#the-providersdev-look)**: "Provimux by providers.dev" throughout, in three themes.
 - **[The Provimux version](#the-provimux-version-and-the-console-on-the-system-page)** and the console's update source
   on the System page.
@@ -48,8 +49,19 @@ Then: [Use it](#use-it) · [Versions and releases](#versions-and-releases) · [B
 
 ### Provimux's own pages
 
-In the sidebar under Gateway, **Models** (it replaced Aliases, Model routes and Model lists, whose addresses lead to
-it) and **Savings**:
+In the sidebar under Gateway, **Accounts** (in the place of AI Providers, Auth Files and OAuth Login, which keep their
+addresses), **Models** (it replaced Aliases, Model routes and Model lists, whose addresses lead to it) and **Savings**.
+
+**Accounts.** Every subscription (a login) and every API key, one card per service (Claude, ChatGPT · OpenAI, Gemini,
+OpenRouter, Devin…), the one tried first on top. A row says the kind (subscription in green, API key in amber), who it
+is (the e-mail, or the key's host and its masked tail), whether it works now in one word (Working, Signed out, Cooling
+down until 15:17, Key refused, Off) and its priority, with the fix when one is needed (**Sign in again**, **Replace
+key**) and an on/off switch. **Add account** asks for the service first, then a subscription (OAuth Login's own
+sign-in) or a key (stored where AI Providers stores it). An account's panel changes its priority, opens Models on what
+it serves, and links to its other settings on AI Providers or Auth Files. Each change is the call the original page
+makes for it; a key's is written only if the configuration is still the one the page read.
+
+
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/models-desktop-dark.png">
@@ -60,8 +72,7 @@ it) and **Savings**:
 names, and the names you made, one model or several under one name. Your names come first, then the models used in the
 last 30 days, then the rest (folded). Under each name, the routes that serve it in the order Provimux tries them
 (among the routes that can take a new request, a higher priority first; routes that share one share the requests):
-subscription in green, API key in amber, the provider, the login as Auth Files names it (it opens there) or the key's
-host, the model it sends upstream, its priority, the cooldown Provimux recorded on it, counting down (a record, not a
+subscription in green, API key in amber, the provider, the login's account (it opens on Accounts) or the key's host, the model it sends upstream, its priority, the cooldown Provimux recorded on it, counting down (a record, not a
 verdict on availability), and for a login where its list of models comes from and how old it is ("Claude's model
 list, 2 hours ago"). Sizes (context, output) and reasoning levels are under a name's **Details**, each with where it comes from; a route
 says something about limits only when one is estimated: "new: limits estimated" for a model only the login's own list
@@ -69,7 +80,7 @@ has yet, "limits estimated" for a limit no list states, each with one line on wh
 
 **New name** makes a name and puts models under it; on a name, **Edit** renames it, adds or takes out models, or
 removes it. A row Provimux would ignore, or never use, says so in one sentence. An API key's priority is edited on its
-route (it applies to every model of the key); a login's priority is in its file, on Auth Files. Everything is saved
+route (it applies to every model of the key); a login's priority is in its file, changed on Accounts. Everything is saved
 with one action, as configuration rows (`api-keys.<family>`, `oauth.model-alias`) written only if the file is still
 the one the page read. Below the list: the **live model lists** switch with a refresh request, and, when you have them,
 **Devin's quota pause per model** (`oauth.providers.devin.model-level-cooling`) and **OpenRouter**, the
