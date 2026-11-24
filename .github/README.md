@@ -63,8 +63,9 @@ last 30 days, then the rest (folded). Under each name, the routes that serve it 
 subscription in green, API key in amber, the provider, the login as Auth Files names it (it opens there) or the key's
 host, the model it sends upstream, its priority, the cooldown Provimux recorded on it, counting down (a record, not a
 verdict on availability), and for a login where its list of models comes from and how old it is ("Claude's model
-list, 2 hours ago"). A model only the login's own list has yet carries "new: limits estimated", with one line on why and where each of its
-limits comes from; a context no list states reads "(a default)".
+list, 2 hours ago"). Sizes (context, output) and reasoning levels are under a name's **Details**, each with where it comes from; a route
+says something about limits only when one is estimated: "new: limits estimated" for a model only the login's own list
+has yet, "limits estimated" for a limit no list states, each with one line on why.
 
 **New name** makes a name and puts models under it; on a name, **Edit** renames it, adds or takes out models, or
 removes it. A row Provimux would ignore, or never use, says so in one sentence. An API key's priority is edited on its

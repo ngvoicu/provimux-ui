@@ -86,12 +86,14 @@ export interface RouteLine {
   /** The draft changes this API key's priority. */
   priorityEdited: boolean;
   /**
-   * The login's own list offers this model and the built-in list does not have it yet: its context, output
-   * and reasoning limits come from that list or from defaults.
+   * A limit of the model behind the route is estimated: the login's own list offers the model and the
+   * built-in list does not have it yet ('new'), or no list states its context or output ('default').
    */
-  estimated: boolean;
+  estimated: 'new' | 'default' | null;
   /** Where the login's list says each limit of the model comes from; null when not known (or an API key). */
   detail: ModelDetail | null;
+  /** The reasoning levels the route offers, as the proxy reports them; null when not reported. */
+  reasoning: string[] | null;
   /** 1-based: routes of rank 1 are tried first. null: not tried, or not known. */
   rank: number | null;
   /** Another tried route of the name has the same priority: the routing strategy chooses between them. */
@@ -132,9 +134,13 @@ export interface NameItem {
   /** Requests in the last 30 days; null when not known. */
   requests: number | null;
   limits: ProvimuxLimits | null;
-  /** No list states the context of the model behind any of its routes: the value is a default. */
-  contextDefault: boolean;
+  /** Where the name's context and output come from, when every route that is tried agrees; null: not known. */
+  limitSources: { context: LimitSource | null; output: LimitSource | null };
 }
+
+/** Where a limit's value comes from: a company's own list, the built-in list, or neither (a default). */
+export type LimitSource =
+  { kind: 'list'; provider: string } | { kind: 'built-in' } | { kind: 'default' };
 
 /** Where a login's model list says a model's limits come from (model-lists.md): its own list, the built-in
  *  list, or neither (null: a default). */
@@ -395,8 +401,9 @@ export function buildNames(input: CatalogInput): NameItem[] {
         upstream: (draftRow ?? baseRow)?.upstream.trim() || upstreamOfServed(route, model.id),
         priority,
         priorityEdited: keyPriorityEdited(entry),
-        estimated: false,
+        estimated: null,
         detail: null,
+        reasoning: route.reasoning?.levels.length ? route.reasoning.levels : null,
         rank: null,
         sharesRank: false,
         cooldown: isCoolingAt(route.recorded_cooldown, nowMs) ? route.recorded_cooldown : null,
@@ -478,7 +485,13 @@ export function buildNames(input: CatalogInput): NameItem[] {
     const lines = rank(
       found.lines.map((line) => {
         const detail = line.access === 'sub' ? detailOf(line.authIndex, line.upstream) : null;
-        return detail ? { ...line, detail, estimated: detail.learned } : line;
+        if (!detail) return line;
+        const estimated = detail.learned
+          ? 'new'
+          : detail.context === null || detail.output === null
+            ? 'default'
+            : null;
+        return { ...line, detail, estimated };
       })
     );
     const triedLines = lines.filter(tried);
@@ -502,11 +515,34 @@ export function buildNames(input: CatalogInput): NameItem[] {
       fresh: configLines.length > 0 && configLines.every((line) => line.state === 'new'),
       requests: usage ? (usage[key] ?? 0) : null,
       limits: found.limits,
-      contextDefault:
-        triedLines.length > 0 &&
-        triedLines.every((line) => line.detail !== null && line.detail.context === null),
+      limitSources: {
+        context: agreedSource(triedLines, 'context'),
+        output: agreedSource(triedLines, 'output'),
+      },
     };
   });
+}
+
+/** The source of one limit that every tried line agrees on; null when a line has none known, or they differ. */
+function agreedSource(
+  lines: readonly RouteLine[],
+  limit: 'context' | 'output'
+): LimitSource | null {
+  if (!lines.length || lines.some((line) => line.detail === null)) return null;
+  const sources = lines.map((line): LimitSource => {
+    const source = line.detail![limit];
+    return source === 'live'
+      ? { kind: 'list', provider: line.provider }
+      : source === 'built-in'
+        ? { kind: 'built-in' }
+        : source === null
+          ? { kind: 'default' }
+          : { kind: 'list', provider: '' };
+  });
+  // A source this console does not know says nothing.
+  if (sources.some((source) => source.kind === 'list' && !source.provider)) return null;
+  const first = JSON.stringify(sources[0]);
+  return sources.every((source) => JSON.stringify(source) === first) ? sources[0] : null;
 }
 
 const channelOf = (entry: AliasEntry) => (entry.store === 'login' ? entry.channel : '');
@@ -557,8 +593,9 @@ function pendingLine(
     upstream: row.upstream.trim(),
     priority: options.priority,
     priorityEdited: options.priorityEdited,
-    estimated: false,
+    estimated: null,
     detail: null,
+    reasoning: null,
     rank: null,
     sharesRank: false,
     cooldown: null,
