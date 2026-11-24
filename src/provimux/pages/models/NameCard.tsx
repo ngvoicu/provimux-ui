@@ -1,7 +1,14 @@
 import { memo, useState } from 'react';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
-import { IconAlertTriangle, IconPencil, IconPlus, IconTimer } from '@/components/ui/icons';
+import {
+  IconAlertTriangle,
+  IconChevronDown,
+  IconChevronUp,
+  IconPencil,
+  IconPlus,
+  IconTimer,
+} from '@/components/ui/icons';
 import type { ProvimuxModelRoutesResponse, ProvimuxRecordedCooldown } from '../../api/types';
 import { setKeyPriority } from '../aliases/priority';
 import type { AliasDraft, AliasEntry } from '../aliases/types';
@@ -12,7 +19,7 @@ import { ProviderPill } from '../shared/ProviderPill';
 import { useOpenInAuthFiles } from '../shared/authFilesLink';
 import { formatDuration, formatExact, formatRelative, serverNow, timeMs } from '../time';
 import { usePageClock, useSecondClock } from '../shared/clocks';
-import type { ModelDetail, NameItem, RouteLine } from './catalog';
+import type { LimitSource, ModelDetail, NameItem, RouteLine } from './catalog';
 import { NameEditor } from './NameEditor';
 import { providerName } from './labels';
 import styles from './ModelsPage.module.scss';
@@ -37,7 +44,7 @@ export interface NameCardProps {
 
 /** One name: its routes in the order they are tried, what needs a look, and its editor when open. */
 export const NameCard = memo(function NameCard(props: NameCardProps) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const { item, open, locked } = props;
   const meta = [
     item.active === 0
@@ -47,7 +54,8 @@ export const NameCard = memo(function NameCard(props: NameCardProps) {
       ? t('provimux.models.requests', { count: item.requests })
       : null,
   ].filter(Boolean);
-  const context = item.limits?.context ? formatTokens(item.limits.context, i18n.language) : null;
+  const [details, setDetails] = useState(false);
+  const detailsId = `${props.id}-details`;
 
   return (
     <article
@@ -77,23 +85,18 @@ export const NameCard = memo(function NameCard(props: NameCardProps) {
             </span>
           ) : null}
         </div>
-        <p className={styles.nameMeta}>
-          {meta.join(' · ')}
-          {context ? (
-            item.contextDefault ? (
-              <span title={t('provimux.models.context_default_hint')}>
-                {' · '}
-                {t('provimux.models.context_default', { value: context })}
-              </span>
-            ) : (
-              <>
-                {' · '}
-                {t('provimux.models.context', { value: context })}
-              </>
-            )
-          ) : null}
-        </p>
+        <p className={styles.nameMeta}>{meta.join(' · ')}</p>
         <div className={styles.nameActions}>
+          <button
+            type="button"
+            className={styles.ghost}
+            aria-expanded={details}
+            aria-controls={detailsId}
+            onClick={() => setDetails((shown) => !shown)}
+          >
+            {details ? <IconChevronUp size={13} /> : <IconChevronDown size={13} />}
+            {t('provimux.models.details')}
+          </button>
           {!item.own ? (
             <button
               type="button"
@@ -133,6 +136,8 @@ export const NameCard = memo(function NameCard(props: NameCardProps) {
           />
         ))}
       </ol>
+      {details ? <NameDetails id={detailsId} item={item} /> : null}
+
       {item.problems.includes('mixed') ? (
         <p className={styles.problem}>
           <IconAlertTriangle size={13} />
@@ -161,6 +166,55 @@ export const NameCard = memo(function NameCard(props: NameCardProps) {
 });
 
 /**
+ * A name's details, shown on request: what clients are told about the model's size (context and output)
+ * and its reasoning levels, each with where it comes from when that is known. Not on the row itself: the
+ * row says something about limits only when one is estimated.
+ */
+export function NameDetails({ id, item }: { id: string; item: NameItem }) {
+  const { t, i18n } = useTranslation();
+  const source = (from: LimitSource | null) =>
+    !from
+      ? null
+      : from.kind === 'list'
+        ? t('provimux.models.detail_from_list', { provider: providerName(t, from.provider, null) })
+        : from.kind === 'built-in'
+          ? t('provimux.models.detail_built_in')
+          : t('provimux.models.detail_default');
+  const size = (value: number | null | undefined, from: LimitSource | null) =>
+    value ? (
+      <>
+        <span
+          title={t('provimux.routes.tokens_exact', { value: value.toLocaleString(i18n.language) })}
+        >
+          {formatTokens(value, i18n.language)}
+        </span>
+        {source(from) ? <span className={styles.detailSource}>{source(from)}</span> : null}
+      </>
+    ) : (
+      <span className={styles.detailSource}>{t('provimux.models.detail_unknown')}</span>
+    );
+  const levels = [...new Set(item.lines.flatMap((line) => line.reasoning ?? []))];
+  return (
+    <dl id={id} className={styles.details}>
+      <div>
+        <dt>{t('provimux.models.detail_context')}</dt>
+        <dd>{size(item.limits?.context, item.limitSources.context)}</dd>
+      </div>
+      <div>
+        <dt>{t('provimux.models.detail_output')}</dt>
+        <dd>{size(item.limits?.output, item.limitSources.output)}</dd>
+      </div>
+      {levels.length ? (
+        <div>
+          <dt>{t('provimux.models.detail_reasoning')}</dt>
+          <dd>{levels.join(', ')}</dd>
+        </div>
+      ) : null}
+    </dl>
+  );
+}
+
+/**
  * Why a route's limits are estimated, naming the company: "Codex's own list offers this model, but
  * Provimux's built-in list doesn't have it yet. Context from Codex's list; output: a default; …".
  */
@@ -176,7 +230,10 @@ function estimatedHint(t: TFunction, line: RouteLine): string {
         : t('provimux.models.limit_default', { what });
   // The joining is the language's own (Chinese has no spaces and its own semicolon and full stop).
   return t('provimux.models.estimated_full', {
-    lead: t('provimux.models.estimated_lead', { provider }),
+    lead:
+      line.estimated === 'new'
+        ? t('provimux.models.estimated_lead', { provider })
+        : t('provimux.models.estimated_default_lead'),
     limits: [
       value(t('provimux.models.limit_context'), detail.context),
       value(t('provimux.models.limit_output'), detail.output),
@@ -280,7 +337,9 @@ function Line({
           <code>{line.upstream}</code>
           {line.estimated ? (
             <span className={styles.estimated} title={estimatedHint(t, line)}>
-              {t('provimux.models.tag_estimated')}
+              {line.estimated === 'new'
+                ? t('provimux.models.tag_estimated')
+                : t('provimux.models.tag_estimated_default')}
             </span>
           ) : null}
         </span>

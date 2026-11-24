@@ -41,6 +41,7 @@ import { ModelsPage } from '@/provimux/pages/models/ModelsPage';
 import { modelsAddressFor } from '@/provimux/pages/models/address';
 import { ModelsRedirect } from '@/provimux/pages/models/ModelsRedirect';
 import { ModelsSettings } from '@/provimux/pages/models/ModelsSettings';
+import { NameDetails } from '@/provimux/pages/models/NameCard';
 import type { DevinCooling } from '@/provimux/pages/modelRoutes/useDevinCooling';
 import { PROVIMUX_PAGES } from '@/provimux/nav';
 import { PROVIMUX_ROUTES } from '@/provimux/routes';
@@ -189,8 +190,8 @@ describe('where a limit comes from, said plainly (owner: “wtf is this”, “w
     await i18n.changeLanguage('en');
     const items = names();
     const sol = nameOf(items, 'gpt-6.2-sol');
-    expect(sol.lines[0].estimated).toBe(true);
-    expect(nameOf(items, 'terra').lines[0].estimated).toBe(false);
+    expect(sol.lines[0].estimated).toBe('new');
+    expect(nameOf(items, 'terra').lines[0].estimated).toBeNull();
     const html = renderCard(sol, startDraft(ownerState()));
     expect(textOf(html)).toContain('new: limits estimated');
     expect(textOf(html)).not.toMatch(/catalog|\bL\b|\bB\b/);
@@ -199,23 +200,38 @@ describe('where a limit comes from, said plainly (owner: “wtf is this”, “w
     );
   });
 
-  test('a context no list states says it is a default; one a list states says nothing more', async () => {
+  test('no sizes on a row: a limit no list states marks the route “limits estimated”, and nothing else', async () => {
     await i18n.changeLanguage('en');
     const items = names();
     const flash = nameOf(items, 'swe-2-flash');
-    expect(flash.contextDefault).toBe(true);
+    expect(flash.lines[0].estimated).toBe('default');
     const html = renderCard(flash, startDraft(ownerState()));
-    expect(textOf(html)).toContain('262K context (a default)');
+    expect(textOf(html)).toContain('limits estimated');
+    expect(textOf(html)).not.toContain('new: limits estimated');
+    expect(textOf(html)).not.toMatch(/context|262K|\boutput\b/i);
     expect(html.replace(/&#x27;/g, "'")).toContain(
-      'title="No list states this model\'s context, so Provimux uses a default."'
+      'title="No list states some of this model\'s limits, so Provimux uses defaults. Context: a default; output: a default; reasoning levels: a default."'
     );
-    // Only where it matters: a value from a list carries no mark.
-    const terra = nameOf(items, 'terra');
-    expect(terra.contextDefault).toBe(false);
-    expect(textOf(renderCard(terra, startDraft(ownerState())))).toContain('400K context');
-    expect(textOf(renderCard(terra, startDraft(ownerState())))).not.toContain('default');
-    // A route without a login list (an API key) never makes a name's value a default.
-    expect(nameOf(items, 'deepseek').contextDefault).toBe(false);
+    // A model whose limits a list states says nothing about limits on its row.
+    const terra = renderCard(nameOf(items, 'terra'), startDraft(ownerState()));
+    expect(textOf(terra)).not.toMatch(/context|estimated|400K/i);
+  });
+
+  test('the sizes are in the details, each with where it comes from', async () => {
+    await i18n.changeLanguage('en');
+    const items = names();
+    const details = (key: string) =>
+      textOf(
+        renderToStaticMarkup(createElement(NameDetails, { id: 'd', item: nameOf(items, key) }))
+      );
+    expect(details('swe-2-flash')).toBe('Context 262K a default Output 33K a default');
+    expect(details('gpt-6.2-sol')).toBe("Context 400K from Codex's list Output 128K a default");
+    expect(details('terra')).toBe(
+      'Context 400K from the built-in list Output 128K from the built-in list'
+    );
+    // An API key's route says nothing of where a size comes from: no source is shown.
+    expect(details('deepseek')).toBe('Context 262K Output 33K');
+    expect(nameOf(items, 'deepseek').limitSources).toEqual({ context: null, output: null });
   });
 });
 

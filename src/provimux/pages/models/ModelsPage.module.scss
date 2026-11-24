@@ -716,6 +716,42 @@
   }
 }
 
+.details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 28px;
+  margin: 8px 0 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  font-size: 12.5px;
+
+  div {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+
+  dt {
+    color: var(--text-tertiary);
+  }
+
+  dd {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    margin: 0;
+    font-family: var(--pmx-font-mono);
+    color: var(--text-primary);
+  }
+}
+
+.detailSource {
+  font-family: var(--pmx-font-sans);
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
 .problem {
   display: flex;
   align-items: flex-start;

@@ -16,7 +16,7 @@ only by an API key's priority (section 4 below).
 | `GET /config` (with its `ETag`) and `GET /credentials` | the draft: rows, entries, issues | the page cannot load |
 | `GET /provimux/model-routes`, every 30 s | every name the proxy serves, each route's priority and cooldown | only the configuration's names; no order where a priority is unknown; one line says so |
 | `GET /provimux/model-lists`, every 30 s | each login's list source and age, on its routes; the live-lists switch | no list detail, no switch |
-| `GET /provimux/model-lists?auth_index=…`, per login, again when its list changes | where each model's limits come from: which get "new: limits estimated", which context is a default | no such marks |
+| `GET /provimux/model-lists?auth_index=…`, per login, again when its list changes | where each model's limits come from: which routes say "limits estimated", the sources in Details | no such marks or sources |
 | `GET /provimux/savings?period=30d&group=model` | requests per name in 30 days, to find the names he uses | no "used" section |
 
 `catalog.ts` (pure) joins them: a served route is matched to its configuration row (an API key by `auth_index`, a
@@ -39,9 +39,11 @@ Words. The owner reads quickly and does not know the proxy's internals, so every
 (he asked "wtf is this" of Model lists' "17 not in the catalog yet"). A route of a model that only the login's own
 list has (the built-in list lacks it) carries **new: limits estimated**, with one line on why: its context, output
 and reasoning limits come from that list or from defaults; its tooltip names the company for each ("Context from
-Codex's list; output: a default; reasoning levels: a default"). A context no list states reads "262K context (a
-default)"; a value a list states carries no mark (only where it matters). No letter codes: Model lists' legend "L / B"
-("who is the provider") is gone with its table. A login's list reads "Claude's model list, 2 hours ago", "built-in
+Codex's list; output: a default; reasoning levels: a default"). A route whose model has a limit no list states carries
+"limits estimated", with the same kind of tooltip. Rows show no sizes ("why are they shown at all"): a name's
+**Details** list its context, output and reasoning levels, each with where it comes from ("from Codex's list", "from
+the built-in list", "a default"). No letter codes: Model lists' legend "L / B" ("who is the provider") is gone with
+its table. A login's list reads "Claude's model list, 2 hours ago", "built-in
 model list" or "providers.dev model list"; a name a subscription offers by itself "can't be taken out here"; no label
 says catalog, alias row, login type or backoff.
 
@@ -75,5 +77,5 @@ and `/auth-files/oauth-model-alias` (`?provider` as the login type) lead to Mode
 The menu holds Models (always) and Savings. Below the list: the live-lists switch with "Refresh lists now"; Devin's
 quota pause only with a Devin login, and OpenRouter only with an OpenRouter entry, both only where Provimux answers.
 
-Not carried over: Model routes' per-route reasoning levels and limit chips (the name keeps its context), and Model
-lists' per-model table of which source stated each value.
+Not carried over: Model routes' per-route limit and reasoning chips (a name's Details hold its sizes and levels), and
+Model lists' per-model table of which source stated each value (Details say it per name).
