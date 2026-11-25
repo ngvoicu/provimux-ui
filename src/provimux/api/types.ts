@@ -370,3 +370,66 @@ export interface ProvimuxSavingsResponse {
   models_truncated: boolean;
   reported_cost_hosts: string[];
 }
+
+// --- GET /provimux/names (models.only-my-names; design only-my-names.md, section 6) ---------------------------
+
+/** One account that offers a name, identified as a route of /provimux/model-routes is. */
+export interface ProvimuxNameAccount {
+  auth_index: string | null;
+  provider: string;
+  /** "oauth" = a subscription login, "apikey" = an API key. */
+  kind: 'oauth' | 'apikey' | (string & {}) | null;
+  priority: number | null;
+  /** The host of an API key's base URL; null for a login. */
+  host: string | null;
+  login: ProvimuxLogin;
+}
+
+/** Who made a name the owner's: an alias row, the `keep` list, or an alias in a login's own file. */
+export type ProvimuxNameSetBy = 'alias' | 'keep' | 'login-file' | (string & {});
+
+export interface ProvimuxOwnName {
+  /** As written where it was set. */
+  name: string;
+  set_by: ProvimuxNameSetBy[];
+  /** Enabled accounts that register it now; 0 when nothing answers it. */
+  accounts: number;
+}
+
+export interface ProvimuxOtherName {
+  /** As a client sends it, namespace and prefix included. */
+  name: string;
+  /** Highest priority first. */
+  accounts: ProvimuxNameAccount[];
+}
+
+export interface ProvimuxRefusedName {
+  name: string;
+  requests: number;
+  last_at: Timestamp;
+}
+
+export interface ProvimuxNamesResponse {
+  observed_at: Timestamp | null;
+  only_my_names: {
+    enabled: boolean;
+    /** false: the gateway does not decide names itself (Home); nothing is held back. */
+    applies: boolean;
+    /** Why it does not apply: 'home', or a reason this console does not know. */
+    not_applied: 'home' | (string & {}) | null;
+  };
+  /** Every name the owner set. Sorted by name. */
+  names: ProvimuxOwnName[];
+  /** `keep` entries the gateway ignores: a pattern, or empty. */
+  keep_ignored: Array<{ value: string; reason: 'pattern' | 'empty' | (string & {}) }>;
+  /** Every other name an enabled account offers: held back while the switch is on, served otherwise. */
+  others: ProvimuxOtherName[];
+  /** Requests refused because the name is held back; null while the switch is off or does not apply. */
+  refused: {
+    since: Timestamp | null;
+    /** Most recent first. */
+    names: ProvimuxRefusedName[];
+    /** More than 256 names were refused; the rest are not counted. */
+    truncated: boolean;
+  } | null;
+}

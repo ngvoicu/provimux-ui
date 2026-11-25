@@ -86,7 +86,7 @@ describe('strings in seven languages', () => {
   const baseOf = (key: string) => key.replace(/_(zero|one|two|few|many|other)$/, '');
 
   // The page's strings, and the provider forms' line (U3).
-  for (const block of ['aliases', 'models', 'forms'] as const) {
+  for (const block of ['aliases', 'models', 'forms', 'names'] as const) {
     test(`every language has every key of provimux.${block}, in its own plural forms, with the same placeholders`, () => {
       const source = (en.provimux as Tree)[block] as Tree;
       const plural = new Set(

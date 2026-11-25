@@ -350,6 +350,17 @@
       grid-row: 2;
     }
   }
+
+  // A phone: the actions get a row of their own, so the name keeps the width.
+  @include mobile {
+    grid-template-columns: minmax(0, 1fr);
+
+    .nameActions {
+      flex-wrap: wrap;
+      justify-content: flex-start;
+      margin-left: -9px;
+    }
+  }
 }
 
 .nameTitle {
@@ -1331,4 +1342,55 @@
     opacity: 0.55;
     cursor: not-allowed;
   }
+}
+
+/* ---------- a key of an OpenAI-compatible entry, a pool's models, a kept name ---------- */
+
+// Which key of an entry with several keys a route is: otherwise its lines read the same.
+.keyName {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 7px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-family: var(--pmx-font-mono);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+// A pool's other models, on the route's own line: the route takes turns between them.
+.poolMate {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+
+  &[data-state='removed'] code {
+    opacity: 0.55;
+    text-decoration: line-through;
+  }
+}
+
+.poolOr {
+  color: var(--text-tertiary);
+  font-size: 12px;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  cursor: help;
+}
+
+.noLines {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  color: var(--text-tertiary);
+}
+
+.tag[data-tone='kept'] {
+  border-color: var(--pmx-brand-line);
+  background: transparent;
+  color: var(--pmx-brand);
+  font-weight: 500;
 }

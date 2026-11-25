@@ -9,6 +9,7 @@ import {
   IconPencil,
   IconPlus,
   IconTimer,
+  IconX,
 } from '@/components/ui/icons';
 import type { ProvimuxModelRoutesResponse, ProvimuxRecordedCooldown } from '../../api/types';
 import { IconExcluded, IconLiveLists } from '../../components/ProvimuxIcons';
@@ -57,6 +58,17 @@ export interface NameCardProps {
   onExclude?: (line: RouteLine, model: string) => void;
   /** Why an exclusion cannot be written now (edits not saved, a write running); null when it can. */
   excludeBlocked?: string | null;
+  /**
+   * "Stop keeping", for a name kept under its own name (only-my-names `keep`): written at once. Absent: the
+   * gateway has no such setting, and the button is not offered.
+   */
+  onUnkeep?: (name: string) => void;
+  /** Why the setting cannot be written now; null when it can. */
+  keepBlocked?: string | null;
+  /** The name is being written (its Keep or Stop keeping). */
+  keepWriting?: boolean;
+  /** With the switch on, a name that stops being kept is refused at once: the button says so. */
+  servedOnlyMine?: boolean;
 }
 
 /** One name: its routes in the order they are tried, what needs a look, and its editor when open. */
@@ -90,9 +102,18 @@ export const NameCard = memo(function NameCard(props: NameCardProps) {
             <span className={styles.tag} data-tone="new">
               {t('provimux.models.tag_unsaved')}
             </span>
-          ) : item.own ? (
+          ) : item.own && (item.aliased || !item.kept) ? (
             <span className={styles.tag} data-tone="own">
               {t('provimux.models.tag_yours')}
+            </span>
+          ) : null}
+          {item.kept && !item.fresh ? (
+            <span
+              className={styles.tag}
+              data-tone="kept"
+              title={t('provimux.names.kept_title', { name: item.name })}
+            >
+              {t('provimux.names.tag_kept')}
             </span>
           ) : null}
           {item.problems.length ? (
@@ -138,6 +159,28 @@ export const NameCard = memo(function NameCard(props: NameCardProps) {
               {t('provimux.models.name_it')}
             </button>
           ) : null}
+          {item.kept && props.onUnkeep ? (
+            <button
+              type="button"
+              className={styles.ghost}
+              data-danger
+              disabled={props.keepBlocked != null || props.keepWriting}
+              aria-busy={props.keepWriting || undefined}
+              title={
+                props.keepBlocked ??
+                t(
+                  props.servedOnlyMine
+                    ? 'provimux.names.unkeep_title_on'
+                    : 'provimux.names.unkeep_title',
+                  { name: item.name }
+                )
+              }
+              onClick={() => props.onUnkeep!(item.name)}
+            >
+              <IconX size={13} />
+              {t('provimux.names.unkeep')}
+            </button>
+          ) : null}
           <button
             type="button"
             className={styles.ghost}
@@ -150,21 +193,27 @@ export const NameCard = memo(function NameCard(props: NameCardProps) {
         </div>
       </header>
 
+      {item.lines.length === 0 ? (
+        <p className={styles.noLines}>{t('provimux.names.no_account')}</p>
+      ) : null}
       <ol
         className={styles.lines}
         aria-label={t('provimux.models.lines_label', { name: item.name })}
       >
-        {item.lines.map((line) => (
-          <Line
-            key={line.key}
-            line={line}
-            name={item.name}
-            routesKnown={props.routesKnown}
-            offsetMs={props.offsetMs}
-            locked={locked}
-            edit={props.edit}
-          />
-        ))}
+        {item.lines
+          .filter((line) => line.poolOf === null)
+          .map((line) => (
+            <Line
+              key={line.key}
+              line={line}
+              pool={item.lines.filter((mate) => mate.poolOf === line.key)}
+              name={item.name}
+              routesKnown={props.routesKnown}
+              offsetMs={props.offsetMs}
+              locked={locked}
+              edit={props.edit}
+            />
+          ))}
       </ol>
       {details ? <NameDetails id={detailsId} item={item} /> : null}
 
@@ -343,6 +392,7 @@ function lineSentence(t: TFunction, line: RouteLine, routesKnown: boolean): stri
 
 function Line({
   line,
+  pool,
   name,
   routesKnown,
   offsetMs,
@@ -350,6 +400,8 @@ function Line({
   edit,
 }: {
   line: RouteLine;
+  /** The pool's other models on this route (an OpenAI-compatible entry with several under the name). */
+  pool: readonly RouteLine[];
   name: string;
   routesKnown: boolean;
   offsetMs: number;
@@ -403,6 +455,14 @@ function Line({
         ) : line.account ? (
           <span className={styles.account}>{line.account}</span>
         ) : null}
+        {line.keyName ? (
+          <span
+            className={styles.keyName}
+            title={t('provimux.models.key_name_title', { key: line.keyName })}
+          >
+            {t('provimux.models.key_name', { key: line.keyName })}
+          </span>
+        ) : null}
         <span className={styles.sends} data-same={sameName || undefined}>
           <span aria-hidden="true">→</span>
           <span className="visually-hidden">{t('provimux.models.sends')}</span>
@@ -425,6 +485,23 @@ function Line({
                 : t('provimux.models.tag_estimated_default')}
             </span>
           ) : null}
+          {pool.map((mate) => (
+            <span key={mate.key} className={styles.poolMate} data-state={mate.state}>
+              <span className={styles.poolOr} title={t('provimux.models.pool_hint')}>
+                {t('provimux.models.pool_or')}
+              </span>
+              <code>{mate.upstream}</code>
+              {mate.state === 'changed' || mate.state === 'removed' ? (
+                <span className={styles.tag} data-tone={mate.state}>
+                  {t(
+                    mate.state === 'changed'
+                      ? 'provimux.models.tag_changed'
+                      : 'provimux.models.tag_removed'
+                  )}
+                </span>
+              ) : null}
+            </span>
+          ))}
         </span>
         <span className={styles.lineEnd}>
           {line.cooldown ? (

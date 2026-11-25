@@ -43,6 +43,17 @@ under a name gets a line of its own: new, moved, ignored, or not reported.
   can reach in several ways", so the words are "account", never "route" or "fallback" (with the same priority, the
   accounts share the requests), and the filter beside them, "Served by", starts at "Any account". Joining such names
   is "Your names"' work.
+- Lines (2026-11-25, three things a card drew wrong). An OpenAI-compatible entry with several keys has one route
+  per key in the proxy (each its own cooldown), so one line per key; each such line names its key, masked as
+  Accounts masks one ("openrouter.ai · key fi******h8", `KeyEntry.keyPreviews`), where two lines read the same before
+  ("4 accounts" over 5 identical-looking lines). The entry still counts once. Where the proxy reports what it
+  serves, a line it does not serve now (`idle`) gets no order number ("–"): only lines that are tried are ranked.
+  A pool (two or more rows of one OpenAI-compatible entry under one name) is one route per key in the proxy, which
+  takes turns between the pool's models on that key and tries the next one when one fails (`nextModelPoolOffset`,
+  `rotateStrings`, `proxy:sdk/cliproxy/auth/conductor_models.go`). The card draws the other models on the route's
+  own line, "→ deepseek/deepseek-v4 or deepseek/deepseek-v4-pro", the "or" explaining the pool; they are served,
+  so no "doesn't serve this route now" (`RouteLine.poolOf`). In the editor each model stays a member of its own,
+  removable; a removed one is struck through on the route's line until the save.
 - Problems, one sentence each: a row Provimux ignores (`incomplete`, `same-as-name`, `duplicate`), a row a key never
   uses (`shadowed`), one service answering the name with different models (`several-models`, not a pool). A name
   served by several services is not a problem: it is a pool.
@@ -165,3 +176,117 @@ The card's "Update model catalog" was `POST /models/refresh`, the request Models
 then updates the shared model catalog and, with live lists on, asks every login for its list. With live lists off
 "Refresh lists now" cannot ask, so **Sync model catalog** stands beside it: Auth Files' own action
 (`useModelCatalogSync`, imported as it is), the same request. Each button's line says which does what.
+
+## 8. Serve only my names
+
+The owner (2026-11-25): "In the Models page can we have a setting where only 'names' I set are available through
+Provimux? The rest are like excluded?" The gateway's design is Provimux's `.github/provimux/design/only-my-names.md`
+(the rule, the setting, the refusal, `GET /provimux/names`); its contract is `pui13/openapi.yaml` there. All six of
+its decisions are taken as recommended: a `keep` list of exact names inside the setting, by name not by route, no
+switching on with zero names, no wildcards, refusals counted in memory, the plugin path as it is. This section is
+the page.
+
+A name is **his** when an alias row gives it (the page's rule of section 1), when `models.only-my-names.keep` lists
+it (a model kept under its vendor's name: an alias row equal to its name is dropped by the proxy, aliases-page.md
+3.5), or when an alias in a login's own file gives it (only the gateway sees those: `set_by: login-file`). With the
+switch on, every other name is refused as an unknown model.
+
+### 8.1 What it reads and writes
+
+| | |
+| --- | --- |
+| `GET /provimux/names`, every 30 s with the routes | his names (`names`), every other name with its accounts (`others`), the switch's state, `keep` entries the gateway ignores, and the names asked for and refused. Not probed at login: the page's own load reports to the presence store; a 404 hides the switch and changes nothing else |
+| The page's read of the configuration | `models.only-my-names` as stored (`readSetting`): the source of every write's body, and of `keep` the moment after a write, before the gateway's answer catches up (`yourNameKeys`, `setNamesOf`) |
+| `GET /provimux/savings?period=30d&group=model` (already read) | the order by use; failed or folded, one line says the order by use is not known |
+| `PUT /config/models/only-my-names` | the whole object, `{...as stored, enabled, keep}`, with `If-Match` on the read's tag (`onlyMyNamesApi`, `namesSetting.ts`): other fields of the object, patterns and anything not a string in `keep` stay as stored |
+
+Writes are the exclusions' (section 6.3): one at a time, never while the names have edits not saved (the write
+changes the tag their save is conditional on; one line says so and every Keep waits), nothing without a tag or
+over a setting the page cannot read whole (not a map, `keep` not a list); a 412 writes nothing and the page reads
+again. After every write the page reads the configuration, the routes and the names.
+
+### 8.2 The switch
+
+At the top of Names, above the summary, not with the settings below the list: it decides what the whole list
+means, and for an owner with no names of his own the way in has to be the first thing on the page. A card with the
+page's left edge (brand while on), the shield, "Serve only my names", one line ("Tools can ask only for the names
+under Your names. Every other model is refused.") and its state in one line:
+
+| State | The line |
+| --- | --- |
+| Off | "Off: all 561 names are served, 14 of them yours." With none of his own: "…You have no names of your own yet: turning this on starts by showing the ones your tools use, to keep." |
+| On | "On: 14 names served, 547 not served." and **Show what isn't served** (unfolds Not served, scrolls to it). With no names (set by hand): "On, and you have no names: nothing is served…", warning tone |
+| Home | the switch disabled, "Doesn't apply": "Home decides which names this gateway serves, so this setting doesn't apply here." A reason the console does not know reads the same way, without naming Home |
+
+Turning it on writes nothing: it opens the preview, the switch reading "Not on yet". Turning it off is one click,
+written at once, no question. `keep` entries the gateway ignores (a pattern, an empty one) are named in one line,
+with **Remove them**.
+
+### 8.3 The preview
+
+What turning it on changes, before anything is switched, in the card under the switch:
+
+- "547 names will stop being served. 6 of them were used in the last 30 days."
+- **Stay served**: his names as chips; a kept one has its own ×, Stop keeping. None: "None yet. Keep the names your
+  tools use, below: with none, nothing would be served."
+- **Used in the last 30 days**: most used first, each with its requests, who serves it, and **Keep**; **Keep all 6**
+  writes them in one request. Who serves it is the line the design asked for before Keep writes: each service by kind,
+  in the access colours ("Claude subscription", "Claude API key · paid per token"), an OpenAI-compatible entry once
+  whatever its number of keys, two logins of a type "×2" (`accountGroups`).
+- **Not used in 30 days** (or "Every other name" when the usage is not known): folded with a sample; unfolded, a search
+  ("Find a name to keep") and the rows, 60 at a time.
+- The confirming row stays in reach (sticky) and says what will happen: "Serve only my names (14)"; while used names
+  are not kept, the danger button "Turn on: 3 used names will be refused" and the line "3 names your tools used are
+  not kept: a tool that asks for one will get an error."; with no names, the button is disabled and the line says to
+  keep one first (decision 3). Cancel closes it.
+
+Keep writes at once, while the switch is still off: the kept row leaves the used list and its chip appears, so the
+list shrinks as he goes and the switch goes on last.
+
+### 8.4 With it on
+
+The list has two parts. **Your names**, cards as before; a kept name says "kept under its own name" (not also "Your
+name"), has **Stop keeping** (written at once; its tooltip says tools asking for it are refused from then on) and no
+rename or remove in its editor (it has no alias rows); a kept name no account offers now stands there too, "No account
+offers this name now. It is served as soon as one does." Then **Not served**: every other name as a row with who
+offers it and Keep, used ones first, folded ("Show the 547 names that aren't served (2 used in 30 days)"). The search
+and "Served by" filter narrow it and unfold it; a view (More than one account, Cooling down, …) hides it, since its
+rows have no routes. "Used in the last 30 days" and "Other models" are not drawn while it is on: everything not his is
+under Not served.
+
+### 8.5 What was refused
+
+While `refused.names` has a name that is still not his, a warning strip under the switch: "Tools asked for 2 names
+that aren't served", since when it counts, one line ("Keep a name to serve it under its own name, or set the tool to
+ask for one of your names."), and per name how many times, when last, who would serve it, and Keep. A name kept since
+leaves the strip at once. Over 256 names: one line says only the first 256 are counted.
+
+### 8.6 The save
+
+With the switch on, a save that takes a name's last alias away, the name neither kept nor set in a login's file,
+stops serving it: the save bar says so after the count of changes ("2 names will no longer be served: haiku, sonnet")
+(`droppedBySave`). A rename counts as the old name going.
+
+### 8.7 Files and tests
+
+`namesSetting.ts` (pure: the setting, the bodies, his names, the preview's order, the filter, the save's names),
+`onlyMyNamesApi.ts` (the write), `OnlyMyNames.tsx` and `.module.scss` (the switch with its preview, the refused strip,
+Not served); `catalog.ts` takes the kept and login-file names (`SetNames`: `own`, `aliased`, `kept`). Tests:
+`tests/provimux/only-my-names.test.ts`, with `fixtures/models/owner-names.json`, the gateway's answer for
+`owner-config.json` (the fixture the gateway's test S2 can share): Your names equals the answer's `names`; the preview
+orders used names first and counts them; Keep sends the whole object with `If-Match` and nothing else of the file
+changes, a 412 writes nothing, no tag and an unreadable setting send nothing, unsaved edits stop every Keep; a 404
+shows no switch; zero names keeps the button disabled; on, the refused strip and Not served; Home; the three line
+fixes.
+
+### 8.8 What the contract does not give the page
+
+- No version of the configuration in `GET /provimux/names`: after a write the page cannot tell whether the answer
+  already reflects it (the gateway reloads on its own time). The page joins the read's `keep` in meanwhile; a field
+  such as the `ETag` the answer was computed from would end the guess.
+- `PUT /config/models/only-my-names` is the generic config writer at a path the file may not have yet; that it takes
+  an object there is the gateway design's own [infer] (its test C2). If it refuses, Keep says "The gateway refused
+  the change" with its message, and nothing else breaks.
+- That a savings row's model is the name the client sent, prefix included, is still the gateway design's open
+  point (its section 13); the preview's "used" depends on it as "Used in the last 30 days" always has.
+- A refused name does not say which client key asked: the strip can say what and when, not which tool.

@@ -82,6 +82,11 @@ export interface RouteLine {
   host: string | null;
   /** The login's account (e-mail) or the key's host; null when not known. */
   account: string | null;
+  /**
+   * Which key of an OpenAI-compatible entry with several keys the route is (its masked key): the entry's routes
+   * otherwise read the same. null for every other route.
+   */
+  keyName: string | null;
   /** A login's file name on Auth Files, to open it there. */
   loginFile: string | null;
   authIndex: string | null;
@@ -117,6 +122,12 @@ export interface RouteLine {
    * by itself (key-model-lists.md 3.1). `upstream` is then the id as the service lists it.
    */
   learned: boolean;
+  /**
+   * Another model of a pool (two rows of one OpenAI-compatible entry under one name): the key of the route line
+   * it takes turns with. The proxy reports one route per key for the pool; the line's own row is the second
+   * model. It has no rank of its own and is drawn on that route's line. null for every other line.
+   */
+  poolOf: string | null;
 }
 
 export type NameProblem =
@@ -132,8 +143,15 @@ export interface NameItem {
   key: string;
   /** As the proxy lists it, or as typed. */
   name: string;
-  /** A name the owner made: an alias row of the configuration (in the read or the draft) gives it. */
+  /**
+   * A name the owner set (only-my-names.md 2.2): an alias row of the configuration (in the read or the draft)
+   * gives it, `models.only-my-names.keep` lists it, or an alias in a login's own file gives it.
+   */
   own: boolean;
+  /** An alias row of the configuration (in the read or the draft) gives it: it can be renamed and removed. */
+  aliased: boolean;
+  /** `models.only-my-names.keep` lists it: kept under its own name. */
+  kept: boolean;
   lines: RouteLine[];
   /**
    * How many accounts Provimux can send a request for this name to, or will once saved (design models-page.md
@@ -186,6 +204,19 @@ export interface CatalogInput {
   nowMs: number;
   /** Per login (auth index), its models by id, with where each limit comes from (Model lists per login). */
   details?: Record<string, Record<string, ModelDetail>>;
+  /** Names the gateway counts as his besides alias rows; absent on a gateway without the setting. */
+  setNames?: SetNames;
+}
+
+/**
+ * Names that are his without an alias row of the configuration (only-my-names.md 2.2), by `nameKey`: kept under
+ * their own name (`keep` of the page's read), or given by an alias in a login's own file (the gateway's answer).
+ */
+export interface SetNames {
+  kept: ReadonlySet<string>;
+  loginFile: ReadonlySet<string>;
+  /** Each name as written, for a kept name no account offers (it has no route to take a spelling from). */
+  spelled: ReadonlyMap<string, string>;
 }
 
 /** 30 days of requests per name, from a savings answer grouped by model. */
@@ -307,30 +338,32 @@ const accountOf = (line: RouteLine): string =>
  */
 const accountsOf = (lines: readonly RouteLine[], servedKnown: boolean): number =>
   new Set(
-    lines
-      .filter((line) => tried(line) && !(servedKnown && line.state === 'idle'))
-      .map(accountOf)
+    lines.filter((line) => tried(line) && !(servedKnown && line.state === 'idle')).map(accountOf)
   ).size;
 
 /**
  * Ranks the tried lines by priority, highest first. When the priority of a tried line is not known (a
- * proxy that does not report it), no line of the name is ranked: a partial order would mislead.
+ * proxy that does not report it), no line of the name is ranked: a partial order would mislead. Where the
+ * proxy says what it serves, a row it does not serve now (`idle`) has no place in the order; another model
+ * of a pool is drawn on its route's line and has none of its own.
  */
-function rank(lines: RouteLine[]): RouteLine[] {
-  const unknown = lines.some((l) => tried(l) && l.priority === null);
+function rank(lines: RouteLine[], servedKnown: boolean): RouteLine[] {
+  const inOrder = (l: RouteLine) =>
+    tried(l) && l.poolOf === null && !(servedKnown && l.state === 'idle');
+  const unknown = lines.some((l) => inOrder(l) && l.priority === null);
   const priorities = unknown
     ? []
     : [
-        ...new Set(lines.filter((l) => tried(l) && l.priority !== null).map((l) => l.priority!)),
+        ...new Set(lines.filter((l) => inOrder(l) && l.priority !== null).map((l) => l.priority!)),
       ].sort((a, b) => b - a);
   const counts = new Map<number, number>();
   for (const line of lines) {
-    if (tried(line) && line.priority !== null) {
+    if (inOrder(line) && line.priority !== null) {
       counts.set(line.priority, (counts.get(line.priority) ?? 0) + 1);
     }
   }
   const ranked = lines.map((line) =>
-    !unknown && tried(line) && line.priority !== null
+    !unknown && inOrder(line) && line.priority !== null
       ? {
           ...line,
           rank: priorities.indexOf(line.priority) + 1,
@@ -410,10 +443,20 @@ export function buildNames(input: CatalogInput): NameItem[] {
     entry?.store === 'api-key' && priorityChanged(draft, entry.id);
   const isOff = (entry: AliasEntry | null) => entry?.store === 'api-key' && entry.disabled;
 
-  /** The base row of an entry that answers under a name (the first: a later one is shadowed). */
-  const baseRowFor = (entry: AliasEntry, key: string) =>
-    base.rows.find((row) => row.entryId === entry.id && namesOf(row, entry, base).includes(key)) ??
-    null;
+  /** The base rows of an entry that answer under a name, in order (a key's later ones are shadowed). */
+  const baseRowsFor = (entry: AliasEntry, key: string) =>
+    base.rows.filter((row) => row.entryId === entry.id && namesOf(row, entry, base).includes(key));
+  /** A row's state on a route the proxy serves: as saved, changed by the draft, or taken out of the name. */
+  const stateOn = (entry: AliasEntry, baseRow: AliasRow, key: string): LineState => {
+    const draftRow = draftRows.get(baseRow.id);
+    if (!draftRow || !namesOf(draftRow, entry, base).includes(key)) return 'removed';
+    return rowChanged(draftRow, baseRow) ? 'changed' : 'live';
+  };
+  /** The masked key a route of an OpenAI-compatible entry with several keys uses. */
+  const keyNameOf = (entry: AliasEntry | null, authIndex: string | null) =>
+    entry?.store === 'api-key' && entry.keyCount > 1 && authIndex
+      ? (entry.keyPreviews?.[authIndex] ?? null)
+      : null;
 
   const accounted = new Set<string>(); // `${rowId}\n${key}`
 
@@ -425,22 +468,26 @@ export function buildNames(input: CatalogInput): NameItem[] {
     found.limits = model.limits;
     model.routes.forEach((route, index) => {
       const entry = entryOfRoute(route, entries);
-      const baseRow = entry ? baseRowFor(entry, key) : null;
+      const rows = entry ? baseRowsFor(entry, key) : [];
+      const baseRow = rows[0] ?? null;
       const draftRow = baseRow ? draftRows.get(baseRow.id) : undefined;
       let state: LineState = 'live';
       if (baseRow) {
         accounted.add(`${baseRow.id}\n${key}`);
-        if (!draftRow || !namesOf(draftRow, entry!, base).includes(key)) state = 'removed';
-        else if (rowChanged(draftRow, baseRow)) state = 'changed';
+        state = stateOn(entry!, baseRow, key);
       }
+      // A pool: the entry's other rows under the name are models of this route, not routes of their own.
+      const pool =
+        entry?.store === 'api-key' && entry.family === 'openai-compatibility' ? rows.slice(1) : [];
       const priority =
         route.kind === 'apikey' && entry?.store === 'api-key' ? keyPriority(entry) : route.priority;
       const learnedId =
         route.kind === 'apikey' && !baseRow && route.auth_index
           ? learnedNames.get(route.auth_index)?.get(key)
           : undefined;
+      const lineKey = `route-${index}-${route.auth_index ?? route.provider}`;
       found.lines.push({
-        key: `route-${index}-${route.auth_index ?? route.provider}`,
+        key: lineKey,
         rowId: baseRow?.id ?? null,
         entryId: entry?.id ?? null,
         access: accessOf(route.kind),
@@ -450,6 +497,7 @@ export function buildNames(input: CatalogInput): NameItem[] {
           route.kind === 'apikey'
             ? (route.host ?? route.login.label)
             : (route.login.email ?? route.login.label ?? route.login.name),
+        keyName: route.kind === 'apikey' ? keyNameOf(entry, route.auth_index) : null,
         loginFile: route.kind === 'oauth' ? route.login.name : null,
         authIndex: route.auth_index,
         upstream:
@@ -467,7 +515,24 @@ export function buildNames(input: CatalogInput): NameItem[] {
         issue: baseRow && draftRow ? issues[draftRow.id] : undefined,
         off: isOff(entry),
         learned: learnedId !== undefined,
+        poolOf: null,
       });
+      const routeLine = found.lines[found.lines.length - 1];
+      for (const mate of pool) {
+        accounted.add(`${mate.id}\n${key}`);
+        const draftMate = draftRows.get(mate.id);
+        found.lines.push({
+          ...routeLine,
+          key: `${lineKey}-pool-${mate.id}`,
+          rowId: mate.id,
+          upstream: (draftMate ?? mate).upstream.trim(),
+          state: stateOn(entry!, mate, key),
+          issue: draftMate ? issues[draftMate.id] : undefined,
+          cooldown: null,
+          learned: false,
+          poolOf: lineKey,
+        });
+      }
     });
   }
 
@@ -536,8 +601,14 @@ export function buildNames(input: CatalogInput): NameItem[] {
   for (const row of [...base.rows, ...draft.rows]) {
     if (row.alias && row.alias.trim()) aliasKeys.add(nameKey(row.alias));
   }
+  // A kept name no account offers now still stands under his names: it is served once one does.
+  for (const key of input.setNames?.kept ?? []) {
+    if (!byName.has(key)) collect(key, input.setNames?.spelled.get(key) ?? key);
+  }
 
   return [...byName.entries()].map(([key, found]): NameItem => {
+    const kept = input.setNames?.kept.has(key) ?? false;
+    const aliased = aliasKeys.has(key);
     const lines = rank(
       found.lines.map((line) => {
         const detail = line.access === 'sub' ? detailOf(line.authIndex, line.upstream) : null;
@@ -548,7 +619,8 @@ export function buildNames(input: CatalogInput): NameItem[] {
             ? 'default'
             : null;
         return { ...line, detail, estimated };
-      })
+      }),
+      routes !== null
     );
     const triedLines = lines.filter(tried);
     const configLines = lines.filter((line) => line.rowId !== null);
@@ -563,7 +635,9 @@ export function buildNames(input: CatalogInput): NameItem[] {
     return {
       key,
       name: found.name,
-      own: aliasKeys.has(key),
+      own: aliased || kept || (input.setNames?.loginFile.has(key) ?? false),
+      aliased,
+      kept,
       lines,
       accounts: accountsOf(lines, routes !== null),
       problems,
@@ -666,6 +740,7 @@ function pendingLine(
         : one && login
           ? (login.login.email ?? login.login.label ?? login.login.name)
           : null,
+    keyName: null,
     loginFile: one && login ? login.login.name : null,
     authIndex: entry.store === 'api-key' ? entry.authIndex : (one && login?.auth_index) || null,
     upstream: row.upstream.trim(),
@@ -682,6 +757,7 @@ function pendingLine(
     issue: options.issue,
     off: options.off,
     learned: false,
+    poolOf: null,
   };
 }
 
@@ -789,7 +865,10 @@ export function accountNameOf(
 }
 
 /** The filter keys a line answers to. */
-export function lineProviderKeys(line: RouteLine, entries: readonly AliasEntry[]): string[] {
+export function lineProviderKeys(
+  line: Pick<RouteLine, 'provider' | 'access' | 'entryId' | 'authIndex' | 'host'>,
+  entries: readonly AliasEntry[]
+): string[] {
   const keys = [`id:${line.provider}`, line.access === 'sub' ? 'logins' : 'keys'];
   const entry = line.entryId ? entries.find((e) => e.id === line.entryId) : undefined;
   if (line.authIndex) keys.push(`account:${line.authIndex}`);

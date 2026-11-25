@@ -12,7 +12,7 @@ import type { DevinCooling } from '../modelRoutes/useDevinCooling';
 import type { ExcludedFilter } from '../excluded/exclusions';
 import { ExcludedView, type ExclusionWriteRequest } from '../excluded/ExcludedView';
 import type { ModelDetail, ModelsFilter } from './catalog';
-import { ModelsBoard } from './ModelsBoard';
+import { ModelsBoard, type BoardNames } from './ModelsBoard';
 import shared from '../shared/Shared.module.scss';
 import styles from './ModelsPage.module.scss';
 
@@ -50,6 +50,8 @@ export interface ModelsBodyProps {
   /** The load error's retry. */
   onRetry: () => void;
   onDismiss: (key: number) => void;
+  /** "Serve only my names"; absent where the gateway has no such setting. */
+  names?: BoardNames;
 }
 
 /**
@@ -147,6 +149,7 @@ export function ModelsBody(props: ModelsBodyProps) {
                 dirty={isDirty(page)}
                 writing={props.writing ?? null}
                 onWriteExclusion={props.onWriteExclusion}
+                names={props.names}
               />
             </div>
           )}

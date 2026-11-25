@@ -140,7 +140,7 @@ describe('4. Refresh on Model routes reads the Devin switch again', () => {
       "useProvimuxResource('modelRoutes', fetchRoutes, POLL_MS, devin.read, {"
     );
     expect(page).toContain(
-      'const others = Promise.all([refreshRoutes(), loadLists(), loadUsage()]);'
+      'const others = Promise.all([refreshRoutes(), loadLists(), loadUsage(), loadNames()]);'
     );
     expect(page).toContain('onClick={() => void refresh()}');
     expect(page).toContain('useHeaderRefresh(refresh);');

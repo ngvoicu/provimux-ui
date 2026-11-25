@@ -593,6 +593,11 @@ export function rowIssues(draft: AliasDraft): Record<string, RowIssue>;   // by 
 A new row with neither name nor alias is not a row yet: no issue, not written. The three blocking issues are the
 old editor's (`getAliasRowIssues`), which are the proxy's drop rules.
 
+Because of `same-as-name`, a model cannot be made "his" under its own name with a row. The Models page keeps such a
+name in `models.only-my-names.keep` instead (models-page.md 8), written at once with `If-Match`, never through this
+draft: a kept name has no row, so it is neither renamed nor removed here, and a row still gives a name only by its
+alias.
+
 ### 3.6 After a save: nothing is carried
 
 A draft lives and ends with its read. **No edit is ever moved onto another read**: not by id, not by position,

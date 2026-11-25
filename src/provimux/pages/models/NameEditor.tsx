@@ -338,7 +338,7 @@ export function NameEditor({
       role="group"
       aria-label={t('provimux.models.editor_label', { name: item.name })}
     >
-      {item.own ? (
+      {item.aliased ? (
         <form
           className={styles.rename}
           onSubmit={(event) => {
@@ -400,7 +400,7 @@ export function NameEditor({
       </div>
 
       <div className={styles.editorFoot}>
-        {item.own ? (
+        {item.aliased ? (
           <button
             type="button"
             className={styles.ghost}

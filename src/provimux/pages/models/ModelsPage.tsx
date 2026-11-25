@@ -47,6 +47,10 @@ import {
   type ModelsFilter,
 } from './catalog';
 import { ModelsBody, type ModelsTab } from './ModelsBody';
+import type { BoardNames } from './ModelsBoard';
+import { droppedBySave, readSetting, setNamesOf, switchState, usageStateOf } from './namesSetting';
+import type { NamesWrite } from './OnlyMyNames';
+import { NamesRequestError, onlyMyNamesApi } from './onlyMyNamesApi';
 import { tabOf } from './address';
 import shared from '../shared/Shared.module.scss';
 import styles from './ModelsPage.module.scss';
@@ -59,6 +63,7 @@ const fetchLists = (client: Parameters<typeof provimuxApi.modelLists>[0]) =>
   provimuxApi.modelLists(client);
 const fetchUsage = (client: Parameters<typeof provimuxApi.modelUsage>[0]) =>
   provimuxApi.modelUsage(client);
+const fetchNames = (client: Parameters<typeof provimuxApi.names>[0]) => provimuxApi.names(client);
 
 /**
  * Models (design models-page.md): every name a client can send, with the routes that serve it in the order
@@ -126,6 +131,11 @@ export function ModelsPage() {
   const usage = useProvimuxResource('savings', fetchUsage, null, undefined, {
     headerRefresh: false,
   });
+  // "Serve only my names" (models-page.md 8): read like the routes, so refused names show within 30 s.
+  const names = useProvimuxResource('names', fetchNames, POLL_MS, undefined, {
+    headerRefresh: false,
+  });
+  const namesStatus = useProvimuxPresence((state) => state.names.status);
   const routesStatus = useProvimuxPresence((state) => state.modelRoutes.status);
   const listsStatus = useProvimuxPresence((state) => state.modelLists.status);
   // OpenAI-compatible entries have exclusions of their own on a server with self-refreshing key lists.
@@ -133,6 +143,7 @@ export function ModelsPage() {
   const { refresh: refreshRoutes, load: loadRoutes } = routes;
   const { load: loadLists } = lists;
   const { load: loadUsage } = usage;
+  const { load: loadNames } = names;
   const now = screenNow(usePageClock(), routes.loadedAt, routes.offsetMs);
   const usageMap = useMemo(() => usageByName(usage.data), [usage.data]);
   const details = useModelDetails(lists.data);
@@ -178,7 +189,7 @@ export function ModelsPage() {
 
   /** Everything the page shows, read again; the configuration only after asking, when it has edits. */
   const refresh = useCallback(async () => {
-    const others = Promise.all([refreshRoutes(), loadLists(), loadUsage()]);
+    const others = Promise.all([refreshRoutes(), loadLists(), loadUsage(), loadNames()]);
     const current = pageRef.current;
     if (current.saving || current.reading) return void (await others);
     if (!isDirty(current)) return void (await Promise.all([read(), others]));
@@ -193,7 +204,7 @@ export function ModelsPage() {
       },
     });
     await others;
-  }, [loadLists, loadUsage, read, refreshRoutes, showConfirmation, t]);
+  }, [loadLists, loadNames, loadUsage, read, refreshRoutes, showConfirmation, t]);
   useHeaderRefresh(refresh);
 
   // The list of edits not saved is the only copy of what was typed: leaving asks first, as with edits.
@@ -255,8 +266,9 @@ export function ModelsPage() {
     useConfigStore.getState().clearCache();
     if (outcome.failure === null) showNotification(t('provimux.models.saved'), 'success');
     else showNotification(t('provimux.aliases.save_not_whole'), 'warning');
-    await Promise.all([read(), loadRoutes()]);
-  }, [loadRoutes, read, send, showNotification, t]);
+    // His names follow his alias rows: with the switch on, what is served changes with a save.
+    await Promise.all([read(), loadRoutes(), loadNames()]);
+  }, [loadNames, loadRoutes, read, send, showNotification, t]);
 
   const edit = useCallback(
     (change: (current: AliasDraft) => AliasDraft) => send({ type: 'edited', change }),
@@ -315,11 +327,95 @@ export function ModelsPage() {
     [loadRoutes, read, send, showNotification, t]
   );
 
-  const statusText = page.saving
+  /**
+   * "Serve only my names" written whole, at once (models-page.md 8.5): with If-Match on the page's read, and only
+   * over a draft with no edits. The page then reads the configuration, the routes and the names again.
+   */
+  const namesOn = names.data !== null && switchState(names.data) === 'on';
+  const writeNames = useCallback(
+    async (write: NamesWrite): Promise<boolean> => {
+      const before = pageRef.current;
+      const base = before.draft?.base;
+      if (!base) return false;
+      const started = send({ type: 'write-started' });
+      if (started === before) return false;
+      setWriting(write.id);
+      let done = false;
+      try {
+        await onlyMyNamesApi.write(base, write.body);
+        done = true;
+        const [first] = write.names;
+        const message =
+          write.kind === 'on'
+            ? t('provimux.names.turned_on')
+            : write.kind === 'off'
+              ? t('provimux.names.turned_off')
+              : write.kind === 'drop-ignored'
+                ? t('provimux.names.ignored_removed', { count: write.names.length })
+                : write.kind === 'unkeep'
+                  ? t(namesOn ? 'provimux.names.unkept_on' : 'provimux.names.unkept', {
+                      name: first,
+                    })
+                  : write.names.length > 1
+                    ? t('provimux.names.kept_many', { count: write.names.length })
+                    : t(namesOn ? 'provimux.names.kept_on' : 'provimux.names.kept', {
+                        name: first,
+                      });
+        showNotification(message, 'success');
+      } catch (error) {
+        const reason = error instanceof NamesRequestError ? error.reason : 'error';
+        const message =
+          reason === 'changed'
+            ? t('provimux.names.write_changed')
+            : reason === 'no-tag'
+              ? t('provimux.names.blocked_no_tag')
+              : reason === 'unreadable'
+                ? t('provimux.names.blocked_unreadable')
+                : reason === 'refused'
+                  ? t('provimux.names.write_refused', { message: getErrorMessage(error) })
+                  : t('provimux.names.write_failed', { message: getErrorMessage(error) });
+        showNotification(message, reason === 'changed' ? 'warning' : 'error');
+      } finally {
+        setWriting(null);
+        send({ type: 'write-ended' });
+        useConfigStore.getState().clearCache();
+      }
+      await Promise.all([read(), loadRoutes(), loadNames()]);
+      return done;
+    },
+    [loadNames, loadRoutes, namesOn, read, send, showNotification, t]
+  );
+  const usageState = usageStateOf(usage.data, usage.error !== null && usage.data === null);
+  const boardNames = useMemo(
+    (): BoardNames | undefined =>
+      namesStatus === 'unsupported'
+        ? undefined
+        : {
+            answer: names.data,
+            error: names.data === null ? names.error : null,
+            usage: usageState,
+            write: writeNames,
+          },
+    [names.data, names.error, namesStatus, usageState, writeNames]
+  );
+  // With the switch on, a save that takes a name's last alias away stops serving it: the bar says so.
+  const dropped = useMemo(() => {
+    if (!draft || !namesOn || !names.data) return [];
+    return droppedBySave(draft, setNamesOf(names.data, readSetting(draft.base.document)));
+  }, [draft, names.data, namesOn]);
+
+  const baseStatus = page.saving
     ? t('provimux.aliases.saving')
     : blocked
       ? t('provimux.aliases.blocked', { count: toFix })
       : t('provimux.aliases.unsaved', { count: Math.max(changes, 1) });
+  const statusText =
+    dropped.length && !page.saving && !blocked
+      ? `${baseStatus} · ${t('provimux.names.save_drops', {
+          count: dropped.length,
+          names: dropped.join(', '),
+        })}`
+      : baseStatus;
 
   return (
     <div className={`${shared.page} ${styles.page}`}>
@@ -402,6 +498,7 @@ export function ModelsPage() {
         onRoutesChanged={() => void Promise.all([loadRoutes(), loadLists()])}
         onRetry={() => void read()}
         onDismiss={(key) => send({ type: 'dismissed', key })}
+        names={boardNames}
       />
 
       <FloatingSaveBar

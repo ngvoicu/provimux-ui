@@ -1,9 +1,16 @@
 import { apiClient } from '@/services/api/client';
-import { readLiveLists, readModelLists, readModelRoutes, readSavings } from './normalize';
+import {
+  readLiveLists,
+  readModelLists,
+  readModelRoutes,
+  readNames,
+  readSavings,
+} from './normalize';
 import type {
   ProvimuxLiveListsResponse,
   ProvimuxModelListsResponse,
   ProvimuxModelRoutesResponse,
+  ProvimuxNamesResponse,
   ProvimuxSavingsPeriod,
   ProvimuxSavingsResponse,
 } from './types';
@@ -22,6 +29,8 @@ export const PROVIMUX_PATHS = {
   /** Its successor: every login type, the source that decides each login's models. 404 on older servers. */
   modelLists: '/provimux/model-lists',
   savings: '/provimux/savings',
+  /** models.only-my-names: the owner's names, every other name, and what was refused. 404 on older servers. */
+  names: '/provimux/names',
   /** Upstream's refresh: the catalogs and, with live lists on, every login's list (in the background). */
   modelsRefresh: '/models/refresh',
   /** Config paths mirror the v8 YAML tree. */
@@ -96,6 +105,14 @@ export const provimuxApi = {
    */
   async probeModelRoutes(client: Client = apiClient): Promise<void> {
     await client.get<unknown>(`${PROVIMUX_PATHS.modelRoutes}?model=`);
+  },
+
+  /**
+   * The names the owner set, every other name his accounts offer, and the names asked for and refused
+   * (only-my-names.md 6). Rejects with the client's error (404 on a server without the setting).
+   */
+  async names(client: Client = apiClient): Promise<ProvimuxNamesResponse> {
+    return readNames(await client.get<unknown>(PROVIMUX_PATHS.names));
   },
 
   /** Per Claude, Codex and Meta login, its live model list. Small: one row per login; it is its own probe. */

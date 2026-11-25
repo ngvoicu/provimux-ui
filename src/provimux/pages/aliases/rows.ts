@@ -245,6 +245,14 @@ function readKeyEntries(document: unknown, family: ProviderFamily) {
       ? injectedIndexOf(storedGroup)
       : injectedIndexOf(storedKeys[keyIndex as number]);
     const keyIndexes = openai ? storedKeys.flatMap((key) => injectedIndexOf(key) ?? []) : [];
+    const keyPreviews: Record<string, string> = {};
+    if (openai) {
+      for (const key of storedKeys) {
+        const index = injectedIndexOf(key);
+        const secret = isRecord(key) ? trimmed(key['api-key']) : '';
+        if (index && secret) keyPreviews[index] = maskApiKey(secret);
+      }
+    }
     const authIndexes = openai
       ? storedKeys.length
         ? keyIndexes
@@ -269,6 +277,7 @@ function readKeyEntries(document: unknown, family: ProviderFamily) {
           : null,
       keyPreview: openai ? null : maskApiKey(keyConfig.apiKey),
       keyCount: openai ? openaiConfig.apiKeyEntries.length : 1,
+      ...(openai ? { keyPreviews } : {}),
       authIndex,
       authIndexes,
       host,

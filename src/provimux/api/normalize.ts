@@ -13,7 +13,12 @@ import type {
   ProvimuxModelListsResponse,
   ProvimuxModelRoute,
   ProvimuxModelRoutesResponse,
+  ProvimuxNameAccount,
+  ProvimuxNamesResponse,
+  ProvimuxOtherName,
+  ProvimuxOwnName,
   ProvimuxReasoning,
+  ProvimuxRefusedName,
   ProvimuxRecordedCooldown,
   ProvimuxSavingsBreakdown,
   ProvimuxSavingsDimension,
@@ -454,5 +459,72 @@ export const readSavings = (value: unknown): ProvimuxSavingsResponse => {
     models: list(rec.models, readSavingsModel),
     models_truncated: rec.models_truncated === true,
     reported_cost_hosts: list(rec.reported_cost_hosts, str),
+  };
+};
+
+// --- GET /provimux/names ------------------------------------------------------------------------------------
+
+export const readNameAccount = (value: unknown): ProvimuxNameAccount | null => {
+  if (!isRec(value)) return null;
+  return {
+    auth_index: str(value.auth_index),
+    provider: str(value.provider) ?? 'unknown',
+    kind: str(value.kind),
+    priority: num(value.priority),
+    host: str(value.host),
+    login: readLogin(value.login),
+  };
+};
+
+const readOwnName = (value: unknown): ProvimuxOwnName | null => {
+  if (!isRec(value)) return null;
+  const name = str(value.name);
+  if (name === null) return null;
+  return { name, set_by: list(value.set_by, str), accounts: num(value.accounts) ?? 0 };
+};
+
+const readOtherName = (value: unknown): ProvimuxOtherName | null => {
+  if (!isRec(value)) return null;
+  const name = str(value.name);
+  if (name === null) return null;
+  return { name, accounts: list(value.accounts, readNameAccount) };
+};
+
+const readRefusedName = (value: unknown): ProvimuxRefusedName | null => {
+  if (!isRec(value)) return null;
+  const name = str(value.name);
+  const lastAt = time(value.last_at);
+  if (name === null || lastAt === null) return null;
+  return { name, requests: num(value.requests) ?? 0, last_at: lastAt };
+};
+
+/**
+ * The names and the state of models.only-my-names. A state the console cannot read is taken as off; an unknown
+ * reason for not applying is kept as it came (the page then treats the switch as not applying).
+ */
+export const readNames = (value: unknown): ProvimuxNamesResponse => {
+  const rec = isRec(value) ? value : {};
+  const state = isRec(rec.only_my_names) ? rec.only_my_names : {};
+  const refused = isRec(rec.refused) ? rec.refused : null;
+  return {
+    observed_at: time(rec.observed_at),
+    only_my_names: {
+      enabled: state.enabled === true,
+      applies: state.applies !== false,
+      not_applied: state.applies === false ? (str(state.not_applied) ?? 'unknown') : null,
+    },
+    names: list(rec.names, readOwnName),
+    keep_ignored: list(rec.keep_ignored, (item) => {
+      if (!isRec(item) || typeof item.value !== 'string') return null;
+      return { value: item.value, reason: str(item.reason) ?? 'unknown' };
+    }),
+    others: list(rec.others, readOtherName),
+    refused: refused
+      ? {
+          since: time(refused.since),
+          names: list(refused.names, readRefusedName),
+          truncated: refused.truncated === true,
+        }
+      : null,
   };
 };

@@ -21,6 +21,11 @@ export interface KeyEntry {
   keyPreview: string | null;
   keyCount: number;
   /**
+   * An OpenAI-compatible entry's keys, masked (`maskApiKey`), by the index the proxy injects on each: a route
+   * names its key with it when the entry has several. Absent for other entries.
+   */
+  keyPreviews?: Record<string, string>;
+  /**
    * The index the proxy injects at read time (`auth_index`, or `auth-index`), read from the stored key;
    * for an OpenAI-compatible entry, the entry's own (it has one only without keys). null when none.
    */

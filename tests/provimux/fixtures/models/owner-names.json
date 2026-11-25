@@ -1,0 +1,593 @@
+{
+  "observed_at": "2026-11-24T14:00:00.000Z",
+  "only_my_names": {
+    "enabled": false,
+    "applies": true,
+    "not_applied": null
+  },
+  "names": [
+    {
+      "name": "claude-opus-5-5",
+      "set_by": [
+        "alias"
+      ],
+      "accounts": 4
+    },
+    {
+      "name": "codex",
+      "set_by": [
+        "alias"
+      ],
+      "accounts": 1
+    },
+    {
+      "name": "deepseek",
+      "set_by": [
+        "alias"
+      ],
+      "accounts": 1
+    },
+    {
+      "name": "glm",
+      "set_by": [
+        "alias"
+      ],
+      "accounts": 1
+    },
+    {
+      "name": "gpt-6.1-terra",
+      "set_by": [
+        "alias"
+      ],
+      "accounts": 2
+    },
+    {
+      "name": "grok",
+      "set_by": [
+        "alias"
+      ],
+      "accounts": 1
+    },
+    {
+      "name": "haiku",
+      "set_by": [
+        "alias"
+      ],
+      "accounts": 1
+    },
+    {
+      "name": "kimi",
+      "set_by": [
+        "alias"
+      ],
+      "accounts": 2
+    },
+    {
+      "name": "opus",
+      "set_by": [
+        "alias"
+      ],
+      "accounts": 1
+    },
+    {
+      "name": "qwen-coder",
+      "set_by": [
+        "alias"
+      ],
+      "accounts": 1
+    },
+    {
+      "name": "sonnet",
+      "set_by": [
+        "alias"
+      ],
+      "accounts": 1
+    },
+    {
+      "name": "swe",
+      "set_by": [
+        "alias"
+      ],
+      "accounts": 1
+    },
+    {
+      "name": "terra",
+      "set_by": [
+        "alias"
+      ],
+      "accounts": 1
+    }
+  ],
+  "keep_ignored": [],
+  "others": [
+    {
+      "name": "claude-haiku-4-5",
+      "accounts": [
+        {
+          "auth_index": "li-claude-1",
+          "provider": "claude",
+          "kind": "oauth",
+          "priority": 10,
+          "host": null,
+          "login": {
+            "name": "claude-office@providers.dev.json",
+            "email": "office@providers.dev",
+            "label": "office@providers.dev"
+          }
+        }
+      ]
+    },
+    {
+      "name": "claude-haiku-5-5",
+      "accounts": [
+        {
+          "auth_index": "li-claude-1",
+          "provider": "claude",
+          "kind": "oauth",
+          "priority": 10,
+          "host": null,
+          "login": {
+            "name": "claude-office@providers.dev.json",
+            "email": "office@providers.dev",
+            "label": "office@providers.dev"
+          }
+        }
+      ]
+    },
+    {
+      "name": "claude-opus-4-1",
+      "accounts": [
+        {
+          "auth_index": "li-claude-1",
+          "provider": "claude",
+          "kind": "oauth",
+          "priority": 10,
+          "host": null,
+          "login": {
+            "name": "claude-office@providers.dev.json",
+            "email": "office@providers.dev",
+            "label": "office@providers.dev"
+          }
+        }
+      ]
+    },
+    {
+      "name": "claude-opus-4-5",
+      "accounts": [
+        {
+          "auth_index": "li-claude-1",
+          "provider": "claude",
+          "kind": "oauth",
+          "priority": 10,
+          "host": null,
+          "login": {
+            "name": "claude-office@providers.dev.json",
+            "email": "office@providers.dev",
+            "label": "office@providers.dev"
+          }
+        }
+      ]
+    },
+    {
+      "name": "claude-sonnet-4-5",
+      "accounts": [
+        {
+          "auth_index": "li-claude-1",
+          "provider": "claude",
+          "kind": "oauth",
+          "priority": 10,
+          "host": null,
+          "login": {
+            "name": "claude-office@providers.dev.json",
+            "email": "office@providers.dev",
+            "label": "office@providers.dev"
+          }
+        }
+      ]
+    },
+    {
+      "name": "claude-sonnet-5-5",
+      "accounts": [
+        {
+          "auth_index": "li-claude-1",
+          "provider": "claude",
+          "kind": "oauth",
+          "priority": 10,
+          "host": null,
+          "login": {
+            "name": "claude-office@providers.dev.json",
+            "email": "office@providers.dev",
+            "label": "office@providers.dev"
+          }
+        },
+        {
+          "auth_index": "ak-anthropic-1",
+          "provider": "claude",
+          "kind": "apikey",
+          "priority": 0,
+          "host": "api.anthropic.com",
+          "login": {
+            "name": null,
+            "email": null,
+            "label": "claude-apikey"
+          }
+        }
+      ]
+    },
+    {
+      "name": "devin/claude-opus-5-5",
+      "accounts": [
+        {
+          "auth_index": "li-devin-1",
+          "provider": "devin",
+          "kind": "oauth",
+          "priority": 5,
+          "host": null,
+          "login": {
+            "name": "devin-office@providers.dev.json",
+            "email": "office@providers.dev",
+            "label": "office@providers.dev"
+          }
+        }
+      ]
+    },
+    {
+      "name": "devin/claude-sonnet-5-5",
+      "accounts": [
+        {
+          "auth_index": "li-devin-1",
+          "provider": "devin",
+          "kind": "oauth",
+          "priority": 5,
+          "host": null,
+          "login": {
+            "name": "devin-office@providers.dev.json",
+            "email": "office@providers.dev",
+            "label": "office@providers.dev"
+          }
+        }
+      ]
+    },
+    {
+      "name": "devin/deepseek-v4",
+      "accounts": [
+        {
+          "auth_index": "li-devin-1",
+          "provider": "devin",
+          "kind": "oauth",
+          "priority": 5,
+          "host": null,
+          "login": {
+            "name": "devin-office@providers.dev.json",
+            "email": "office@providers.dev",
+            "label": "office@providers.dev"
+          }
+        }
+      ]
+    },
+    {
+      "name": "devin/gemini-3-pro",
+      "accounts": [
+        {
+          "auth_index": "li-devin-1",
+          "provider": "devin",
+          "kind": "oauth",
+          "priority": 5,
+          "host": null,
+          "login": {
+            "name": "devin-office@providers.dev.json",
+            "email": "office@providers.dev",
+            "label": "office@providers.dev"
+          }
+        }
+      ]
+    },
+    {
+      "name": "devin/glm-5",
+      "accounts": [
+        {
+          "auth_index": "li-devin-1",
+          "provider": "devin",
+          "kind": "oauth",
+          "priority": 5,
+          "host": null,
+          "login": {
+            "name": "devin-office@providers.dev.json",
+            "email": "office@providers.dev",
+            "label": "office@providers.dev"
+          }
+        }
+      ]
+    },
+    {
+      "name": "devin/gpt-6.1-terra",
+      "accounts": [
+        {
+          "auth_index": "li-devin-1",
+          "provider": "devin",
+          "kind": "oauth",
+          "priority": 5,
+          "host": null,
+          "login": {
+            "name": "devin-office@providers.dev.json",
+            "email": "office@providers.dev",
+            "label": "office@providers.dev"
+          }
+        }
+      ]
+    },
+    {
+      "name": "devin/kimi-k3",
+      "accounts": [
+        {
+          "auth_index": "li-devin-1",
+          "provider": "devin",
+          "kind": "oauth",
+          "priority": 5,
+          "host": null,
+          "login": {
+            "name": "devin-office@providers.dev.json",
+            "email": "office@providers.dev",
+            "label": "office@providers.dev"
+          }
+        }
+      ]
+    },
+    {
+      "name": "devin/qwen4-coder",
+      "accounts": [
+        {
+          "auth_index": "li-devin-1",
+          "provider": "devin",
+          "kind": "oauth",
+          "priority": 5,
+          "host": null,
+          "login": {
+            "name": "devin-office@providers.dev.json",
+            "email": "office@providers.dev",
+            "label": "office@providers.dev"
+          }
+        }
+      ]
+    },
+    {
+      "name": "gemini-2.5-flash",
+      "accounts": [
+        {
+          "auth_index": "ak-gemini-1",
+          "provider": "gemini",
+          "kind": "apikey",
+          "priority": 0,
+          "host": "generativelanguage.googleapis.com",
+          "login": {
+            "name": null,
+            "email": null,
+            "label": "gemini-apikey"
+          }
+        }
+      ]
+    },
+    {
+      "name": "gemini-2.5-pro",
+      "accounts": [
+        {
+          "auth_index": "ak-gemini-1",
+          "provider": "gemini",
+          "kind": "apikey",
+          "priority": 0,
+          "host": "generativelanguage.googleapis.com",
+          "login": {
+            "name": null,
+            "email": null,
+            "label": "gemini-apikey"
+          }
+        }
+      ]
+    },
+    {
+      "name": "gemini-3-flash",
+      "accounts": [
+        {
+          "auth_index": "ak-gemini-1",
+          "provider": "gemini",
+          "kind": "apikey",
+          "priority": 0,
+          "host": "generativelanguage.googleapis.com",
+          "login": {
+            "name": null,
+            "email": null,
+            "label": "gemini-apikey"
+          }
+        }
+      ]
+    },
+    {
+      "name": "gemini-3-flash-lite",
+      "accounts": [
+        {
+          "auth_index": "ak-gemini-1",
+          "provider": "gemini",
+          "kind": "apikey",
+          "priority": 0,
+          "host": "generativelanguage.googleapis.com",
+          "login": {
+            "name": null,
+            "email": null,
+            "label": "gemini-apikey"
+          }
+        }
+      ]
+    },
+    {
+      "name": "gemini-3-pro",
+      "accounts": [
+        {
+          "auth_index": "ak-gemini-1",
+          "provider": "gemini",
+          "kind": "apikey",
+          "priority": 0,
+          "host": "generativelanguage.googleapis.com",
+          "login": {
+            "name": null,
+            "email": null,
+            "label": "gemini-apikey"
+          }
+        }
+      ]
+    },
+    {
+      "name": "gpt-5.5",
+      "accounts": [
+        {
+          "auth_index": "li-codex-1",
+          "provider": "codex",
+          "kind": "oauth",
+          "priority": 10,
+          "host": null,
+          "login": {
+            "name": "codex-office@providers.dev.json",
+            "email": "office@providers.dev",
+            "label": "office@providers.dev"
+          }
+        }
+      ]
+    },
+    {
+      "name": "gpt-5.5-codex",
+      "accounts": [
+        {
+          "auth_index": "li-codex-1",
+          "provider": "codex",
+          "kind": "oauth",
+          "priority": 10,
+          "host": null,
+          "login": {
+            "name": "codex-office@providers.dev.json",
+            "email": "office@providers.dev",
+            "label": "office@providers.dev"
+          }
+        }
+      ]
+    },
+    {
+      "name": "gpt-6-chat",
+      "accounts": [
+        {
+          "auth_index": "li-codex-1",
+          "provider": "codex",
+          "kind": "oauth",
+          "priority": 10,
+          "host": null,
+          "login": {
+            "name": "codex-office@providers.dev.json",
+            "email": "office@providers.dev",
+            "label": "office@providers.dev"
+          }
+        }
+      ]
+    },
+    {
+      "name": "gpt-6-mini",
+      "accounts": [
+        {
+          "auth_index": "li-codex-1",
+          "provider": "codex",
+          "kind": "oauth",
+          "priority": 10,
+          "host": null,
+          "login": {
+            "name": "codex-office@providers.dev.json",
+            "email": "office@providers.dev",
+            "label": "office@providers.dev"
+          }
+        }
+      ]
+    },
+    {
+      "name": "gpt-6.1-codex",
+      "accounts": [
+        {
+          "auth_index": "li-codex-1",
+          "provider": "codex",
+          "kind": "oauth",
+          "priority": 10,
+          "host": null,
+          "login": {
+            "name": "codex-office@providers.dev.json",
+            "email": "office@providers.dev",
+            "label": "office@providers.dev"
+          }
+        }
+      ]
+    },
+    {
+      "name": "gpt-6.1-codex-mini",
+      "accounts": [
+        {
+          "auth_index": "li-codex-1",
+          "provider": "codex",
+          "kind": "oauth",
+          "priority": 10,
+          "host": null,
+          "login": {
+            "name": "codex-office@providers.dev.json",
+            "email": "office@providers.dev",
+            "label": "office@providers.dev"
+          }
+        }
+      ]
+    },
+    {
+      "name": "gpt-6.2-sol",
+      "accounts": [
+        {
+          "auth_index": "li-codex-1",
+          "provider": "codex",
+          "kind": "oauth",
+          "priority": 10,
+          "host": null,
+          "login": {
+            "name": "codex-office@providers.dev.json",
+            "email": "office@providers.dev",
+            "label": "office@providers.dev"
+          }
+        }
+      ]
+    },
+    {
+      "name": "swe-2",
+      "accounts": [
+        {
+          "auth_index": "li-devin-1",
+          "provider": "devin",
+          "kind": "oauth",
+          "priority": 5,
+          "host": null,
+          "login": {
+            "name": "devin-office@providers.dev.json",
+            "email": "office@providers.dev",
+            "label": "office@providers.dev"
+          }
+        }
+      ]
+    },
+    {
+      "name": "swe-2-flash",
+      "accounts": [
+        {
+          "auth_index": "li-devin-1",
+          "provider": "devin",
+          "kind": "oauth",
+          "priority": 5,
+          "host": null,
+          "login": {
+            "name": "devin-office@providers.dev.json",
+            "email": "office@providers.dev",
+            "label": "office@providers.dev"
+          }
+        }
+      ]
+    }
+  ],
+  "refused": null
+}

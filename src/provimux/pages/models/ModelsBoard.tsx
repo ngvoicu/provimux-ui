@@ -6,7 +6,11 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { IconAlertTriangle, IconInfo, IconPlus, IconSearch, IconX } from '@/components/ui/icons';
 import { Select } from '@/components/ui/Select';
 import { getTypeLabel } from '@/features/authFiles/constants';
-import type { ProvimuxModelListsResponse, ProvimuxModelRoutesResponse } from '../../api/types';
+import type {
+  ProvimuxModelListsResponse,
+  ProvimuxModelRoutesResponse,
+  ProvimuxNamesResponse,
+} from '../../api/types';
 import { familyLabel } from '../aliases/labels';
 import { draftEntries } from '../aliases/draft';
 import type { AliasDraft } from '../aliases/types';
@@ -34,6 +38,26 @@ import { IconLiveLists } from '../../components/ProvimuxIcons';
 import { accountsAddressToAdd } from '../shared/accountsLink';
 import { placesExcluding, readExclusions, type Exclusion } from '../excluded/exclusions';
 import { NameCard } from './NameCard';
+import {
+  byUse,
+  otherMatches,
+  othersOf,
+  readSetting,
+  refusedOf,
+  setNamesOf,
+  switchState,
+  unkeepBody,
+  yourNameKeys,
+  type OtherItem,
+  type UsageState,
+} from './namesSetting';
+import {
+  NotServedSection,
+  OnlyMyNamesSwitch,
+  RefusedStrip,
+  type NamesState,
+  type NamesWrite,
+} from './OnlyMyNames';
 import { NameComposer } from './NameEditor';
 import { ModelsSettings } from './ModelsSettings';
 import shared from '../shared/Shared.module.scss';
@@ -67,7 +91,22 @@ export interface ModelsBoardProps {
   writing?: string | null;
   /** One exclusion written at once (Excluded models' own write), for a learned model a subscription serves. */
   onWriteExclusion?: (request: ExclusionWriteRequest, writing: string) => Promise<boolean>;
+  /** "Serve only my names" (models-page.md 8); absent, or without an answer, where the gateway has none. */
+  names?: BoardNames;
 }
+
+/** What the page read of "Serve only my names", and its one write. */
+export interface BoardNames {
+  /** GET /provimux/names; null until it answers (or on a gateway without it). */
+  answer: ProvimuxNamesResponse | null;
+  /** The last read failed (not a 404, which hides the switch). */
+  error: string | null;
+  usage: UsageState;
+  write: (write: NamesWrite) => Promise<boolean>;
+}
+
+/** The DOM id of "Not served". */
+const NOT_SERVED_ID = 'pmx-models-not-served';
 
 /** How many of the other models are drawn at once; the rest on "Show more". */
 const OTHER_PAGE = 60;
@@ -85,13 +124,48 @@ export function ModelsBoard(props: ModelsBoardProps) {
   const [otherOpen, setOtherOpen] = useState(false);
   const [otherLimit, setOtherLimit] = useState(OTHER_PAGE);
   const [focusKey, setFocusKey] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [notServedOpen, setNotServedOpen] = useState(false);
 
   const entries = useMemo(() => draftEntries(draft), [draft]);
   const { details } = props;
-  const items = useMemo(
-    () => buildNames({ draft, routes, lists, usage, nowMs, details }),
-    [draft, routes, lists, usage, nowMs, details]
+  // "Serve only my names": whose names the gateway counts (the read's keep, its login-file names), and the rest.
+  const namesAnswer = props.names?.answer ?? null;
+  const setting = useMemo(() => readSetting(draft.base.document), [draft.base.document]);
+  const setNames = useMemo(
+    () => (namesAnswer ? setNamesOf(namesAnswer, setting) : undefined),
+    [namesAnswer, setting]
   );
+  const allItems = useMemo(
+    () => buildNames({ draft, routes, lists, usage, nowMs, details, setNames }),
+    [draft, routes, lists, usage, nowMs, details, setNames]
+  );
+  const yours = useMemo(
+    () => (namesAnswer ? yourNameKeys(namesAnswer, setting) : new Set<string>()),
+    [namesAnswer, setting]
+  );
+  const others = useMemo(
+    () => (namesAnswer ? othersOf(namesAnswer, yours, usage) : []),
+    [namesAnswer, yours, usage]
+  );
+  const onlyMine = namesAnswer !== null && switchState(namesAnswer) === 'on';
+  // Home decides names itself: the switch says so, and the list's words do not point at it.
+  const namesApply = namesAnswer !== null && switchState(namesAnswer) !== 'not-applied';
+  // With the switch on, the cards are his names; everything else is a row of "Not served".
+  const items = useMemo(
+    () => (onlyMine ? allItems.filter((item) => item.own || item.fresh) : allItems),
+    [allItems, onlyMine]
+  );
+  const notServed = useMemo((): OtherItem[] => {
+    if (!onlyMine) return [];
+    const list = [...others];
+    const listed = new Set(list.map((other) => other.key));
+    for (const item of allItems) {
+      if (item.own || item.fresh || listed.has(item.key)) continue;
+      list.push({ key: item.key, name: item.name, requests: item.requests, accounts: [] });
+    }
+    return list.sort(byUse);
+  }, [allItems, onlyMine, others]);
   const summary = useMemo(() => summarizeNames(items), [items]);
   // Where each name is excluded (by its name or a model it sends upstream), for its mark and link.
   const compatibleExclusions = props.compatibleExclusions === true;
@@ -127,6 +201,76 @@ export function ModelsBoard(props: ModelsBoardProps) {
         : locked
           ? t('provimux.models.paid_exclude_busy')
           : null;
+  const namesWrite = props.names?.write;
+  const namesState = useMemo((): NamesState | null => {
+    if (!namesAnswer || !namesWrite) return null;
+    const blocked = props.dirty
+      ? t('provimux.names.blocked_dirty')
+      : setting.unreadable
+        ? t('provimux.names.blocked_unreadable')
+        : draft.base.etag === null
+          ? t('provimux.names.blocked_no_tag')
+          : null;
+    return {
+      answer: namesAnswer,
+      setting,
+      yours,
+      others,
+      usage: props.names?.usage ?? 'unknown',
+      blocked,
+      busy: locked || props.writing != null,
+      writing: props.writing ?? null,
+      write: namesWrite,
+      nowMs,
+    };
+  }, [
+    namesAnswer,
+    namesWrite,
+    props.dirty,
+    props.names?.usage,
+    props.writing,
+    setting,
+    draft.base.etag,
+    locked,
+    yours,
+    others,
+    nowMs,
+    t,
+  ]);
+  /** His names as the preview's chips show them: kept ones can stop being kept there. */
+  const yourNames = useMemo(() => {
+    const kept = new Set(setting.keep.map(nameKey));
+    const byKey = new Map<string, { key: string; name: string; kept: boolean }>();
+    for (const own of namesAnswer?.names ?? []) {
+      const key = nameKey(own.name);
+      if (yours.has(key)) byKey.set(key, { key, name: own.name, kept: kept.has(key) });
+    }
+    for (const name of setting.keep) {
+      if (!byKey.has(nameKey(name)))
+        byKey.set(nameKey(name), { key: nameKey(name), name, kept: true });
+    }
+    return [...byKey.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }, [namesAnswer, setting.keep, yours]);
+  const refused = useMemo(() => refusedOf(namesAnswer, yours), [namesAnswer, yours]);
+  const unkeep = useCallback(
+    (name: string) => {
+      if (!namesWrite) return;
+      void namesWrite({
+        body: unkeepBody(setting, name),
+        kind: 'unkeep',
+        names: [name],
+        id: `unkeep|${nameKey(name)}`,
+      });
+    },
+    [namesWrite, setting]
+  );
+  const showNotServed = useCallback(() => {
+    setNotServedOpen(true);
+    window.requestAnimationFrame(() =>
+      document.getElementById(NOT_SERVED_ID)?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+    );
+  }, []);
+
   const keyPlaces = useMemo(
     () =>
       new Set(
@@ -255,6 +399,12 @@ export function ModelsBoard(props: ModelsBoardProps) {
           : undefined
       }
       excludeBlocked={excludeBlocked}
+      onUnkeep={namesState ? unkeep : undefined}
+      keepBlocked={
+        namesState?.blocked ?? (namesState?.busy ? t('provimux.names.blocked_busy') : null)
+      }
+      keepWriting={props.writing === `unkeep|${item.key}`}
+      servedOnlyMine={onlyMine}
     />
   );
 
@@ -265,7 +415,11 @@ export function ModelsBoard(props: ModelsBoardProps) {
           {t(`provimux.models.section_${id}`)}
           <span className={styles.sectionCount}>{list.length}</span>
         </h2>
-        <p className={styles.sectionHint}>{t(`provimux.models.section_${id}_hint`)}</p>
+        <p className={styles.sectionHint}>
+          {id === 'yours' && namesApply
+            ? t('provimux.names.section_yours_hint')
+            : t(`provimux.models.section_${id}_hint`)}
+        </p>
       </div>
       {body ?? <div className={styles.cards}>{list.map(card)}</div>}
     </section>
@@ -274,8 +428,28 @@ export function ModelsBoard(props: ModelsBoardProps) {
   const showOther = narrowed || otherOpen;
   const otherShown = parts.rest.slice(0, otherLimit);
 
+  const notServedShown = useMemo(
+    () => (narrowed ? notServed.filter((item) => otherMatches(item, filter, entries)) : notServed),
+    [entries, filter, narrowed, notServed]
+  );
+
   return (
     <>
+      {namesState ? (
+        <OnlyMyNamesSwitch
+          state={namesState}
+          yourNames={yourNames}
+          previewOpen={previewOpen}
+          onPreview={setPreviewOpen}
+          onShowNotServed={showNotServed}
+        />
+      ) : props.names?.error ? (
+        <p className={shared.inlineError} role="alert">
+          {t('provimux.names.read_failed', { message: props.names.error })}
+        </p>
+      ) : null}
+      {namesState && onlyMine ? <RefusedStrip state={namesState} refused={refused} /> : null}
+
       <div className={shared.chips} aria-label={t('provimux.models.summary_label')}>
         <span className={shared.chip}>
           {t('provimux.models.count_names', { count: summary.names })}
@@ -452,10 +626,26 @@ export function ModelsBoard(props: ModelsBoardProps) {
                 'yours',
                 parts.yours,
                 parts.yours.length === 0 ? (
-                  <p className={styles.sectionEmpty}>{t('provimux.models.yours_empty')}</p>
+                  <p className={styles.sectionEmpty}>
+                    {namesApply
+                      ? t('provimux.names.yours_empty')
+                      : t('provimux.models.yours_empty')}
+                  </p>
                 ) : undefined
               )
             : null}
+        {namesState && onlyMine ? (
+          filter.view === 'all' && (notServedShown.length || !narrowed) ? (
+            <NotServedSection
+              id={NOT_SERVED_ID}
+              state={namesState}
+              items={notServedShown}
+              open={notServedOpen}
+              onOpen={setNotServedOpen}
+              narrowed={narrowed}
+            />
+          ) : null
+        ) : null}
         {parts.used.length ? section('used', parts.used) : null}
         {parts.rest.length
           ? section(

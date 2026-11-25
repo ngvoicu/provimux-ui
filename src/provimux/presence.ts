@@ -17,7 +17,13 @@ import { errorStatus, provimuxApi } from './api/provimuxApi';
  * upgrade under an open tab). A page's own loads report back, so a page that starts answering 404 hides itself.
  */
 
-export type ProvimuxEndpoint = 'modelRoutes' | 'liveLists' | 'modelLists' | 'savings';
+/** The endpoints probed at login: each decides whether a page is listed. */
+export type ProbedEndpoint = 'modelRoutes' | 'liveLists' | 'modelLists' | 'savings';
+/**
+ * Every endpoint a page reports on. `names` (only-my-names.md 6) is a part of Models, not a page: it is never
+ * probed; the Models page learns of it from its own load and hides the switch on a 404.
+ */
+export type ProvimuxEndpoint = ProbedEndpoint | 'names';
 export type PresenceStatus = 'unknown' | 'probing' | 'ready' | 'unsupported' | 'error';
 
 export interface PresenceEntry {
@@ -34,6 +40,8 @@ interface PresenceState {
   /** The successor of liveLists (model-lists.md 5.5); a server without it keeps the live-lists page. */
   modelLists: PresenceEntry;
   savings: PresenceEntry;
+  /** Models' "Serve only my names"; known from the page's own load only. */
+  names: PresenceEntry;
   /** Probes every endpoint for a connection, unless they were already probed for it. */
   probe: (key: string) => Promise<void>;
   /** A page's own load: success shows the page, a 404 hides it, anything else shows the error. */
@@ -55,7 +63,7 @@ export function presenceOf(outcome: { error?: unknown }): PresenceEntry {
   return { status: 'error', message: messageOf(outcome.error) };
 }
 
-const PROBES: Record<ProvimuxEndpoint, (client: typeof apiClient) => Promise<unknown>> = {
+const PROBES: Record<ProbedEndpoint, (client: typeof apiClient) => Promise<unknown>> = {
   modelRoutes: (client) => provimuxApi.probeModelRoutes(client),
   liveLists: (client) => provimuxApi.liveLists(client),
   modelLists: (client) => provimuxApi.modelLists(client),
@@ -68,6 +76,7 @@ export const useProvimuxPresence = create<PresenceState>((set, get) => ({
   liveLists: UNKNOWN,
   modelLists: UNKNOWN,
   savings: UNKNOWN,
+  names: UNKNOWN,
 
   probe: async (key) => {
     if (get().key === key) return;
@@ -77,10 +86,11 @@ export const useProvimuxPresence = create<PresenceState>((set, get) => ({
       liveLists: PROBING,
       modelLists: PROBING,
       savings: PROBING,
+      names: UNKNOWN,
     });
     const client = apiClient.captureConnection(() => get().key === key);
     await Promise.all(
-      (Object.keys(PROBES) as ProvimuxEndpoint[]).map(async (endpoint) => {
+      (Object.keys(PROBES) as ProbedEndpoint[]).map(async (endpoint) => {
         let outcome: { error?: unknown } = {};
         try {
           await PROBES[endpoint](client);
@@ -111,6 +121,7 @@ export const useProvimuxPresence = create<PresenceState>((set, get) => ({
       liveLists: UNKNOWN,
       modelLists: UNKNOWN,
       savings: UNKNOWN,
+      names: UNKNOWN,
     }),
 }));
 
@@ -119,7 +130,7 @@ export const isListed = (entry: PresenceEntry): boolean =>
   entry.status === 'ready' || entry.status === 'error';
 
 /** The server has Provimux's console endpoints (one answered 200). */
-export const isProvimuxServer = (state: Pick<PresenceState, ProvimuxEndpoint>): boolean =>
+export const isProvimuxServer = (state: Pick<PresenceState, ProbedEndpoint>): boolean =>
   state.modelRoutes.status === 'ready' ||
   state.liveLists.status === 'ready' ||
   state.modelLists.status === 'ready' ||
@@ -129,7 +140,7 @@ export const isProvimuxServer = (state: Pick<PresenceState, ProvimuxEndpoint>): 
  * Runs the probes for the current connection and returns the pages' presence. Called once, by the sidebar
  * (MainLayout), which lives as long as the signed-in session.
  */
-export function useProvimuxPages(): Record<ProvimuxEndpoint, PresenceEntry> {
+export function useProvimuxPages(): Record<ProbedEndpoint, PresenceEntry> {
   const connectionStatus = useAuthStore((state) => state.connectionStatus);
   const apiBase = useAuthStore((state) => state.apiBase);
   const serverVersion = useAuthStore((state) => state.serverVersion);
