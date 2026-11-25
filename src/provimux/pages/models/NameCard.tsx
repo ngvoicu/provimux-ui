@@ -69,6 +69,11 @@ export interface NameCardProps {
   keepWriting?: boolean;
   /** With the switch on, a name that stops being kept is refused at once: the button says so. */
   servedOnlyMine?: boolean;
+  /**
+   * The ids an account registers as this name with a thinking level (`opus(high)`), served through it
+   * (only-my-names.md 17.2 C): not names of their own, so drawn here rather than on cards.
+   */
+  levels?: readonly string[];
 }
 
 /** One name: its routes in the order they are tried, what needs a look, and its editor when open. */
@@ -196,6 +201,14 @@ export const NameCard = memo(function NameCard(props: NameCardProps) {
 
       {item.lines.length === 0 ? (
         <p className={styles.noLines}>{t('provimux.names.no_account')}</p>
+      ) : null}
+      {props.levels?.length ? (
+        <p className={styles.noLines}>
+          {t('provimux.names.levels', {
+            ids: props.levels.join(', '),
+            name: item.name,
+          })}
+        </p>
       ) : null}
       <ol
         className={styles.lines}

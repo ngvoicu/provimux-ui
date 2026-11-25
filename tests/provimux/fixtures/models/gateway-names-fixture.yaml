@@ -1,0 +1,60 @@
+# The shared fixture of only-my-names.md test S2: a config whose names the gateway (GET /provimux/names,
+# names with set_by alias) and the console's Models page (Your names, rows.ts) must agree on.
+# Expected, sorted without case: Fast, gpt-5.5, my-opus, team-sonnet, vertex-flash, work-fast (alias);
+# claude-opus-5-5, devin/claude-opus-4.6 and GPT-5.5 (keep). Names are compared exactly (only-my-names.md
+# section 17), so GPT-5.5 on keep and the alias gpt-5.5 are two names. Not names: rows without an alias, rows
+# whose alias equals their name, display-name, excluded-models; "claude-*", "" and "auto" in keep are ignored.
+api-keys:
+  claude:
+    - name: claude-team
+      base-url: https://api.anthropic.example
+      models:
+        - name: claude-sonnet-5
+          alias: team-sonnet
+        - name: claude-haiku-5
+        - name: claude-opus-5-5
+          alias: claude-opus-5-5
+          display-name: Opus as it is
+      excluded-models:
+        - claude-3*
+      keys:
+        - api-key: sk-fixture-claude
+  vertex:
+    - name: vertex-project
+      base-url: https://vertex.example
+      models:
+        - name: gemini-3-flash
+          alias: vertex-flash
+      keys:
+        - api-key: sk-fixture-vertex
+  openai-compatibility:
+    - name: openrouter
+      base-url: https://openrouter.example/api/v1
+      disabled: true
+      models:
+        - name: openai/gpt-5.5
+          alias: gpt-5.5
+        - name: anthropic/claude-opus-5.5
+      keys:
+        - api-key: sk-fixture-openrouter
+oauth-model-alias:
+  claude:
+    - name: claude-opus-5-5
+      alias: my-opus
+  codex:
+    - name: gpt-5.5-mini
+      alias: Fast
+      fork: true
+    - name: gpt-5.5-codex
+      alias: work-fast
+models:
+  only-my-names:
+    enabled: false
+    keep:
+      - claude-opus-5-5
+      - " devin/claude-opus-4.6 "
+      - GPT-5.5
+      - claude-*
+      - ""
+      - auto
+config-version: 8

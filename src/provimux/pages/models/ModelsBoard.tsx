@@ -41,6 +41,8 @@ import { NameCard } from './NameCard';
 import {
   byUse,
   copyKeysOf,
+  levelCopiesOf,
+  servedCopiesOf,
   otherMatches,
   othersOf,
   readSetting,
@@ -160,8 +162,21 @@ export function ModelsBoard(props: ModelsBoardProps) {
     () => (namesAnswer ? othersOf(namesAnswer, yours, usage) : []),
     [namesAnswer, yours, usage]
   );
-  // An account's prefixed copy of one of his names is served with it: the gateway lists them (`copies`).
+  // An account's prefixed copy of one of his names, or one of them with a thinking level, is served with it: the
+  // gateway lists them (`copies`).
   const alsoServed = useMemo(() => copyKeysOf(namesAnswer), [namesAnswer]);
+  // A spelling with a thinking level (`opus(high)`) is not a name of its own: it is drawn on the card of the id it
+  // spells (`opus`), and counted with it. Without that card (not on the page), it keeps a card of its own.
+  const levelsByBase = useMemo(() => {
+    const byBase = new Map<string, string[]>();
+    const keys = new Set(allItems.map((item) => item.key));
+    for (const [id, base] of levelCopiesOf(namesAnswer)) {
+      if (!keys.has(base) || !keys.has(id)) continue;
+      byBase.set(base, [...(byBase.get(base) ?? []), id].sort());
+    }
+    return byBase;
+  }, [allItems, namesAnswer]);
+  const levelKeys = useMemo(() => new Set([...levelsByBase.values()].flat()), [levelsByBase]);
   const onlyMine = namesAnswer !== null && switchState(namesAnswer) === 'on';
   // Home decides names itself: the switch says so, and the list's words do not point at it.
   const namesApply = namesAnswer !== null && switchState(namesAnswer) !== 'not-applied';
@@ -169,10 +184,11 @@ export function ModelsBoard(props: ModelsBoardProps) {
   // "Not served".
   const items = useMemo(
     () =>
-      onlyMine
+      (onlyMine
         ? allItems.filter((item) => item.own || item.fresh || alsoServed.has(item.key))
-        : allItems,
-    [allItems, alsoServed, onlyMine]
+        : allItems
+      ).filter((item) => !levelKeys.has(item.key)),
+    [allItems, alsoServed, levelKeys, onlyMine]
   );
   const notServed = useMemo((): OtherItem[] => {
     if (!onlyMine) return [];
@@ -234,7 +250,7 @@ export function ModelsBoard(props: ModelsBoardProps) {
       setting,
       yours,
       others,
-      alsoServed: alsoServed.size,
+      alsoServed: servedCopiesOf(namesAnswer),
       usage: props.names?.usage ?? 'unknown',
       usageSince: props.names?.usageSince ?? null,
       applying: props.names?.applying ?? null,
@@ -428,6 +444,7 @@ export function ModelsBoard(props: ModelsBoardProps) {
       }
       keepWriting={props.writing === `unkeep|${item.key}`}
       servedOnlyMine={onlyMine}
+      levels={levelsByBase.get(item.key)}
     />
   );
 

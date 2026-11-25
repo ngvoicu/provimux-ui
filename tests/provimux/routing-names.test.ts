@@ -90,10 +90,25 @@ describe('the verdict for the typed name', () => {
       accounts: 1,
       copyOf: 'opus',
     });
-    // A thinking suffix: the gateway checks the name without it first.
-    expect(routingNameVerdict(answer, 'opus(high)')?.kind).toBe('yours');
-    // Exactly as the config has it: another spelling is not his.
+    // A thinking suffix: the gateway checks the name without it too; said as a level of the name.
+    expect(routingNameVerdict(answer, 'opus(high)')).toEqual({
+      kind: 'yours',
+      name: 'opus(high)',
+      accounts: 1,
+      copyOf: null,
+      levelOf: 'opus',
+    });
+    expect(routingNameVerdict(answer, 'team/opus(high)')).toMatchObject({
+      kind: 'yours',
+      copyOf: 'opus',
+      levelOf: 'team/opus',
+    });
+    // Exactly as the config has it: another spelling is not his, with a level or not.
     expect(routingNameVerdict(answer, 'Opus')?.kind).toBe('refused');
+    expect(routingNameVerdict(answer, 'Opus(high)')?.kind).toBe('refused');
+    // auto is never a name.
+    expect(routingNameVerdict(answer, 'auto')?.kind).toBe('refused');
+    expect(routingNameVerdict(answer, 'auto(high)')?.kind).toBe('refused');
   });
 
   test('what made a name his is not read: an answer without set_by, or with only a value that is gone', () => {
@@ -132,6 +147,9 @@ describe('the words', () => {
     );
     expect(note('opus')).toBe(
       'opus is one of your names, so it is served while Serve only my names is on. See which accounts answer it on Models'
+    );
+    expect(note('opus(high)')).toBe(
+      'opus(high) is served: it is opus with a thinking level. See which accounts answer it on Models'
     );
     expect(note('team/opus')).toBe(
       "team/opus is served: it is opus, one of your names, under an account's prefix. See which accounts answer it on Models"

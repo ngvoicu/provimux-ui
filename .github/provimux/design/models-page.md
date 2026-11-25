@@ -364,3 +364,39 @@ Upstream's files take it in three places: `RoutingPage.tsx` (the hook, the line 
 passed down) and `TierLadder.tsx` (an optional `stateNote` drawn after the state of a tier that serves, may serve or
 stands by). The rest is `src/provimux/routing/` (`nameVerdict.ts` pure, `useRoutingNames.ts`, `RoutingNames.tsx` and
 its `.module.scss`). Tests: `tests/provimux/routing-names.test.ts`.
+
+### 8.10 After the gateway's section 17: names his only by the configuration, compared exactly
+
+The gateway (its only-my-names.md 17, `01d7cda32`) narrowed the rule: a name is his only when the configuration names
+it (an alias row of a key or a login type, or `keep`), compared trimmed and nothing else; `set_by: login-file` is no
+longer given (an alias only in a login's own file is among `others` until kept); `keep_ignored` gains `reserved` for
+`auto`; a name's `copies` also hold its spellings with a thinking suffix an account registers as ids (`opus(high)`).
+Where this section differs from 8.1 to 8.9, it holds.
+
+- **Exact everywhere the switch reaches.** The Models page's names (`catalog.ts`'s `nameKey`: trimmed, no case
+  folding) key the cards, the usage, Your names, kept names, the copies, Not served and the refused strip. `GPT-5.5`
+  kept and `gpt-5.5` offered are two cards: the kept one under Your names ("No account offers this name now"), the
+  offered one under Not served with Keep, and in the refused strip when a tool asks for it, so the page never shows
+  as his a spelling the gateway refuses. Keep writes the exact id it is pressed on (`keepBody` adds `gpt-5.5` beside
+  `GPT-5.5`); Stop keeping takes out that spelling only. A rename that changes only case is a rename: with the switch
+  on, the save bar says the old spelling will no longer be served. The Routing note was exact already.
+- **Left folded: the alias pages' own checks.** The collision check (`aliases/collisions.ts`, "one name, several
+  services") and its input (`servedOf`), a login type's "already answers this name" (`candidatesFor`'s `taken`) and
+  "serves it under its own name" (`own-name`) fold case, because upstream resolves aliases and a login type's alias
+  table without regard to it. They decide nothing about what the switch serves, so they do not contradict the Models
+  page: a card's "mixed" problem is looked up by its folded key.
+- **`auto`.** Never kept (`keepable`), so never a card marked kept. A `reserved` entry is named in the ignored line
+  with its own sentence: "auto isn't a name: tools send it to mean any model an account offers, so it can't be
+  kept." **Remove them** takes it out as written.
+- **A spelling with a thinking level is not a name.** `levelCopiesOf` (a copy whose id, cut as the gateway cuts a
+  thinking suffix, is another id). It is not counted: not in "N names served", not in the off line's total, not as a
+  card. It is drawn on the card of the id it spells: "Also served as opus(high): an account offers opus with a
+  thinking level under that id. It isn't a name of its own." Its card stays only when the page has no card for that
+  id. The counts therefore equal `/v1/models` less the registered spellings with a level. A spelling with a level
+  that is not served (its base not his) is one of the gateway's `others` and is listed as such: Keep on it keeps that
+  id. On Routing, `opus(high)` reads "opus(high) is served: it is opus with a thinking level."
+- **Fixtures.** `tests/provimux/fixtures/models/gateway-names-fixture.yaml` and `gateway-names.json` are the gateway's
+  `pui13/examples/names-fixture.yaml` and `names.json` as they are (the yaml's legacy `oauth-model-alias` key is read
+  in the v8 layout the config API gives). Your names equals the fixture's expected list, `GPT-5.5` and `gpt-5.5`
+  apart. Tests: `tests/provimux/only-my-names.test.ts` ("exact names, as the gateway compares them") and
+  `routing-names.test.ts`.

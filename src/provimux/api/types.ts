@@ -413,12 +413,16 @@ export interface ProvimuxNameAccount {
 export type ProvimuxNameSetBy = 'alias' | 'keep' | 'login-file' | (string & {});
 
 export interface ProvimuxOwnName {
-  /** As written where it was set. */
+  /** As written where it was set, trimmed; compared exactly (`GPT-5.5` and `gpt-5.5` are two names). */
   name: string;
+  /** `login-file` is no longer given (only-my-names.md 17.1 A); still read from an older gateway. */
   set_by: ProvimuxNameSetBy[];
   /** Enabled accounts that register it now; 0 when nothing answers it. */
   accounts: number;
-  /** The name served under an account's prefix ("team-a/opus" for "opus"); empty from a gateway without it. */
+  /**
+   * The ids served through the name that are not the name itself: under an account's prefix ("team-a/opus"), or
+   * with a thinking suffix an account registers as an id ("opus(high)"). Empty from a gateway without it.
+   */
   copies: Array<{ id: string; accounts: number }>;
 }
 
@@ -461,8 +465,8 @@ export interface ProvimuxNamesResponse {
   applied: ProvimuxNamesApplied | null;
   /** Every name the owner set. Sorted by name. */
   names: ProvimuxOwnName[];
-  /** `keep` entries the gateway ignores: a pattern, or empty. */
-  keep_ignored: Array<{ value: string; reason: 'pattern' | 'empty' | (string & {}) }>;
+  /** `keep` entries the gateway ignores: a pattern, empty, or `auto` (`reserved`). The value as written. */
+  keep_ignored: Array<{ value: string; reason: 'pattern' | 'empty' | 'reserved' | (string & {}) }>;
   /** Every other name an enabled account offers: held back while the switch is on, served otherwise. */
   others: ProvimuxOtherName[];
   /** Requests refused because the name is held back; null while the switch is off or does not apply. */

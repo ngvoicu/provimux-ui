@@ -1,6 +1,6 @@
 import type { ProvimuxNamesResponse } from '../api/types';
 import { MODELS_PATH } from '../pages/models/address';
-import { switchState } from '../pages/models/namesSetting';
+import { switchState, thinkingBase } from '../pages/models/namesSetting';
 
 /**
  * What the Routing page says about "Serve only my names" (models-page.md 8.9). Upstream's preview shows what an
@@ -16,12 +16,16 @@ export type RoutingNameVerdict =
   | { kind: 'refused'; name: string }
   /**
    * The typed name is served under the rule: one of his names, or (`copyOf`) one of them under an account's
-   * prefix. `accounts`: the accounts that answer it now, 0 when none does.
+   * prefix, or (`levelOf`) one of them, or such a copy, with a thinking level (`opus(high)` runs `opus`).
+   * `accounts`: the accounts that answer it now, 0 when none does.
    */
-  | { kind: 'yours'; name: string; accounts: number; copyOf: string | null };
-
-/** `opus(high)` → `opus`: the gateway checks a name without its thinking suffix first (only-my-names.md 16.3). */
-const withoutSuffix = (name: string): string => name.match(/^(.+)\([^()]*\)$/)?.[1] ?? name;
+  | {
+      kind: 'yours';
+      name: string;
+      accounts: number;
+      copyOf: string | null;
+      levelOf?: string | null;
+    };
 
 /**
  * The verdict for the name typed in the Routing page's model field, from the gateway's names answer. A name is
@@ -35,16 +39,42 @@ export function routingNameVerdict(
   if (!answer || switchState(answer) !== 'on') return null;
   const name = typed?.trim() ?? '';
   if (!name) return { kind: 'rule' };
-  const base = withoutSuffix(name);
-  const candidates = base === name ? [name] : [base, name];
-  for (const candidate of candidates) {
-    const own = answer.names.find((item) => item.name === candidate);
-    if (own) return { kind: 'yours', name, accounts: own.accounts, copyOf: null };
-  }
-  for (const candidate of candidates) {
-    for (const own of answer.names) {
-      const copy = own.copies.find((item) => item.id === candidate);
-      if (copy) return { kind: 'yours', name, accounts: copy.accounts, copyOf: own.name };
+  // The gateway's predicate (only-my-names.md 17.2 C): the name, or the name without its thinking suffix, is his
+  // (or an account's prefixed copy of his). `auto` is never his.
+  const base = thinkingBase(name);
+  const own = answer.names.find((item) => item.name === name);
+  if (own) return { kind: 'yours', name, accounts: own.accounts, copyOf: null };
+  const prefixed = (id: string) => {
+    for (const item of answer.names) {
+      const copy = item.copies.find((c) => c.id === id && thinkingBase(c.id) === c.id);
+      if (copy) return { item, copy };
+    }
+    return null;
+  };
+  const copy = prefixed(name);
+  if (copy) return { kind: 'yours', name, accounts: copy.copy.accounts, copyOf: copy.item.name };
+  if (base !== name && base !== 'auto') {
+    // An account may register the spelling itself as an id: its accounts are those that answer it as written.
+    const registered = answer.names.flatMap((item) => item.copies).find((c) => c.id === name);
+    const baseOwn = answer.names.find((item) => item.name === base);
+    if (baseOwn) {
+      return {
+        kind: 'yours',
+        name,
+        accounts: registered?.accounts ?? baseOwn.accounts,
+        copyOf: null,
+        levelOf: base,
+      };
+    }
+    const baseCopy = prefixed(base);
+    if (baseCopy) {
+      return {
+        kind: 'yours',
+        name,
+        accounts: registered?.accounts ?? baseCopy.copy.accounts,
+        copyOf: baseCopy.item.name,
+        levelOf: base,
+      };
     }
   }
   return { kind: 'refused', name };

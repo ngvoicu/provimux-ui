@@ -21,7 +21,7 @@ import type {
   ProvimuxRecordedCooldown,
   ProvimuxModelUsage,
 } from '../../api/types';
-import { clientNames, nameGroups, nameKey } from '../aliases/collisions';
+import { clientNames, nameGroups, nameKey as aliasKey } from '../aliases/collisions';
 import {
   addKeyAlias,
   addLoginAlias,
@@ -54,7 +54,12 @@ import {
   type OverlapOrder,
 } from '../keyLists/keyLists';
 
-export { nameKey } from '../aliases/collisions';
+/**
+ * A name on this page, as the gateway compares names (only-my-names.md 17.1 B): trimmed, nothing else. `GPT-5.5`
+ * and `gpt-5.5` are two names: the gateway lists, counts, serves and refuses them apart, so the page shows them
+ * apart. The alias pages' collision check folds case (`aliasKey`): upstream resolves aliases without regard to it.
+ */
+export const nameKey = (name: string): string => name.trim();
 
 // --- the lines -------------------------------------------------------------------------------------
 
@@ -139,7 +144,7 @@ export type NameProblem =
   | 'mixed';
 
 export interface NameItem {
-  /** `nameKey`: trimmed, lower-case. */
+  /** `nameKey`: trimmed, exactly as written. */
   key: string;
   /** As the proxy lists it, or as typed. */
   name: string;
@@ -281,7 +286,8 @@ export function servedOf(routes: ProvimuxModelRoutesResponse | null): ServedName
   if (!routes) return { known: false, byName: {} };
   const byName: Record<string, ServedRoute[]> = {};
   for (const model of routes.models) {
-    const key = nameKey(model.id);
+    // Keyed as the collision check keys names (without case): it is the check's input.
+    const key = aliasKey(model.id);
     byName[key] = [
       ...(byName[key] ?? []),
       ...model.routes.map((route): ServedRoute => ({
@@ -322,7 +328,7 @@ export function providerOfEntry(entry: AliasEntry): string {
   return entry.family;
 }
 
-/** The row's client names, compared as names are (trimmed, lower-case). */
+/** The row's client names, compared as names are (trimmed, exactly). */
 const namesOf = (row: AliasRow, entry: AliasEntry, state: Pick<AliasState, 'forceModelPrefix'>) =>
   row.upstream.trim() || row.alias?.trim()
     ? clientNames(row, entry, state.forceModelPrefix).map(nameKey).filter(Boolean)
@@ -605,6 +611,7 @@ export function buildNames(input: CatalogInput): NameItem[] {
 
   // The name check of the data layer, for one service answering a name with different models.
   const groups = nameGroups(draft, servedOf(routes));
+  // The check groups names without case (upstream's alias lookup): a name of the page is in its group's key.
   const mixed = new Set(
     groups.filter((g) => g.verdict === 'several-models' && !g.pool).map((g) => g.key)
   );
@@ -642,7 +649,7 @@ export function buildNames(input: CatalogInput): NameItem[] {
     if (lines.some((line) => line.state !== 'removed' && line.issue === 'shadowed')) {
       problems.push('shadowed');
     }
-    if (mixed.has(key)) problems.push('mixed');
+    if (mixed.has(aliasKey(key))) problems.push('mixed');
     return {
       key,
       name: found.name,
@@ -998,11 +1005,12 @@ export function candidatesFor(
         !isBlankNewRow(row) &&
         row.upstream.trim() !== upstream &&
         (entry.store === 'login'
-          ? row.alias !== null && nameKey(row.alias) === targetKey
+          ? // A login type's alias table is keyed without case upstream: `Opus` and `opus` are one alias there.
+            row.alias !== null && aliasKey(row.alias) === aliasKey(targetKey)
           : namesOf(row, entry, draft.base).includes(targetKey))
     );
   const blockedOf = (entry: AliasEntry, upstream: string): Candidate['blocked'] =>
-    entry.store === 'login' && nameKey(upstream) === targetKey
+    entry.store === 'login' && aliasKey(upstream) === aliasKey(targetKey)
       ? 'own-name'
       : inName(entry, upstream)
         ? 'in-name'

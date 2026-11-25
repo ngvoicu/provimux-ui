@@ -8,7 +8,7 @@ import { getTypeLabel } from '@/features/authFiles/constants';
 import type { ProvimuxNamesResponse, ProvimuxRefusedName } from '../../api/types';
 import { compatibleEntryOf, isOpenRouterHost } from '../modelRoutes/logic';
 import { formatClock, formatExact, formatRelative, timeMs } from '../time';
-import { nameKey } from '../aliases/collisions';
+import { nameKey } from './catalog';
 import {
   accountGroups,
   dropIgnoredBody,
@@ -371,12 +371,16 @@ export function OnlyMyNamesSwitch({
   );
 }
 
-/** keep entries the gateway ignores (a pattern, an empty one), with a way to take them out. */
+/**
+ * keep entries the gateway ignores (a pattern, an empty one, `auto`), with a way to take them out. `auto` gets its
+ * own reason: it looks like a name, so "not a pattern or empty" would not say why.
+ */
 function IgnoredLine({ state }: { state: NamesState }) {
   const { t } = useTranslation();
   const ignored = state.answer.keep_ignored;
   if (!ignored.length) return null;
   const values = ignored.map((entry) => entry.value);
+  const reserved = ignored.filter((entry) => entry.reason === 'reserved');
   return (
     <p className={styles.ignored}>
       <IconInfo size={13} />
@@ -385,6 +389,9 @@ function IgnoredLine({ state }: { state: NamesState }) {
           count: ignored.length,
           values: values.map((value) => (value.trim() ? value : '""')).join(', '),
         })}{' '}
+        {reserved.length ? (
+          <>{t('provimux.names.ignored_reserved', { value: reserved[0].value.trim() })} </>
+        ) : null}
         <button
           type="button"
           className={page.textButton}

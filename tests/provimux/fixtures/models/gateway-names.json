@@ -1,0 +1,96 @@
+{
+  "observed_at": "2026-11-25T10:04:11.482Z",
+  "only_my_names": {
+    "enabled": true,
+    "applies": true,
+    "not_applied": null
+  },
+  "applied": {
+    "generation": 7,
+    "config_etag": "\"3f1c0e5d9a6b47c2a1f0e8d7c6b5a4938271605f4e3d2c1b0a99887766554433\"",
+    "applying": false
+  },
+  "names": [
+    {
+      "name": "claude-opus-5-5",
+      "set_by": [
+        "keep"
+      ],
+      "accounts": 3,
+      "copies": []
+    },
+    {
+      "name": "opus",
+      "set_by": [
+        "alias"
+      ],
+      "accounts": 2,
+      "copies": [
+        {
+          "id": "opus(high)",
+          "accounts": 1
+        },
+        {
+          "id": "team-a/opus",
+          "accounts": 1
+        }
+      ]
+    },
+    {
+      "name": "work-fast",
+      "set_by": [
+        "keep"
+      ],
+      "accounts": 1,
+      "copies": []
+    }
+  ],
+  "keep_ignored": [
+    {
+      "value": "claude-*",
+      "reason": "pattern"
+    }
+  ],
+  "others": [
+    {
+      "name": "gpt-5.5",
+      "accounts": [
+        {
+          "auth_index": "a8d167b7d82c8c15",
+          "provider": "codex",
+          "kind": "oauth",
+          "priority": 0,
+          "host": null,
+          "login": {
+            "name": "codex-office.json",
+            "email": "office@example.com",
+            "label": "office@example.com"
+          }
+        },
+        {
+          "auth_index": "2f61a9c0b7e4d318",
+          "provider": "openai-compatible-openrouter",
+          "kind": "apikey",
+          "priority": 0,
+          "host": "openrouter.ai",
+          "login": {
+            "name": null,
+            "email": null,
+            "label": "openrouter"
+          }
+        }
+      ]
+    }
+  ],
+  "refused": {
+    "since": "2026-11-25T10:04:00Z",
+    "names": [
+      {
+        "name": "claude-opus-4-6",
+        "requests": 14,
+        "last_at": "2026-11-25T10:31:52.120Z"
+      }
+    ],
+    "truncated": false
+  }
+}

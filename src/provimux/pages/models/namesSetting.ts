@@ -3,11 +3,13 @@
  * it from its one read of the configuration, the whole object each write sends, and what the switch, its preview,
  * "Not served" and the refused strip show. Pure.
  *
- * A name is his when an alias row gives it, when `models.only-my-names.keep` lists it (a model kept under its
- * vendor's name), or when an alias in a login's own file gives it (only the gateway can see that one). With the
- * switch on, every other name is refused. The gateway's status endpoint, `GET /provimux/names`, lists both sides as
- * the rule it applies now, his names with their prefixed copies; the page joins it with the 30-day usage it already
- * reads.
+ * A name is his when the configuration names it: an alias row gives it, or `models.only-my-names.keep` lists it (a
+ * model kept under its vendor's name). An alias in a login's own file is not one (only-my-names.md 17.1 A): it is
+ * among the others until kept. Names are compared exactly, trimmed and nothing else (17.1 B): `GPT-5.5` kept does
+ * not make `gpt-5.5` his. With the switch on, every other name is refused. The gateway's status endpoint,
+ * `GET /provimux/names`, lists both sides as the rule it applies now, his names with the ids served through them
+ * (`copies`: under an account's prefix, or with a thinking level); the page joins it with the 30-day usage it
+ * already reads.
  */
 import { isRecord } from '@/utils/helpers';
 import type {
@@ -16,11 +18,16 @@ import type {
   ProvimuxNamesResponse,
   ProvimuxRefusedName,
 } from '../../api/types';
-import { nameKey } from '../aliases/collisions';
 import { inexactNumbers } from '../aliases/rows';
 import type { AliasDraft, AliasEntry } from '../aliases/types';
 import { accessOf, compatibleEntryOf, type Access } from '../modelRoutes/logic';
-import { entryOfRoute, lineProviderKeys, type ModelsFilter, type SetNames } from './catalog';
+import {
+  entryOfRoute,
+  lineProviderKeys,
+  nameKey,
+  type ModelsFilter,
+  type SetNames,
+} from './catalog';
 
 /** The config API's path for the setting: written whole, with `If-Match` (only-my-names.md 4). */
 export const ONLY_MY_NAMES_PATH = '/config/models/only-my-names';
@@ -33,7 +40,7 @@ export interface OnlyMyNamesSetting {
   enabled: boolean;
   /** `keep` as stored, every element in order: a write changes only what it means to. */
   keepStored: readonly unknown[];
-  /** The names `keep` serves by: its strings, trimmed, without empty entries and patterns. */
+  /** The names `keep` serves by: its strings, trimmed, without empty entries, patterns and `auto`. */
   keep: string[];
   /**
    * The setting cannot be written whole (aliases-page.md 2.5): `models` or the setting is not a map, `keep` is
@@ -42,9 +49,31 @@ export interface OnlyMyNamesSetting {
   unreadable: boolean;
 }
 
-/** A `keep` entry the gateway serves by: a string with something in it and no `*` (no wildcards, decision 4). */
+/**
+ * `auto` is never a name: clients send it for the first available model, and the gateway ignores it on `keep`
+ * (`keep_ignored` reason `reserved`, only-my-names.md 17.2 F). Compared exactly, as every name is.
+ */
+export const RESERVED_NAME = 'auto';
+
+/**
+ * A `keep` entry the gateway serves by: a string with something in it, no `*` (no wildcards, decision 4), and not
+ * `auto`.
+ */
 export const keepable = (entry: unknown): entry is string =>
-  typeof entry === 'string' && entry.trim() !== '' && !entry.includes('*');
+  typeof entry === 'string' &&
+  entry.trim() !== '' &&
+  !entry.includes('*') &&
+  entry.trim() !== RESERVED_NAME;
+
+/**
+ * A name without its thinking suffix, as the gateway cuts it (`registry.ProvimuxBase`): `opus(high)` is `opus`; a
+ * name without one is itself.
+ */
+export function thinkingBase(name: string): string {
+  const open = name.lastIndexOf('(');
+  if (open === -1 || !name.endsWith(')')) return name;
+  return name.slice(0, open).trim();
+}
 
 export function readSetting(document: unknown): OnlyMyNamesSetting {
   const off: OnlyMyNamesSetting = {
@@ -80,7 +109,10 @@ const bodyOf = (
   keep: readonly unknown[]
 ): Record<string, unknown> => ({ ...(setting.stored ?? {}), enabled, keep: [...keep] });
 
-/** Keep: the names added at the end of `keep`, each once (case does not matter); the switch as it is. */
+/**
+ * Keep: the names added at the end of `keep`, each once and exactly as served (the gateway compares names exactly:
+ * `GPT-5.5` kept does not serve `gpt-5.5`); the switch as it is.
+ */
 export function keepBody(setting: OnlyMyNamesSetting, names: readonly string[]) {
   const have = new Set(setting.keep.map(nameKey));
   const added: string[] = [];
@@ -93,7 +125,10 @@ export function keepBody(setting: OnlyMyNamesSetting, names: readonly string[]) 
   return bodyOf(setting, setting.enabled, [...setting.keepStored, ...added]);
 }
 
-/** Stop keeping: every spelling of the name taken out of `keep`; the rest, patterns included, stays. */
+/**
+ * Stop keeping: the entries that are this name (trimmed, exactly) taken out of `keep`; the rest stays, patterns and
+ * the name in another case included (another name to the gateway).
+ */
 export const unkeepBody = (setting: OnlyMyNamesSetting, name: string) =>
   bodyOf(
     setting,
@@ -126,7 +161,7 @@ const joinsKeep = (answer: ProvimuxNamesResponse | null) => !answer || answer.ap
 
 /**
  * The names the gateway counts as his besides alias rows, for the list: what is kept, and the gateway's
- * login-file names. Kept: the gateway's kept names when it says which rule it applies (`source: 'shown'`), else
+ * login-file names (no longer given since only-my-names.md 17, still read from an older gateway). Kept: the gateway's kept names when it says which rule it applies (`source: 'shown'`), else
  * `keep` of the page's read; `source: 'config'` is always the read's (what a save of the file keeps).
  */
 export function setNamesOf(
@@ -239,9 +274,10 @@ export function othersOf(
 }
 
 /**
- * His names served under an account's prefix (`team-a/opus` for `opus`, only-my-names.md 3.3): the gateway lists
- * them under each name (`copies`). Served with his names, so never "Not served", and counted among what is served.
- * Keys; a copy that is itself one of his names is his, not a copy.
+ * The ids served through his names that are not names of his (`copies`, only-my-names.md 17.2 C): his names under an
+ * account's prefix (`team-a/opus` for `opus`, 3.3), and his names with a thinking suffix an account registers as an
+ * id (`opus(high)`). Served with his names, so never "Not served". Keys; a copy that is itself one of his names is
+ * his, not a copy.
  */
 export function copyKeysOf(answer: ProvimuxNamesResponse | null): Set<string> {
   const own = new Set((answer?.names ?? []).map((name) => nameKey(name.name)));
@@ -251,6 +287,26 @@ export function copyKeysOf(answer: ProvimuxNamesResponse | null): Set<string> {
   }
   return copies;
 }
+
+/**
+ * Of the copies, the spellings with a thinking suffix (`opus(high)`, `team-a/opus(high)`), each with the id it is a
+ * spelling of (`opus`, `team-a/opus`). Not a name of its own: any name can be asked for with a level, and an
+ * account that registers one as an id adds no name. The page counts it with that id and shows it on its card.
+ */
+export function levelCopiesOf(answer: ProvimuxNamesResponse | null): Map<string, string> {
+  const levels = new Map<string, string>();
+  for (const key of copyKeysOf(answer)) {
+    const base = thinkingBase(key);
+    if (base !== key && base !== '') levels.set(key, base);
+  }
+  return levels;
+}
+
+/** Copies counted among what is served: under an account's prefix, not a spelling with a thinking level. */
+export const servedCopiesOf = (answer: ProvimuxNamesResponse | null): number => {
+  const levels = levelCopiesOf(answer);
+  return [...copyKeysOf(answer)].filter((key) => !levels.has(key)).length;
+};
 
 export interface Preview {
   /** The names that stop being served once the switch is on: used ones first. */
@@ -395,7 +451,8 @@ export function switchState(answer: ProvimuxNamesResponse): 'not-applied' | 'on'
 
 /**
  * The names a save of the draft stops serving while the switch is on: names an alias row of the read gives and no
- * alias row of the draft does, unless `keep` or a login's own file also makes them his.
+ * alias row of the draft does (exactly: a rename that only changes case stops the old spelling), unless `keep` also
+ * makes them his.
  */
 export function droppedBySave(draft: AliasDraft, setNames: SetNames): string[] {
   const aliasNames = (rows: AliasDraft['rows']) => {

@@ -19,9 +19,11 @@ export function ProvimuxRoutingNamesNote({ verdict }: { verdict: RoutingNameVerd
         ? t('provimux.routing.names_refused', { name: verdict.name })
         : verdict.accounts === 0
           ? t('provimux.routing.names_yours_none', { name: verdict.name })
-          : verdict.copyOf !== null
-            ? t('provimux.routing.names_yours_copy', { name: verdict.name, base: verdict.copyOf })
-            : t('provimux.routing.names_yours', { name: verdict.name });
+          : verdict.levelOf
+            ? t('provimux.routing.names_yours_level', { name: verdict.name, base: verdict.levelOf })
+            : verdict.copyOf !== null
+              ? t('provimux.routing.names_yours_copy', { name: verdict.name, base: verdict.copyOf })
+              : t('provimux.routing.names_yours', { name: verdict.name });
   return (
     <p
       className={styles.note}

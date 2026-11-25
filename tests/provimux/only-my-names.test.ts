@@ -5,6 +5,8 @@
 // name's card: an OpenAI-compatible entry's keys told apart, no order number on a line not served, and a pool's
 // second model on its route's line.
 import { afterAll, afterEach, describe, expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
+import { parse as parseYaml } from 'yaml';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
@@ -53,6 +55,9 @@ import {
   readSetting,
   refusedOf,
   copyKeysOf,
+  levelCopiesOf,
+  servedCopiesOf,
+  thinkingBase,
   setNamesOf,
   switchBody,
   unkeepBody,
@@ -205,7 +210,7 @@ describe('whose names: the console and the gateway count the same ones', () => {
       .yours.map((item) => item.key)
       .sort();
     const answer = ownerAnswer();
-    expect(answer.names.map((own) => own.name.toLowerCase()).sort()).toEqual(yours);
+    expect(answer.names.map((own) => own.name).sort()).toEqual(yours);
     // Every other name an account offers is the gateway's "others", and nothing is in both.
     const others = othersOf(answer, yourNameKeys(answer, readSetting(ownerState().document)), null);
     expect(others).toHaveLength(28);
@@ -383,12 +388,30 @@ describe('Keep: the whole object, at once, with If-Match on the page’s read', 
     const setting = readSetting(
       withSetting({ enabled: false, keep: ['opus-x', 'claude-*', 7], note: 'by hand' }).document
     );
-    expect(keepBody(setting, ['Opus-X', 'gpt-6.2-sol', 'gpt-6.2-sol', 'gemini-*', ' '])).toEqual({
+    // Names are compared exactly (only-my-names.md 17.1 B): Opus-X is another name than opus-x, and is added;
+    // opus-x, already kept, is not; `auto` is never a name.
+    expect(
+      keepBody(setting, [
+        'Opus-X',
+        ' opus-x ',
+        'gpt-6.2-sol',
+        'gpt-6.2-sol',
+        'gemini-*',
+        ' ',
+        'auto',
+      ])
+    ).toEqual({
       enabled: false,
-      keep: ['opus-x', 'claude-*', 7, 'gpt-6.2-sol'],
+      keep: ['opus-x', 'claude-*', 7, 'Opus-X', 'gpt-6.2-sol'],
       note: 'by hand',
     });
+    // Stop keeping takes out that name only, not another case of it.
     expect(unkeepBody(setting, 'OPUS-X')).toEqual({
+      enabled: false,
+      keep: ['opus-x', 'claude-*', 7],
+      note: 'by hand',
+    });
+    expect(unkeepBody(setting, 'opus-x')).toEqual({
       enabled: false,
       keep: ['claude-*', 7],
       note: 'by hand',
@@ -1293,3 +1316,194 @@ function PreviewHarness({
     onShowNotServed: noop,
   });
 }
+
+// --- only-my-names.md section 17: names his only if the config says so, compared exactly ---------------------------
+
+describe('exact names, as the gateway compares them (only-my-names.md 17)', () => {
+  /** The gateway's shared fixture and example (pui13/examples), copied as they are. */
+  const gatewayFixture = () => {
+    const config = parseYaml(
+      readFileSync('tests/provimux/fixtures/models/gateway-names-fixture.yaml', 'utf8')
+    ) as Doc;
+    // The fixture writes the login aliases under the legacy key; the config API gives the v8 layout, where they
+    // are oauth.model-alias (the gateway's config_v8.go maps one to the other).
+    const { 'oauth-model-alias': loginAliases, ...rest } = config;
+    return { ...rest, oauth: { 'model-alias': loginAliases } } as Doc;
+  };
+  const gatewayExample = () =>
+    readNames(
+      JSON.parse(readFileSync('tests/provimux/fixtures/models/gateway-names.json', 'utf8'))
+    );
+
+  test('the gateway’s shared fixture: Your names are exactly the names it lists, GPT-5.5 and gpt-5.5 apart', () => {
+    const config = gatewayFixture();
+    const state = { ...readAliasState(config, []), etag: '"f"' };
+    const setting = readSetting(config);
+    // "claude-*", "" and "auto" are ignored; the rest trimmed, in their case.
+    expect(setting.keep).toEqual(['claude-opus-5-5', 'devin/claude-opus-4.6', 'GPT-5.5']);
+    const items = buildNames({
+      draft: startDraft(state),
+      routes: null,
+      lists: null,
+      usage: null,
+      nowMs: 0,
+      setNames: setNamesOf(null, setting, 'config'),
+    });
+    const yours = sections(items)
+      .yours.map((item) => item.name)
+      .sort();
+    // The fixture's own comment: alias names, then kept names; two spellings of gpt-5.5.
+    expect(yours).toEqual(
+      [
+        'Fast',
+        'gpt-5.5',
+        'my-opus',
+        'team-sonnet',
+        'vertex-flash',
+        'work-fast',
+        'claude-opus-5-5',
+        'devin/claude-opus-4.6',
+        'GPT-5.5',
+      ].sort()
+    );
+    const upper = nameOf(items, 'GPT-5.5');
+    const lower = nameOf(items, 'gpt-5.5');
+    expect([upper.kept, upper.aliased]).toEqual([true, false]);
+    expect([lower.kept, lower.aliased]).toEqual([false, true]);
+  });
+
+  test('the gateway’s example answer: kept names, copies, and a spelling with a thinking level', () => {
+    const answer = gatewayExample();
+    const setting = readSetting({ models: { 'only-my-names': { enabled: true, keep: [] } } });
+    expect([...setNamesOf(answer, setting).kept].sort()).toEqual(['claude-opus-5-5', 'work-fast']);
+    // set_by login-file is no longer given: nothing is a login-file name.
+    expect(setNamesOf(answer, setting).loginFile.size).toBe(0);
+    expect([...copyKeysOf(answer)].sort()).toEqual(['opus(high)', 'team-a/opus']);
+    expect([...levelCopiesOf(answer)]).toEqual([['opus(high)', 'opus']]);
+    // A spelling with a thinking level is not a name: only the prefixed copy is counted as served.
+    expect(servedCopiesOf(answer)).toBe(1);
+    expect(thinkingBase('opus(high)')).toBe('opus');
+    expect(thinkingBase('team-a/opus(high)')).toBe('team-a/opus');
+    expect(thinkingBase('opus')).toBe('opus');
+  });
+
+  /** The owner's answer with GPT-6.1-CODEX kept: an account offers gpt-6.1-codex, which stays another's. */
+  const caseAnswer = (enabled: boolean) =>
+    ownerAnswer((raw) => {
+      raw.only_my_names = { enabled, applies: true, not_applied: null };
+      (raw.names as Doc[]).push({
+        name: 'GPT-6.1-CODEX',
+        set_by: ['keep'],
+        accounts: 0,
+        copies: [],
+      });
+      raw.refused = enabled
+        ? {
+            since: '2026-11-24T13:00:00Z',
+            names: [{ name: 'gpt-6.1-codex', requests: 3, last_at: '2026-11-24T13:58:00Z' }],
+            truncated: false,
+          }
+        : null;
+    });
+
+  test('a name kept in one case while an account offers another: the page never shows the other as his', async () => {
+    await i18n.changeLanguage('en');
+    const state = withSetting({ enabled: true, keep: ['GPT-6.1-CODEX'] });
+    const setting = readSetting(state.document);
+    const answer = caseAnswer(true);
+    const yours = yourNameKeys(answer, setting);
+    expect(yours.has('GPT-6.1-CODEX')).toBe(true);
+    expect(yours.has('gpt-6.1-codex')).toBe(false);
+    expect(othersOf(answer, yours, null).map((o) => o.name)).toContain('gpt-6.1-codex');
+    // Refused as sent: the strip keeps it, with Keep, which writes that spelling.
+    expect(refusedOf(answer, yours).map((r) => r.name)).toEqual(['gpt-6.1-codex']);
+    expect(keepBody(setting, ['gpt-6.1-codex']).keep).toEqual(['GPT-6.1-CODEX', 'gpt-6.1-codex']);
+    // Two cards: the kept spelling (no account offers it), the offered one not his.
+    const items = ownerNamesWith(startDraft(state), setNamesOf(answer, setting));
+    expect(nameOf(items, 'GPT-6.1-CODEX')).toMatchObject({ own: true, kept: true, accounts: 0 });
+    expect(nameOf(items, 'gpt-6.1-codex').own).toBe(false);
+    const served = answer.names.map((own) => own.name);
+    const text = textOf(
+      renderBody(pageWith(state), boardNames(answer), { routes: routesServing(served) })
+    );
+    // His 14, the offered spelling among the 28 not served, and in the refused strip.
+    expect(text).toContain('On: 14 names served, 28 not served.');
+    expect(text).toContain('Your names 14');
+    expect(text).toContain("A tool asked for 1 name that isn't served");
+    expect(text).toContain('gpt-6.1-codex 3 times');
+  });
+
+  test('auto on keep is ignored, and the switch says why in plain words', async () => {
+    await i18n.changeLanguage('en');
+    const state = withSetting({ enabled: false, keep: ['auto', 'claude-*', 'opus'] });
+    expect(readSetting(state.document).keep).toEqual(['opus']);
+    const answer = ownerAnswer((raw) => {
+      raw.keep_ignored = [
+        { value: 'auto', reason: 'reserved' },
+        { value: 'claude-*', reason: 'pattern' },
+      ];
+    });
+    expect(answer.keep_ignored.map((entry) => entry.reason)).toEqual(['reserved', 'pattern']);
+    const text = textOf(renderBody(pageWith(state), boardNames(answer)));
+    expect(text).toContain('Provimux ignores 2 entries of your kept names: auto, claude-*.');
+    expect(text).toContain(
+      "auto isn't a name: tools send it to mean any model an account offers, so it can't be kept."
+    );
+    expect(text).toContain('Remove them');
+    // Remove them takes both out, as written.
+    expect(dropIgnoredBody(readSetting(state.document), ['auto', 'claude-*']).keep).toEqual([
+      'opus',
+    ]);
+    // No card says auto is kept.
+    expect(text).not.toMatch(/auto\s+Kept/);
+  });
+
+  test('a spelling with a thinking level is shown on its name’s card and never counted as a name', async () => {
+    await i18n.changeLanguage('en');
+    const state = withSetting({ enabled: true, keep: ['claude-haiku-5-5'] });
+    const routes = routesServing([
+      ...ownerAnswer().names.map((own) => own.name),
+      'claude-haiku-5-5',
+    ]);
+    const base = routes.models[0].id;
+    const level = { ...structuredClone(routes.models[0]), id: `${base}(high)` };
+    routes.models.push(level);
+    const withLevel = (raw: Doc) => {
+      const own = (raw.names as Doc[]).find((name) => name.name === base)!;
+      own.copies = [{ id: level.id, accounts: 1 }];
+    };
+    const answer = keptAnswer(['claude-haiku-5-5'], (raw) => {
+      raw.only_my_names = { enabled: true, applies: true, not_applied: null };
+      withLevel(raw);
+    });
+    const text = textOf(renderBody(pageWith(state), boardNames(answer), { routes }));
+    // As many as without it (the "on" case above): not a name served, not a copy section of its own.
+    expect(text).toContain('On: 14 names served, 27 not served.');
+    expect(text).toContain('Your names 14');
+    expect(text).not.toContain('Your names under a prefix');
+    expect(text).toContain(
+      `Also served as ${level.id}: an account offers ${base} with a thinking level`
+    );
+    // Off, the same: every name counted once.
+    const off = keptAnswer(['claude-haiku-5-5'], withLevel);
+    expect(
+      textOf(
+        renderBody(
+          pageWith(withSetting({ enabled: false, keep: ['claude-haiku-5-5'] })),
+          boardNames(off),
+          { routes }
+        )
+      )
+    ).toContain('Off: all 41 names are served, 14 of them yours.');
+  });
+
+  test('a save that only changes a name’s case stops serving the old spelling while on', () => {
+    const page = pageWith(withSetting({ enabled: true, keep: [] }));
+    let draft = page.draft!;
+    for (const row of draft.rows.filter((r) => r.alias === 'haiku')) {
+      draft = changeRow(draft, row.id, { alias: 'Haiku' });
+    }
+    const setNames = setNamesOf(ownerAnswer(), readSetting(draft.base.document), 'config');
+    expect(droppedBySave(draft, setNames)).toEqual(['haiku']);
+  });
+});
