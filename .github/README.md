@@ -30,7 +30,7 @@ repository) &nbsp;·&nbsp; **[providers.dev](https://providers.dev)**
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/dashboard-desktop-dark.png">
-  <img alt="The console's dashboard. The sidebar reads Provimux by providers.dev and lists Dashboard, AI Providers, Auth Files (3), OAuth Login, Routing, Quota Management, Logs Viewer, Config Panel and Management Center Info. The page headline reads Quiet for now, with the server version and Connected below it, a Manage providers button and an Inspect logs link; a card on the right shows 0 requests handled. Below: success rate –, credentials 3, provider keys 0, models 5, and an empty live-traffic chart." src="assets/dashboard-desktop-light.png">
+  <img alt="The console's dashboard. The sidebar reads Provimux by providers.dev and lists Dashboard, Accounts, Routing, Models, Savings, Advanced settings, Quota Management, Logs Viewer, Config Panel and Management Center Info. The page headline reads Quiet for now, with the server version and Connected below it, a Manage accounts button and an Inspect logs link; a card on the right shows 0 requests handled. Below: success rate –, credentials 3, provider keys 3, models 41, and a live-traffic section with no traffic recorded yet." src="assets/dashboard-desktop-light.png">
 </picture>
 
 ## What provimux-ui adds
@@ -142,7 +142,7 @@ pages, settings and requests are unchanged; Provimux's own pages come on top of 
     </picture></td>
     <td width="50%"><picture>
       <source media="(prefers-color-scheme: dark)" srcset="assets/system-desktop-dark.png">
-      <img alt="The Management Center Info page. The Provimux tile, Provimux by providers.dev, the line with the Provimux version and the CLIProxyAPI release it is based on, and Built on CLIProxyAPI and the CLI Proxy API Management Center by router-for-me, MIT licensed. Cards show the management UI version, the server version, build time and connection status. Quick links: Provimux on GitHub, providers.dev, Built on CLIProxyAPI, Built on CLI Proxy API Management Center, CLIProxyAPI documentation. Below, the available models by provider." src="assets/system-desktop-light.png">
+      <img alt="The Management Center Info page. The Provimux tile, Provimux by providers.dev, the line with the Provimux version and the CLIProxyAPI release it is based on, and Built on CLIProxyAPI and the CLI Proxy API Management Center by router-for-me, MIT licensed. Cards show the management UI version, the server version, build time and connection status. Quick links: Provimux on GitHub, providers.dev, Built on CLIProxyAPI, Built on CLI Proxy API Management Center, CLIProxyAPI documentation. Below, one line: every model your accounts serve, with its names, its routes and where it is excluded, is on Models, with an Open Models link." src="assets/system-desktop-light.png">
     </picture></td>
   </tr>
 </table>
