@@ -13,7 +13,9 @@ import {
   accountGroups,
   dropIgnoredBody,
   keepBody,
+  offeredSpellingsOf,
   previewOf,
+  thinkingBase,
   switchBody,
   switchState,
   unkeepBody,
@@ -87,10 +89,21 @@ function groupLabel(t: TFunction, group: AccountGroup): string {
  */
 export function Who({ item }: { item: OtherItem }) {
   const { t } = useTranslation();
+  if (item.unoffered) {
+    return <span className={styles.whoNone}>{t('provimux.names.who_unoffered')}</span>;
+  }
   const groups = accountGroups(item.accounts);
-  if (!groups.length) return <span className={styles.whoNone}>{t('provimux.names.who_none')}</span>;
+  const reaches = item.reaches ? (
+    <span className={styles.whoNone}>
+      {t('provimux.names.who_reaches', { name: item.reaches })}
+    </span>
+  ) : null;
+  if (!groups.length) {
+    return reaches ?? <span className={styles.whoNone}>{t('provimux.names.who_none')}</span>;
+  }
   return (
     <span className={styles.who}>
+      {reaches}
       <span className="visually-hidden">{t('provimux.names.who_label')}</span>
       {groups.map((group) => (
         <span
@@ -132,25 +145,27 @@ function OtherRow({
         </span>
         <Who item={item} />
       </div>
-      <Button
-        variant="secondary"
-        size="sm"
-        className={styles.keep}
-        loading={busy}
-        disabled={state.blocked !== null || (state.busy && !busy)}
-        title={state.blocked ?? t('provimux.names.keep_title', { name: item.name })}
-        aria-label={t('provimux.names.keep_label', { name: item.name })}
-        onClick={() =>
-          void state.write({
-            body: keepBody(state.setting, [item.name]),
-            kind: 'keep',
-            names: [item.name],
-            id,
-          })
-        }
-      >
-        {t('provimux.names.keep')}
-      </Button>
+      {item.unoffered ? null : (
+        <Button
+          variant="secondary"
+          size="sm"
+          className={styles.keep}
+          loading={busy}
+          disabled={state.blocked !== null || (state.busy && !busy)}
+          title={state.blocked ?? t('provimux.names.keep_title', { name: item.name })}
+          aria-label={t('provimux.names.keep_label', { name: item.name })}
+          onClick={() =>
+            void state.write({
+              body: keepBody(state.setting, [item.name]),
+              kind: 'keep',
+              names: [item.name],
+              id,
+            })
+          }
+        >
+          {t('provimux.names.keep')}
+        </Button>
+      )}
     </li>
   );
 }
@@ -679,6 +694,7 @@ export function RefusedStrip({
   const since = timeMs(state.answer.refused?.since);
   if (!refused.length) return null;
   const others = new Map(state.others.map((item) => [item.key, item]));
+  const offered = offeredSpellingsOf(state.answer);
   return (
     <section className={styles.refused} aria-labelledby={titleId}>
       <div className={styles.refusedHead}>
@@ -698,11 +714,15 @@ export function RefusedStrip({
       <ul className={styles.rows} aria-label={t('provimux.names.refused_label')}>
         {refused.map((name) => {
           const key = nameKey(name.name);
+          // Not among the others: a spelling no account registers. In another case one may (kept, it is served
+          // through upstream's lower-case lookup); in none, keeping it would serve nothing, and the row says so.
+          const found = offered.get(thinkingBase(key).toLowerCase());
           const item: OtherItem = others.get(key) ?? {
             key,
             name: name.name,
             requests: null,
-            accounts: [],
+            accounts: found?.accounts ?? [],
+            ...(found ? { reaches: [...found.spellings].sort()[0] } : { unoffered: true }),
           };
           const last = timeMs(name.last_at);
           return (

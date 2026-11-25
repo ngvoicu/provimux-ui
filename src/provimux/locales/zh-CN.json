@@ -717,6 +717,8 @@
       "levels": "也以 {{ids}} 提供：某个账号以该 ID 提供带思考级别的 {{name}}。它不是单独的名称。",
       "who_times": "{{name}} ×{{count}}",
       "who_none": "目前没有账号提供",
+      "who_reaches": "会到达 {{name}}（仅大小写不同）",
+      "who_unoffered": "没有账号提供这个名称（不论大小写）：保留它也无法提供。请检查工具发送的名称。",
       "who_label": "提供方：",
       "paid": "按 token 计费",
       "requests_other": "30 天内 {{formatted}} 次请求",

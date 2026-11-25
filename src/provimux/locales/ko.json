@@ -717,6 +717,8 @@
       "levels": "{{ids}}(으)로도 제공됩니다: 계정이 {{name}}에 사고 수준을 붙인 ID로 제공합니다. 별도의 이름이 아닙니다.",
       "who_times": "{{name}} ×{{count}}",
       "who_none": "지금 제공하는 계정 없음",
+      "who_reaches": "대소문자만 다른 {{name}}(으)로 연결됨",
+      "who_unoffered": "어떤 계정도 이 이름을 대소문자와 관계없이 제공하지 않습니다. 유지해도 제공되지 않으니 도구가 보내는 이름을 확인하세요.",
       "who_label": "제공:",
       "paid": "토큰당 과금",
       "requests_other": "30일간 요청 {{formatted}}회",

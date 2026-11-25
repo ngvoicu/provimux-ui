@@ -717,6 +717,8 @@
       "levels": "Cũng được phục vụ dưới dạng {{ids}}: một tài khoản cung cấp {{name}} kèm mức suy nghĩ dưới id đó. Đó không phải là một tên riêng.",
       "who_times": "{{name}} ×{{count}}",
       "who_none": "Hiện không có tài khoản nào cung cấp",
+      "who_reaches": "Đến {{name}}, cùng tên nhưng khác chữ hoa/thường",
+      "who_unoffered": "Không tài khoản nào cung cấp tên này, dù viết hoa hay thường: giữ nó cũng không phục vụ được. Hãy kiểm tra tên mà công cụ gửi.",
       "who_label": "Phục vụ bởi:",
       "paid": "trả theo token",
       "requests_other": "{{formatted}} yêu cầu trong 30 ngày",

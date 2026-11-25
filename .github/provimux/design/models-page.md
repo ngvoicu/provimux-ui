@@ -400,3 +400,22 @@ Where this section differs from 8.1 to 8.9, it holds.
   in the v8 layout the config API gives). Your names equals the fixture's expected list, `GPT-5.5` and `gpt-5.5`
   apart. Tests: `tests/provimux/only-my-names.test.ts` ("exact names, as the gateway compares them") and
   `routing-names.test.ts`.
+
+### 8.11 After the gateway's section 18: a refused name nobody offers, and used names in their sent case
+
+The gateway (its only-my-names.md 18, `00475e892`) judges a name by the rule and the name alone: a name no account
+offers (a typo) is refused with the setting's message and counted in `refused`, where before it got upstream's
+"unknown provider" and was not counted. Its usage by requested name keeps the case the tool sent (`B-Coder`).
+
+- **The refused strip, a name nobody offers.** A refused name that no account registers in any case (its thinking
+  suffix cut, compared without case: `offeredSpellingsOf` over `others`, his names with an account, and their copies)
+  has no Keep: keeping it would serve nothing. Its row says "No account offers this name, in any case: keeping it
+  would serve nothing. Check the name the tool sends." The preview is not affected: such a name never reached an
+  account, so the usage never counts it.
+- **A sent spelling an account offers only in another case.** Upstream finds a requested name by its lower case when
+  no account registers that spelling, so `B-Coder` sent with `b-coder` offered is served while the switch is off and
+  refused once on unless `B-Coder` is kept exactly (18.3). `othersOf` adds every such used spelling (not his, not a
+  copy, not among `others`) as a name that is not his: in the preview's used list, under Not served and in the
+  refused strip, with the accounts of the spelling it reaches and the line "Reaches b-coder, the same name in another
+  case". Keep and Keep all used write it as sent. It is counted with the others in the switch's lines, so with such
+  names the page's counts exceed `/v1/models` by their number (the list holds only registered ids).

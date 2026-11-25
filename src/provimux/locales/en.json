@@ -1335,6 +1335,8 @@
       "levels": "Also served as {{ids}}: an account offers {{name}} with a thinking level under that id. It isn't a name of its own.",
       "who_times": "{{name}} ×{{count}}",
       "who_none": "No account offers it now",
+      "who_reaches": "Reaches {{name}}, the same name in another case",
+      "who_unoffered": "No account offers this name, in any case: keeping it would serve nothing. Check the name the tool sends.",
       "who_label": "Served by:",
       "paid": "paid per token",
       "requests_one": "{{formatted}} request in 30 days",

@@ -1231,6 +1231,112 @@ describe('the refused strip', () => {
     // No string promises the name was the one the tool sent.
     expect(text).not.toMatch(/sent|your tool asked for/i);
   });
+
+  // The gateway's check reads no registration (only-my-names.md 18.2): a typo is refused and counted like any name.
+  const stripOf = (names: Array<{ name: string; requests: number }>) => {
+    const answer = ownerAnswer((raw) => {
+      raw.only_my_names = { enabled: true, applies: true, not_applied: null };
+      raw.refused = {
+        since: '2026-11-24T13:00:00Z',
+        names: names.map((n) => ({ ...n, last_at: '2026-11-24T13:59:00Z' })),
+        truncated: false,
+      };
+    });
+    const setting = readSetting(ownerState().document);
+    const yours = yourNameKeys(answer, setting);
+    const html = renderToStaticMarkup(
+      createElement(RefusedStrip, {
+        state: {
+          answer,
+          setting,
+          yours,
+          others: othersOf(answer, yours, null),
+          alsoServed: 0,
+          usage: 'known',
+          blocked: null,
+          busy: false,
+          writing: null,
+          write: async () => true,
+          nowMs: OWNER_NOW,
+        },
+        refused: refusedOf(answer, yours),
+      })
+    );
+    return html;
+  };
+  const rowOf = (html: string, name: string) =>
+    textOf(html.split('<li').find((li) => li.includes(`>${name}</code>`)) ?? '');
+
+  test('a name no account offers in any case says so and has no Keep', async () => {
+    await i18n.changeLanguage('en');
+    const html = stripOf([
+      { name: 'gemni-3-flsh', requests: 3 },
+      { name: 'gemini-3-flash', requests: 1 },
+    ]);
+    const typo = rowOf(html, 'gemni-3-flsh');
+    expect(typo).toContain(
+      'No account offers this name, in any case: keeping it would serve nothing.'
+    );
+    expect(typo).not.toContain('Keep');
+    expect(html).not.toContain('aria-label="Keep gemni-3-flsh');
+    // An offered name keeps its Keep.
+    expect(rowOf(html, 'gemini-3-flash')).toContain('Keep');
+  });
+
+  test('a spelling an account offers only in another case keeps its Keep and says what it reaches', async () => {
+    await i18n.changeLanguage('en');
+    const row = rowOf(stripOf([{ name: 'Gemini-3-Flash', requests: 2 }]), 'Gemini-3-Flash');
+    expect(row).toContain('Reaches gemini-3-flash, the same name in another case');
+    expect(row).toContain('Keep');
+  });
+
+  test('every language has both lines', async () => {
+    for (const lang of ['en', 'ko', 'ru', 'tr', 'vi', 'zh-CN', 'zh-TW']) {
+      await i18n.changeLanguage(lang);
+      for (const key of ['provimux.names.who_unoffered', 'provimux.names.who_reaches']) {
+        expect(i18n.exists(key, { lng: lang, fallbackLng: [] })).toBe(true);
+      }
+    }
+    await i18n.changeLanguage('en');
+  });
+});
+
+describe('used names in the case they were sent (only-my-names.md 18.5)', () => {
+  test('a sent spelling no account registers but one offers in another case is used, not served once on, and kept exactly', () => {
+    const answer = ownerAnswer();
+    const setting = readSetting(ownerState().document);
+    const yours = yourNameKeys(answer, setting);
+    // Gemini-3-Flash reaches gemini-3-flash through upstream's lower-case lookup; gemni-3-flsh reaches nothing.
+    const usage = { 'Gemini-3-Flash': 4, 'gemni-3-flsh': 2, 'gemini-3-flash': 1 };
+    const others = othersOf(answer, yours, usage);
+    const sent = others.find((o) => o.name === 'Gemini-3-Flash');
+    expect(sent).toBeDefined();
+    expect(sent?.reaches).toBe('gemini-3-flash');
+    expect(sent?.accounts).toEqual(others.find((o) => o.name === 'gemini-3-flash')?.accounts ?? []);
+    expect(others.map((o) => o.name)).not.toContain('gemni-3-flsh');
+    const preview = previewOf(others, 0);
+    expect(preview.used.map((o) => o.name).slice(0, 2)).toEqual([
+      'Gemini-3-Flash',
+      'gemini-3-flash',
+    ]);
+    // Keep all used writes the spelling as sent.
+    const body = keepBody(
+      setting,
+      preview.used.map((o) => o.name)
+    );
+    expect(body.keep as string[]).toContain('Gemini-3-Flash');
+    expect(body.keep as string[]).not.toContain('gemni-3-flsh');
+  });
+
+  test('a sent spelling that is his, or a registered one, adds no row', () => {
+    const answer = ownerAnswer();
+    const setting = readSetting(ownerState().document);
+    const yours = yourNameKeys(answer, setting);
+    const mine = [...yours][0];
+    const base = othersOf(answer, yours, {}).length;
+    expect(othersOf(answer, yours, { [mine]: 3, 'gemini-3-flash': 2 }).length).toBe(base);
+    expect(othersOf(answer, yours, { auto: 5 }).length).toBe(base);
+  });
 });
 
 // --- helpers ------------------------------------------------------------------------------------------------

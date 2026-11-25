@@ -249,28 +249,96 @@ export interface OtherItem {
   requests: number | null;
   /** Who serves it while the switch is off, and would serve it once kept; highest priority first. */
   accounts: ProvimuxNameAccount[];
+  /**
+   * A spelling no account registers that reaches one that is, in another case, through upstream's lower-case
+   * lookup (a tool sent `B-Coder`, an account offers `b-coder`): that spelling. Kept, it is served.
+   */
+  reaches?: string;
+  /** No account offers the name in any case (a typo): keeping it would serve nothing, so it has no Keep. */
+  unoffered?: boolean;
 }
 
 /** Used names first, most used first; then by name. */
 export const byUse = (a: OtherItem, b: OtherItem) =>
   (b.requests ?? 0) - (a.requests ?? 0) || a.name.localeCompare(b.name);
 
-/** Every name an account offers that is not his, used ones first (the preview's and "Not served"'s order). */
+/**
+ * The spellings accounts register now, by their lower case (upstream finds a requested name by its lower case when
+ * no account registers that spelling, only-my-names.md 18.3): each with the registered spellings and the accounts
+ * `others` gives for them. A name his with no account adds nothing.
+ */
+export function offeredSpellingsOf(
+  answer: ProvimuxNamesResponse | null
+): Map<string, { spellings: string[]; accounts: ProvimuxNameAccount[] }> {
+  const offered = new Map<string, { spellings: string[]; accounts: ProvimuxNameAccount[] }>();
+  const add = (spelling: string, accounts: readonly ProvimuxNameAccount[]) => {
+    const lower = nameKey(spelling).toLowerCase();
+    const found = offered.get(lower) ?? { spellings: [], accounts: [] };
+    if (!found.spellings.includes(nameKey(spelling))) found.spellings.push(nameKey(spelling));
+    for (const account of accounts) {
+      if (
+        !found.accounts.some(
+          (a) => a.auth_index === account.auth_index && a.provider === account.provider
+        )
+      )
+        found.accounts.push(account);
+    }
+    offered.set(lower, found);
+  };
+  for (const other of answer?.others ?? []) add(other.name, other.accounts);
+  for (const own of answer?.names ?? []) {
+    if (own.accounts > 0) add(own.name, []);
+    for (const copy of own.copies) add(copy.id, []);
+  }
+  return offered;
+}
+
+/**
+ * Whether some account offers a name a tool asked for, in any case (a thinking suffix aside): when none does, the
+ * gateway still refuses and counts it (its check reads no registration, only-my-names.md 18.2), but keeping it
+ * would serve nothing.
+ */
+export const offeredInSomeCase = (offered: ReadonlyMap<string, unknown>, name: string): boolean =>
+  offered.has(thinkingBase(nameKey(name)).toLowerCase());
+
+/**
+ * Every name an account offers that is not his, used ones first (the preview's and "Not served"'s order). With the
+ * usage, also the names tools sent that no account registers in that spelling but reach one in another case
+ * (`B-Coder` sent, `b-coder` offered): served while the switch is off, refused once on unless kept exactly. A sent
+ * name no account offers in any case was never served (and is not in the usage): it is not here.
+ */
 export function othersOf(
   answer: ProvimuxNamesResponse | null,
   yours: ReadonlySet<string>,
   usage: Readonly<Record<string, number>> | null
 ): OtherItem[] {
   const copies = copyKeysOf(answer);
-  return (answer?.others ?? [])
+  const items: OtherItem[] = (answer?.others ?? [])
     .filter((other) => !yours.has(nameKey(other.name)) && !copies.has(nameKey(other.name)))
     .map((other) => ({
       key: nameKey(other.name),
       name: other.name,
       requests: usage ? (usage[nameKey(other.name)] ?? 0) : null,
       accounts: other.accounts,
-    }))
-    .sort(byUse);
+    }));
+  if (answer && usage) {
+    const listed = new Set((answer.others ?? []).map((other) => nameKey(other.name)));
+    const offered = offeredSpellingsOf(answer);
+    for (const [key, requests] of Object.entries(usage)) {
+      if (!(requests > 0) || !keepable(key) || yours.has(key) || copies.has(key) || listed.has(key))
+        continue;
+      const found = offered.get(key.toLowerCase());
+      if (!found || found.spellings.includes(key)) continue;
+      items.push({
+        key,
+        name: key,
+        requests,
+        accounts: found.accounts,
+        reaches: [...found.spellings].sort()[0],
+      });
+    }
+  }
+  return items.sort(byUse);
 }
 
 /**

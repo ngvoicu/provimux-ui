@@ -778,6 +778,8 @@
       "levels": "Ayrıca {{ids}} olarak sunulur: bir hesap {{name}} adını düşünme düzeyiyle bu kimlik altında sunuyor. Ayrı bir ad değildir.",
       "who_times": "{{name}} ×{{count}}",
       "who_none": "Şu anda sunan hesap yok",
+      "who_reaches": "Büyük/küçük harf farkıyla {{name}} adına ulaşır",
+      "who_unoffered": "Hiçbir hesap bu adı hiçbir yazılışla sunmuyor: tutmak onu sunmaz. Aracın gönderdiği adı kontrol edin.",
       "who_label": "Sunan:",
       "paid": "token başına ücretli",
       "requests_one": "30 günde {{formatted}} istek",
