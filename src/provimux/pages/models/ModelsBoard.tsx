@@ -110,6 +110,8 @@ export interface BoardNames {
   /** The page's last write is not applied by the gateway yet (within the limit, or past it). */
   applying?: NamesApplying;
   write: (write: NamesWrite) => Promise<boolean>;
+  /** Reads the 30 days' usage again: the preview counts the names used, and the page may have been open for long. */
+  refreshUsage?: () => void;
 }
 
 /** The DOM id of "Not served". */
@@ -273,6 +275,14 @@ export function ModelsBoard(props: ModelsBoardProps) {
       });
     },
     [namesWrite, setting]
+  );
+  const refreshUsage = props.names?.refreshUsage;
+  const openPreview = useCallback(
+    (open: boolean) => {
+      setPreviewOpen(open);
+      if (open) refreshUsage?.();
+    },
+    [refreshUsage]
   );
   const showNotServed = useCallback(() => {
     setNotServedOpen(true);
@@ -450,7 +460,7 @@ export function ModelsBoard(props: ModelsBoardProps) {
           state={namesState}
           yourNames={yourNames}
           previewOpen={previewOpen}
-          onPreview={setPreviewOpen}
+          onPreview={openPreview}
           onShowNotServed={showNotServed}
         />
       ) : props.names?.error ? (

@@ -224,6 +224,8 @@ describe('whose names: the console and the gateway count the same ones', () => {
     );
     expect(textOf(html)).toContain('kept under its own name');
     expect(textOf(html)).toContain('Stop keeping');
+    // Its accessible name says which name, as Keep's does.
+    expect(html).toContain('aria-label="Stop keeping claude-haiku-5-5"');
     // Not "Your name" as well: one mark says whose it is.
     expect(textOf(html)).not.toContain('Your name');
     // A kept name has no alias rows: nothing to rename, nothing to remove in its editor.

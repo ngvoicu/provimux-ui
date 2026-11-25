@@ -197,7 +197,7 @@ switch on, every other name is refused as an unknown model.
 | --- | --- |
 | `GET /provimux/names`, every 30 s with the routes | the rule as the gateway applies it now (`applied`): his names (`names`, each with its prefixed `copies`), every other name with its accounts (`others`), the switch's state, `keep` entries the gateway ignores, and the names asked for and refused. Not probed at login: the page's own load reports to the presence store; a 404 hides the switch and changes nothing else |
 | The page's read of the configuration | `models.only-my-names` as stored (`readSetting`): the source of every write's body, and where the switch stands while a write is not applied yet. From a gateway without `applied`, also `keep` the moment after a write, joined to its answer (`yourNameKeys`, `setNamesOf`) |
-| `GET /provimux/savings?period=30d&group=model&include=requested_models` (already read) | the order by use: `requested_models`, the names tools sent (an alias under the alias, a prefixed name with its prefix); when they start inside the 30 days (`from`), the days before by model (`?from=&to=&group=model`), and one line "Names are counted as your tools sent them since Nov 20; before that, under the model that answered." Without the field (an older gateway) or with no day of names, the rows by model, as before. Failed, folded into `~other` or `truncated`: one line says the order by use is not complete |
+| `GET /provimux/savings?period=30d&group=model&include=requested_models` (read with the page, and again when the preview opens) | the order by use: `requested_models`, the names tools sent (an alias under the alias, a prefixed name with its prefix); when they start inside the 30 days (`from`), the days before by model (`?from=&to=&group=model`), and one line "Names are counted as your tools sent them since Nov 20; before that, under the model that answered." Without the field (an older gateway) or with no day of names, the rows by model, as before. Failed, folded into `~other` or `truncated`: one line says the order by use is not complete |
 | `PUT /config/models/only-my-names` | the whole object, `{...as stored, enabled, keep}`, with `If-Match` on the read's tag (`onlyMyNamesApi`, `namesSetting.ts`): other fields of the object, patterns and anything not a string in `keep` stay as stored |
 
 Writes are the exclusions' (section 6.3): one at a time, never while the names have edits not saved (the write
@@ -209,7 +209,9 @@ again. After every write the page reads the configuration, then waits on the gat
 the rule it applies until they have. The page reads the names at once, then at 150 ms, 300 ms, 600 ms, 1 s, … and once a
 second up to 15 s, until `applied.config_etag` is the configuration's tag the write left (the page's read after it,
 else the write's own `ETag`) and `applied.applying` is false; then it reads the routes. Meanwhile the answer is the
-rule before, and the page shows it as that: the switch stands where the file puts it, reading "Applying…" and
+rule before, and the page shows it as that once a read has said so (the first read, at once, usually reflects the
+write already: the gateway commits it within milliseconds of answering, and until that read the page shows nothing
+new rather than "as before"): the switch stands where the file puts it, reading "Applying…" and
 disabled, its line "Applying your change. Until the gateway has, it serves the names as before." (no counts, which are
 the old rule's); a kept name stays under Not served, its Keep busy, until the gateway serves it; the write's
 notification ("Only your names are served now.") comes only then. Past 15 s, the switch reads "Not applied yet" and

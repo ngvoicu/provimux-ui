@@ -166,6 +166,7 @@ export const NameCard = memo(function NameCard(props: NameCardProps) {
               data-danger
               disabled={props.keepBlocked != null || props.keepWriting}
               aria-busy={props.keepWriting || undefined}
+              aria-label={t('provimux.names.unkeep_label', { name: item.name })}
               title={
                 props.keepBlocked ??
                 t(

@@ -183,16 +183,30 @@ export function ModelsPage() {
         await Promise.all([loadRoutes(), loadNames()]);
         return 'unsupported' as const;
       }
-      setPending({ target, late: false });
+      // "Applying…" only once a read says the write is not in force yet: the gateway commits a write within
+      // milliseconds of answering it, so the first read usually reflects it, and saying "it serves the names as
+      // before" until that read would be untrue for those milliseconds.
+      let first = true;
       const started = Date.now();
       const outcome = await waitApplied({
         target,
         read: async () => {
           const result = await loadNames();
-          if (result === null) return undefined;
-          if (result.ok) return result.data.applied;
-          // A gateway without the endpoint cannot say; any other failure is tried again.
-          return errorStatus(result.error) === 404 ? null : undefined;
+          const marker =
+            result === null
+              ? undefined
+              : result.ok
+                ? result.data.applied
+                : // A gateway without the endpoint cannot say; any other failure is tried again.
+                  errorStatus(result.error) === 404
+                  ? null
+                  : undefined;
+          if (first && id === waitRef.current) {
+            first = false;
+            if (marker !== null && !(marker && appliedMatches(marker, target)))
+              setPending({ target, late: false });
+          }
+          return marker;
         },
         sleepUntil: (ms) =>
           new Promise((resolve) =>
@@ -502,8 +516,9 @@ export function ModelsPage() {
             usageSince,
             applying,
             write: writeNames,
+            refreshUsage: () => void loadUsage(),
           },
-    [applying, names.data, names.error, namesStatus, usageSince, usageState, writeNames]
+    [applying, loadUsage, names.data, names.error, namesStatus, usageSince, usageState, writeNames]
   );
   // With the switch on, a save that takes a name's last alias away stops serving it: the bar says so.
   const dropped = useMemo(() => {
