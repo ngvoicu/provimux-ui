@@ -44,6 +44,7 @@ import {
   levelCopiesOf,
   servedCopiesOf,
   otherMatches,
+  offeredSpellingsOf,
   othersOf,
   readSetting,
   refusedOf,
@@ -177,6 +178,12 @@ export function ModelsBoard(props: ModelsBoardProps) {
     return byBase;
   }, [allItems, namesAnswer]);
   const levelKeys = useMemo(() => new Set([...levelsByBase.values()].flat()), [levelsByBase]);
+  // A spelling no account registers that one registers in another case (`B-Coder`, `b-coder`): served through it.
+  const offered = useMemo(() => offeredSpellingsOf(namesAnswer), [namesAnswer]);
+  const reachesOf = (key: string) => {
+    const found = offered.get(key.toLowerCase());
+    return found && !found.spellings.includes(key) ? [...found.spellings].sort()[0] : undefined;
+  };
   const onlyMine = namesAnswer !== null && switchState(namesAnswer) === 'on';
   // Home decides names itself: the switch says so, and the list's words do not point at it.
   const namesApply = namesAnswer !== null && switchState(namesAnswer) !== 'not-applied';
@@ -445,6 +452,7 @@ export function ModelsBoard(props: ModelsBoardProps) {
       keepWriting={props.writing === `unkeep|${item.key}`}
       servedOnlyMine={onlyMine}
       levels={levelsByBase.get(item.key)}
+      reaches={item.lines.length === 0 ? reachesOf(item.key) : undefined}
     />
   );
 

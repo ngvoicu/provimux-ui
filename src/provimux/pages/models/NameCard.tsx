@@ -74,6 +74,11 @@ export interface NameCardProps {
    * (only-my-names.md 17.2 C): not names of their own, so drawn here rather than on cards.
    */
   levels?: readonly string[];
+  /**
+   * No account registers this spelling, one registers it in another case (`b-coder` for `B-Coder`): a request for
+   * it reaches that one through upstream's lower-case lookup and is served (only-my-names.md 18.3).
+   */
+  reaches?: string;
 }
 
 /** One name: its routes in the order they are tried, what needs a look, and its editor when open. */
@@ -82,7 +87,9 @@ export const NameCard = memo(function NameCard(props: NameCardProps) {
   const { item, open, locked } = props;
   const meta = [
     item.accounts === 0
-      ? t('provimux.models.accounts_none')
+      ? props.reaches && item.lines.length === 0
+        ? t('provimux.names.accounts_reaches', { name: props.reaches })
+        : t('provimux.models.accounts_none')
       : t('provimux.models.accounts_count', { count: item.accounts }),
     item.requests !== null && item.requests > 0
       ? t('provimux.models.requests', { count: item.requests })
@@ -200,7 +207,11 @@ export const NameCard = memo(function NameCard(props: NameCardProps) {
       </header>
 
       {item.lines.length === 0 ? (
-        <p className={styles.noLines}>{t('provimux.names.no_account')}</p>
+        <p className={styles.noLines}>
+          {props.reaches
+            ? t('provimux.names.no_account_reaches', { name: props.reaches })
+            : t('provimux.names.no_account')}
+        </p>
       ) : null}
       {props.levels?.length ? (
         <p className={styles.noLines}>

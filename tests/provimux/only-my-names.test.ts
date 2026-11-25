@@ -1537,6 +1537,13 @@ describe('exact names, as the gateway compares them (only-my-names.md 17)', () =
     expect(text).toContain('Your names 14');
     expect(text).toContain("A tool asked for 1 name that isn't served");
     expect(text).toContain('gpt-6.1-codex 3 times');
+    // The kept spelling is served through the offered one (upstream's lower-case lookup, only-my-names.md 18.3):
+    // its card says so, never that nothing serves it.
+    expect(text).toContain(
+      'No account offers this spelling: a request for it reaches gpt-6.1-codex, the same name in another case, and is served.'
+    );
+    expect(text).toContain('served through gpt-6.1-codex');
+    expect(text).not.toContain('No account offers this name now.');
   });
 
   test('auto on keep is ignored, and the switch says why in plain words', async () => {

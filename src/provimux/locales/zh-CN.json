@@ -714,6 +714,8 @@
       "kept_title": "你以原名保留了 {{name}}，因此只提供你的名称时它仍然提供。",
       "tag_kept": "以原名保留",
       "no_account": "目前没有账号提供此名称。一旦有账号提供，就会提供。",
+      "no_account_reaches": "没有账号提供这个拼写：对它的请求会到达 {{name}}（仅大小写不同）并得到提供。",
+      "accounts_reaches": "经由 {{name}} 提供",
       "levels": "也以 {{ids}} 提供：某个账号以该 ID 提供带思考级别的 {{name}}。它不是单独的名称。",
       "who_times": "{{name}} ×{{count}}",
       "who_none": "目前没有账号提供",

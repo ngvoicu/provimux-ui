@@ -1332,6 +1332,8 @@
       "kept_title": "You keep {{name}} under its own name, so it stays served when only your names are served.",
       "tag_kept": "kept under its own name",
       "no_account": "No account offers this name now. It is served as soon as one does.",
+      "no_account_reaches": "No account offers this spelling: a request for it reaches {{name}}, the same name in another case, and is served.",
+      "accounts_reaches": "served through {{name}}",
       "levels": "Also served as {{ids}}: an account offers {{name}} with a thinking level under that id. It isn't a name of its own.",
       "who_times": "{{name}} ×{{count}}",
       "who_none": "No account offers it now",

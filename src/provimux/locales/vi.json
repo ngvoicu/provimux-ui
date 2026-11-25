@@ -714,6 +714,8 @@
       "kept_title": "Bạn giữ {{name}} dưới tên gốc, nên nó vẫn được phục vụ khi chỉ tên của bạn được phục vụ.",
       "tag_kept": "giữ dưới tên gốc",
       "no_account": "Hiện không có tài khoản nào cung cấp tên này. Nó sẽ được phục vụ ngay khi có một tài khoản cung cấp.",
+      "no_account_reaches": "Không tài khoản nào cung cấp cách viết này: yêu cầu cho nó đến {{name}}, cùng tên nhưng khác chữ hoa/thường, và được phục vụ.",
+      "accounts_reaches": "được phục vụ qua {{name}}",
       "levels": "Cũng được phục vụ dưới dạng {{ids}}: một tài khoản cung cấp {{name}} kèm mức suy nghĩ dưới id đó. Đó không phải là một tên riêng.",
       "who_times": "{{name}} ×{{count}}",
       "who_none": "Hiện không có tài khoản nào cung cấp",

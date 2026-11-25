@@ -419,3 +419,7 @@ offers (a typo) is refused with the setting's message and counted in `refused`, 
   refused strip, with the accounts of the spelling it reaches and the line "Reaches b-coder, the same name in another
   case". Keep and Keep all used write it as sent. It is counted with the others in the switch's lines, so with such
   names the page's counts exceed `/v1/models` by their number (the list holds only registered ids).
+- **A kept spelling served through another case.** The gateway's `accounts` counts exact registrations (18.3): kept
+  `B-Coder` with only `b-coder` registered shows 0, though a request for `B-Coder` is served. Its card says so instead
+  of "No account offers this name now": "served through b-coder" in its line, and "No account offers this spelling: a
+  request for it reaches b-coder, the same name in another case, and is served."
