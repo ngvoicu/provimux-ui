@@ -195,15 +195,30 @@ switch on, every other name is refused as an unknown model.
 
 | | |
 | --- | --- |
-| `GET /provimux/names`, every 30 s with the routes | his names (`names`), every other name with its accounts (`others`), the switch's state, `keep` entries the gateway ignores, and the names asked for and refused. Not probed at login: the page's own load reports to the presence store; a 404 hides the switch and changes nothing else |
-| The page's read of the configuration | `models.only-my-names` as stored (`readSetting`): the source of every write's body, and of `keep` the moment after a write, before the gateway's answer catches up (`yourNameKeys`, `setNamesOf`) |
-| `GET /provimux/savings?period=30d&group=model` (already read) | the order by use; failed or folded, one line says the order by use is not known |
+| `GET /provimux/names`, every 30 s with the routes | the rule as the gateway applies it now (`applied`): his names (`names`, each with its prefixed `copies`), every other name with its accounts (`others`), the switch's state, `keep` entries the gateway ignores, and the names asked for and refused. Not probed at login: the page's own load reports to the presence store; a 404 hides the switch and changes nothing else |
+| The page's read of the configuration | `models.only-my-names` as stored (`readSetting`): the source of every write's body, and where the switch stands while a write is not applied yet. From a gateway without `applied`, also `keep` the moment after a write, joined to its answer (`yourNameKeys`, `setNamesOf`) |
+| `GET /provimux/savings?period=30d&group=model&include=requested_models` (already read) | the order by use: `requested_models`, the names tools sent (an alias under the alias, a prefixed name with its prefix); when they start inside the 30 days (`from`), the days before by model (`?from=&to=&group=model`), and one line "Names are counted as your tools sent them since Nov 20; before that, under the model that answered." Without the field (an older gateway) or with no day of names, the rows by model, as before. Failed, folded into `~other` or `truncated`: one line says the order by use is not complete |
 | `PUT /config/models/only-my-names` | the whole object, `{...as stored, enabled, keep}`, with `If-Match` on the read's tag (`onlyMyNamesApi`, `namesSetting.ts`): other fields of the object, patterns and anything not a string in `keep` stay as stored |
 
 Writes are the exclusions' (section 6.3): one at a time, never while the names have edits not saved (the write
 changes the tag their save is conditional on; one line says so and every Keep waits), nothing without a tag or
 over a setting the page cannot read whole (not a map, `keep` not a list); a 412 writes nothing and the page reads
-again. After every write the page reads the configuration, the routes and the names.
+again. After every write the page reads the configuration, then waits on the gateway (`namesApplied.ts`).
+
+**A write applied.** The gateway answers a write before its accounts have registered again, and its names describe
+the rule it applies until they have. The page reads the names at once, then at 150 ms, 300 ms, 600 ms, 1 s, … and once a
+second up to 15 s, until `applied.config_etag` is the configuration's tag the write left (the page's read after it,
+else the write's own `ETag`) and `applied.applying` is false; then it reads the routes. Meanwhile the answer is the
+rule before, and the page shows it as that: the switch stands where the file puts it, reading "Applying…" and
+disabled, its line "Applying your change. Until the gateway has, it serves the names as before." (no counts, which are
+the old rule's); a kept name stays under Not served, its Keep busy, until the gateway serves it; the write's
+notification ("Only your names are served now.") comes only then. Past 15 s, the switch reads "Not applied yet" and
+the line is a warning: "The gateway
+hasn't applied your change yet, so it still serves the names as before. This page looks again every 30 seconds.", the
+notification "Saved, but the gateway hasn't applied it yet.", and the switch can be used again; the line goes with the
+first 30 s read that reflects the write. A save of names and an exclusion wait the same way, without holding the save
+bar. A gateway whose answer has no `applied` is read again 1 s and 4 s after the write, as before, with the read's
+`keep` joined to its answer.
 
 ### 8.2 The switch
 
@@ -258,8 +273,10 @@ under Not served.
 
 While `refused.names` has a name that is still not his, a warning strip under the switch: "Tools asked for 2 names
 that aren't served", since when it counts, one line ("Keep a name to serve it under its own name, or set the tool to
-ask for one of your names."), and per name how many times, when last, who would serve it, and Keep. A name kept since
-leaves the strip at once. Over 256 names: one line says only the first 256 are counted.
+ask for one of your names."), and per name how many times, when last, who would serve it, and Keep; most refused
+first, then by name. The name is the one the gateway resolved (a speech route's `tts-1` shows as `grok-tts`), and no
+line says it is the one the tool sent. A name kept since leaves the strip once the gateway serves it. Over 256 names:
+one line says only the first 256 are counted.
 
 ### 8.6 The save
 
@@ -269,24 +286,36 @@ stops serving it: the save bar says so after the count of changes ("2 names will
 
 ### 8.7 Files and tests
 
-`namesSetting.ts` (pure: the setting, the bodies, his names, the preview's order, the filter, the save's names),
-`onlyMyNamesApi.ts` (the write), `OnlyMyNames.tsx` and `.module.scss` (the switch with its preview, the refused strip,
+`namesSetting.ts` (pure: the setting, the bodies, his names and their copies, the preview's order, the usage state,
+the filter, the save's names), `namesApplied.ts` (pure: whether a write is applied, and the wait), `onlyMyNamesApi.ts`
+(the write), `OnlyMyNames.tsx` and `.module.scss` (the switch with its preview, the refused strip,
 Not served); `catalog.ts` takes the kept and login-file names (`SetNames`: `own`, `aliased`, `kept`). Tests:
 `tests/provimux/only-my-names.test.ts`, with `fixtures/models/owner-names.json`, the gateway's answer for
 `owner-config.json` (the fixture the gateway's test S2 can share): Your names equals the answer's `names`; the preview
 orders used names first and counts them; Keep sends the whole object with `If-Match` and nothing else of the file
 changes, a 412 writes nothing, no tag and an unreadable setting send nothing, unsaved edits stop every Keep; a 404
 shows no switch; zero names keeps the button disabled; on, the refused strip and Not served; Home; the three line
-fixes.
+fixes. Round 2 of the gateway: the marker read, the wait (at once, sooner then slower, late at the limit, a gateway
+without it), the switch while applying and when late, a kept name not served before it is applied; copies counted and
+never Not served; usage by the name sent (the whole range, a `from` inside it with the days before by model, folded,
+an older gateway), the two savings requests; the refused strip's order. The fixture carries `applied` and `copies` as
+the gateway's `pui13/examples/names.json` does.
 
 ### 8.8 What the contract does not give the page
 
-- No version of the configuration in `GET /provimux/names`: after a write the page cannot tell whether the answer
-  already reflects it (the gateway reloads on its own time). The page joins the read's `keep` in meanwhile; a field
-  such as the `ETag` the answer was computed from would end the guess.
+Round 2 of the gateway (its only-my-names.md 15) gave the page the three it lacked: `applied` (whether an answer
+reflects a write), `copies` (a name's prefixed copies; the page's guess from the routes is gone) and
+`requested_models` (usage by the name the client sent). What it still does not give:
+
 - `PUT /config/models/only-my-names` is the generic config writer at a path the file may not have yet; that it takes
   an object there is the gateway design's own [infer] (its test C2). If it refuses, Keep says "The gateway refused
   the change" with its message, and nothing else breaks.
-- That a savings row's model is the name the client sent, prefix included, is still the gateway design's open
-  point (its section 13); the preview's "used" depends on it as "Used in the last 30 days" always has.
+- `applied.config_etag` matches only the configuration the gateway last read: when another writer changes the file
+  between the page's write and its read after it, the page waits on the later tag; when one changes it after that
+  read, the page cannot tell and says the change is not applied until its next read of the configuration.
+- `requested_models` has no days: before its `from`, the page counts by the model that answered (an alias's traffic
+  under the vendor's model, a prefix lost), and says from when names are counted. It is not filtered and has no
+  per-key split: the preview cannot say which tool sent a name.
+- A prefixed copy is drawn as the routes list it (with the served names; under "Other models" while the switch is on),
+  not on its name's card: `copies` gives its accounts, not its routes.
 - A refused name does not say which client key asked: the strip can say what and when, not which tool.

@@ -40,15 +40,16 @@ import { placesExcluding, readExclusions, type Exclusion } from '../excluded/exc
 import { NameCard } from './NameCard';
 import {
   byUse,
+  copyKeysOf,
   otherMatches,
   othersOf,
   readSetting,
   refusedOf,
-  servedCopiesOf,
   setNamesOf,
   switchState,
   unkeepBody,
   yourNameKeys,
+  yourNamesOf,
   type OtherItem,
   type UsageState,
 } from './namesSetting';
@@ -60,6 +61,7 @@ import {
   type NamesWrite,
 } from './OnlyMyNames';
 import { NameComposer } from './NameEditor';
+import type { NamesApplying } from './namesApplied';
 import { ModelsSettings } from './ModelsSettings';
 import shared from '../shared/Shared.module.scss';
 import styles from './ModelsPage.module.scss';
@@ -103,6 +105,10 @@ export interface BoardNames {
   /** The last read failed (not a 404, which hides the switch). */
   error: string | null;
   usage: UsageState;
+  /** The day from which the names tools sent are counted, when it falls inside the 30 days. */
+  usageSince?: string | null;
+  /** The page's last write is not applied by the gateway yet (within the limit, or past it). */
+  applying?: NamesApplying;
   write: (write: NamesWrite) => Promise<boolean>;
 }
 
@@ -149,11 +155,8 @@ export function ModelsBoard(props: ModelsBoardProps) {
     () => (namesAnswer ? othersOf(namesAnswer, yours, usage) : []),
     [namesAnswer, yours, usage]
   );
-  // An account's prefixed copy of one of his names is served too, though neither his nor another's.
-  const alsoServed = useMemo(
-    () => servedCopiesOf(routes, namesAnswer, yours),
-    [routes, namesAnswer, yours]
-  );
+  // An account's prefixed copy of one of his names is served with it: the gateway lists them (`copies`).
+  const alsoServed = useMemo(() => copyKeysOf(namesAnswer), [namesAnswer]);
   const onlyMine = namesAnswer !== null && switchState(namesAnswer) === 'on';
   // Home decides names itself: the switch says so, and the list's words do not point at it.
   const namesApply = namesAnswer !== null && switchState(namesAnswer) !== 'not-applied';
@@ -228,8 +231,10 @@ export function ModelsBoard(props: ModelsBoardProps) {
       others,
       alsoServed: alsoServed.size,
       usage: props.names?.usage ?? 'unknown',
+      usageSince: props.names?.usageSince ?? null,
+      applying: props.names?.applying ?? null,
       blocked,
-      busy: locked || props.writing != null,
+      busy: locked || props.writing != null || props.names?.applying === 'applying',
       writing: props.writing ?? null,
       write: namesWrite,
       nowMs,
@@ -239,6 +244,8 @@ export function ModelsBoard(props: ModelsBoardProps) {
     namesWrite,
     props.dirty,
     props.names?.usage,
+    props.names?.usageSince,
+    props.names?.applying,
     props.writing,
     setting,
     draft.base.etag,
@@ -250,19 +257,10 @@ export function ModelsBoard(props: ModelsBoardProps) {
     t,
   ]);
   /** His names as the preview's chips show them: kept ones can stop being kept there. */
-  const yourNames = useMemo(() => {
-    const kept = new Set(setting.keep.map(nameKey));
-    const byKey = new Map<string, { key: string; name: string; kept: boolean }>();
-    for (const own of namesAnswer?.names ?? []) {
-      const key = nameKey(own.name);
-      if (yours.has(key)) byKey.set(key, { key, name: own.name, kept: kept.has(key) });
-    }
-    for (const name of setting.keep) {
-      if (!byKey.has(nameKey(name)))
-        byKey.set(nameKey(name), { key: nameKey(name), name, kept: true });
-    }
-    return [...byKey.values()].sort((a, b) => a.name.localeCompare(b.name));
-  }, [namesAnswer, setting.keep, yours]);
+  const yourNames = useMemo(
+    () => yourNamesOf(namesAnswer, setNames, yours),
+    [namesAnswer, setNames, yours]
+  );
   const refused = useMemo(() => refusedOf(namesAnswer, yours), [namesAnswer, yours]);
   const unkeep = useCallback(
     (name: string) => {

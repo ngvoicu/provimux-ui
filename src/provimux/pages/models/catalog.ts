@@ -6,7 +6,7 @@
  *   routes come from a row of the configuration, what is not saved yet, and what the proxy will ignore;
  * - `/provimux/model-routes`, every name the proxy serves now, each route with its priority and cooldown;
  * - `/provimux/model-lists`, each login's list source and age;
- * - `/provimux/savings` for 30 days by model, which names were used.
+ * - `/provimux/savings` for 30 days, which names were used (by the name tools sent, where the gateway says).
  *
  * Without Provimux's endpoints the list holds the configuration's names only, with no order. Pure.
  */
@@ -19,7 +19,7 @@ import type {
   ProvimuxModelRoute,
   ProvimuxModelRoutesResponse,
   ProvimuxRecordedCooldown,
-  ProvimuxSavingsResponse,
+  ProvimuxModelUsage,
 } from '../../api/types';
 import { clientNames, nameGroups, nameKey } from '../aliases/collisions';
 import {
@@ -219,17 +219,28 @@ export interface SetNames {
   spelled: ReadonlyMap<string, string>;
 }
 
-/** 30 days of requests per name, from a savings answer grouped by model. */
-export function usageByName(answer: ProvimuxSavingsResponse | null): Record<string, number> | null {
+/**
+ * 30 days of requests per name. With `requested_models` (only-my-names round 2), the names tools sent: an alias's
+ * requests under the alias, a prefixed name with its prefix; the days before its `from` (recorded before the
+ * gateway kept names) count by the model that answered, as all of them did before. Without it, the rows by model.
+ */
+export function usageByName(answer: ProvimuxModelUsage | null): Record<string, number> | null {
   if (!answer) return null;
+  const usage: Record<string, number> = {};
+  const add = (model: string | undefined, requests: number) => {
+    if (!model || model === '~other') return;
+    const key = nameKey(model);
+    usage[key] = (usage[key] ?? 0) + requests;
+  };
+  const requested = answer.requested_models;
+  if (requested && requested.from !== null) {
+    for (const entry of requested.models) add(entry.model, entry.requests);
+    for (const row of answer.before?.rows ?? []) add(row.model, row.requests);
+    return usage;
+  }
   const breakdown = answer.breakdowns.find((b) => b.by.length === 1 && b.by[0] === 'model');
   if (!breakdown) return null;
-  const usage: Record<string, number> = {};
-  for (const row of breakdown.rows) {
-    if (!row.model || row.model === '~other') continue;
-    const key = nameKey(row.model);
-    usage[key] = (usage[key] ?? 0) + row.requests;
-  }
+  for (const row of breakdown.rows) add(row.model, row.requests);
   return usage;
 }
 

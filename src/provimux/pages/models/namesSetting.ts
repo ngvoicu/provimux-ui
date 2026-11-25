@@ -5,12 +5,13 @@
  *
  * A name is his when an alias row gives it, when `models.only-my-names.keep` lists it (a model kept under its
  * vendor's name), or when an alias in a login's own file gives it (only the gateway can see that one). With the
- * switch on, every other name is refused. The gateway's status endpoint, `GET /provimux/names`, lists both sides;
- * the page joins it with the 30-day usage it already reads.
+ * switch on, every other name is refused. The gateway's status endpoint, `GET /provimux/names`, lists both sides as
+ * the rule it applies now, his names with their prefixed copies; the page joins it with the 30-day usage it already
+ * reads.
  */
 import { isRecord } from '@/utils/helpers';
 import type {
-  ProvimuxModelRoutesResponse,
+  ProvimuxModelUsage,
   ProvimuxNameAccount,
   ProvimuxNamesResponse,
   ProvimuxRefusedName,
@@ -117,17 +118,30 @@ export const dropIgnoredBody = (setting: OnlyMyNamesSetting, values: readonly st
 // --- whose names ----------------------------------------------------------------------------------------
 
 /**
- * The names the gateway counts as his besides alias rows, for the list: `keep` of the page's read (written by
- * this page a moment ago, before the gateway's answer has caught up), and the gateway's login-file names.
+ * The gateway says which rule its answer describes (`applied`): the page then shows what it serves, and a write
+ * not applied yet shows as such (`namesApplied.ts`), not as done. A gateway without it says nothing of the kind,
+ * so the page joins the read's `keep` (written a moment ago, before the answer has caught up) to its answer.
+ */
+const joinsKeep = (answer: ProvimuxNamesResponse | null) => !answer || answer.applied === null;
+
+/**
+ * The names the gateway counts as his besides alias rows, for the list: what is kept, and the gateway's
+ * login-file names. Kept: the gateway's kept names when it says which rule it applies (`source: 'shown'`), else
+ * `keep` of the page's read; `source: 'config'` is always the read's (what a save of the file keeps).
  */
 export function setNamesOf(
   answer: ProvimuxNamesResponse | null,
-  setting: OnlyMyNamesSetting
+  setting: OnlyMyNamesSetting,
+  source: 'shown' | 'config' = 'shown'
 ): SetNames {
   const spelled = new Map<string, string>();
   const kept = new Set<string>();
   const loginFile = new Set<string>();
-  for (const name of setting.keep) {
+  const keptNames =
+    source === 'config' || joinsKeep(answer)
+      ? setting.keep
+      : (answer?.names ?? []).filter((own) => own.set_by.includes('keep')).map((own) => own.name);
+  for (const name of keptNames) {
     kept.add(nameKey(name));
     if (!spelled.has(nameKey(name))) spelled.set(nameKey(name), name);
   }
@@ -139,12 +153,16 @@ export function setNamesOf(
   return { kept, loginFile, spelled };
 }
 
-/** His names, by key: the gateway's list and the read's `keep` (which a write just changed). */
+/**
+ * His names, by key: the gateway's list; from a gateway that does not say which rule it applies, joined with the
+ * read's `keep` (which a write just changed).
+ */
 export function yourNameKeys(
   answer: ProvimuxNamesResponse | null,
   setting: OnlyMyNamesSetting
 ): Set<string> {
   const keys = new Set((answer?.names ?? []).map((own) => nameKey(own.name)));
+  if (!joinsKeep(answer)) return keys;
   // A name taken out of keep a moment ago: the gateway's answer may still list it as kept.
   for (const own of answer?.names ?? []) {
     if (
@@ -157,6 +175,33 @@ export function yourNameKeys(
   }
   for (const name of setting.keep) keys.add(nameKey(name));
   return keys;
+}
+
+/** One of his names as the preview's chips show it: a kept one can stop being kept there. */
+export interface YourName {
+  key: string;
+  name: string;
+  kept: boolean;
+}
+
+/** His names for the preview's chips, by name: the gateway's, and any `yourNameKeys` joined from the read. */
+export function yourNamesOf(
+  answer: ProvimuxNamesResponse | null,
+  setNames: SetNames | undefined,
+  yours: ReadonlySet<string>
+): YourName[] {
+  const kept = setNames?.kept ?? new Set<string>();
+  const byKey = new Map<string, YourName>();
+  for (const own of answer?.names ?? []) {
+    const key = nameKey(own.name);
+    if (yours.has(key)) byKey.set(key, { key, name: own.name, kept: kept.has(key) });
+  }
+  // A name kept a moment ago, from a gateway that does not say which rule it applies.
+  for (const key of yours) {
+    if (!byKey.has(key))
+      byKey.set(key, { key, name: setNames?.spelled.get(key) ?? key, kept: true });
+  }
+  return [...byKey.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
 // --- what is not his --------------------------------------------------------------------------------------
@@ -181,8 +226,9 @@ export function othersOf(
   yours: ReadonlySet<string>,
   usage: Readonly<Record<string, number>> | null
 ): OtherItem[] {
+  const copies = copyKeysOf(answer);
   return (answer?.others ?? [])
-    .filter((other) => !yours.has(nameKey(other.name)))
+    .filter((other) => !yours.has(nameKey(other.name)) && !copies.has(nameKey(other.name)))
     .map((other) => ({
       key: nameKey(other.name),
       name: other.name,
@@ -193,22 +239,15 @@ export function othersOf(
 }
 
 /**
- * Names the gateway serves (or, switched off, would go on serving) that are neither his nor among `others`: an
- * account's prefixed copy of one of his names (`team/glm-5` when `glm-5` is his; the gateway's only-my-names.md
- * 3.3 serves it and lists it in neither `names` nor `others`). A name the routes list and the status endpoint does
- * not call another's is served, so it is never "Not served", and it counts among what is served. Keys.
+ * His names served under an account's prefix (`team-a/opus` for `opus`, only-my-names.md 3.3): the gateway lists
+ * them under each name (`copies`). Served with his names, so never "Not served", and counted among what is served.
+ * Keys; a copy that is itself one of his names is his, not a copy.
  */
-export function servedCopiesOf(
-  routes: ProvimuxModelRoutesResponse | null,
-  answer: ProvimuxNamesResponse | null,
-  yours: ReadonlySet<string>
-): Set<string> {
+export function copyKeysOf(answer: ProvimuxNamesResponse | null): Set<string> {
+  const own = new Set((answer?.names ?? []).map((name) => nameKey(name.name)));
   const copies = new Set<string>();
-  if (!routes || !answer) return copies;
-  const others = new Set(answer.others.map((other) => nameKey(other.name)));
-  for (const model of routes.models) {
-    const key = nameKey(model.id);
-    if (!yours.has(key) && !others.has(key)) copies.add(key);
+  for (const name of answer?.names ?? []) {
+    for (const copy of name.copies) if (!own.has(nameKey(copy.id))) copies.add(nameKey(copy.id));
   }
   return copies;
 }
@@ -236,23 +275,36 @@ export function previewOf(others: readonly OtherItem[], served: number): Preview
  */
 export type UsageState = 'loading' | 'known' | 'unknown' | 'partial';
 
-/** The usage state of a savings answer grouped by model. */
-export function usageStateOf(
-  answer: {
-    breakdowns: ReadonlyArray<{
-      by: readonly string[];
-      rows: ReadonlyArray<{ model?: string }>;
-      truncated: boolean;
-    }>;
-  } | null,
-  failed: boolean
-): UsageState {
+/**
+ * The usage state of the page's 30 days of use. With the names tools sent: partial when names were folded into
+ * `~other` or left out (`truncated`), or when the days before them could not be read or were folded. Without: the
+ * rows by model, partial when folded.
+ */
+export function usageStateOf(answer: ProvimuxModelUsage | null, failed: boolean): UsageState {
   if (!answer) return failed ? 'unknown' : 'loading';
+  const folded = (rows: ReadonlyArray<{ model?: string }>) =>
+    rows.some((row) => row.model === '~other');
+  const requested = answer.requested_models;
+  if (requested && requested.from !== null) {
+    return requested.truncated ||
+      folded(requested.models) ||
+      answer.before_failed === true ||
+      (answer.before != null && (answer.before.truncated || folded(answer.before.rows)))
+      ? 'partial'
+      : 'known';
+  }
   const breakdown = answer.breakdowns.find((b) => b.by.length === 1 && b.by[0] === 'model');
   if (!breakdown) return 'unknown';
-  return breakdown.truncated || breakdown.rows.some((row) => row.model === '~other')
-    ? 'partial'
-    : 'known';
+  return breakdown.truncated || folded(breakdown.rows) ? 'partial' : 'known';
+}
+
+/**
+ * The day from which the names tools sent are counted, when it falls inside the 30 days (the gateway began
+ * keeping them since): the page says so in one line. null when they cover the whole range, or are not given.
+ */
+export function usageSinceOf(answer: ProvimuxModelUsage | null): string | null {
+  const from = answer?.requested_models?.from ?? null;
+  return from !== null && answer && from > answer.range.from ? from : null;
 }
 
 /** A not-served name passes the page's search and "Served by" filter (by its accounts). */
@@ -322,12 +374,14 @@ export function accountGroups(accounts: readonly ProvimuxNameAccount[]): Account
   return groups;
 }
 
-/** The refused names that are still not his (one kept a moment ago leaves the strip at once). */
+/** The refused names that are still not his, most refused first, then by name. */
 export const refusedOf = (
   answer: ProvimuxNamesResponse | null,
   yours: ReadonlySet<string>
 ): ProvimuxRefusedName[] =>
-  (answer?.refused?.names ?? []).filter((refused) => !yours.has(nameKey(refused.name)));
+  (answer?.refused?.names ?? [])
+    .filter((refused) => !yours.has(nameKey(refused.name)))
+    .sort((a, b) => b.requests - a.requests || a.name.localeCompare(b.name));
 
 // --- the switch and the save ---------------------------------------------------------------------------
 

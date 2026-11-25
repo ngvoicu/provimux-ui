@@ -10,7 +10,7 @@ import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 import { apiClient } from '@/services/api/client';
 import { useAuthStore, useConfigStore, useNotificationStore } from '@/stores';
 import { getErrorMessage } from '@/utils/helpers';
-import { provimuxApi } from '../../api/provimuxApi';
+import { errorStatus, provimuxApi } from '../../api/provimuxApi';
 import { useProvimuxPresence } from '../../presence';
 import { aliasesApi } from '../aliases/aliasesApi';
 import { rowIssues } from '../aliases/draft';
@@ -48,7 +48,21 @@ import {
 } from './catalog';
 import { ModelsBody, type ModelsTab } from './ModelsBody';
 import type { BoardNames } from './ModelsBoard';
-import { droppedBySave, readSetting, setNamesOf, switchState, usageStateOf } from './namesSetting';
+import {
+  droppedBySave,
+  readSetting,
+  setNamesOf,
+  switchState,
+  usageSinceOf,
+  usageStateOf,
+} from './namesSetting';
+import {
+  FALLBACK_READS_MS,
+  appliedMatches,
+  applyingOf,
+  waitApplied,
+  type PendingWrite,
+} from './namesApplied';
 import type { NamesWrite } from './OnlyMyNames';
 import { NamesRequestError, onlyMyNamesApi } from './onlyMyNamesApi';
 import { tabOf } from './address';
@@ -57,13 +71,6 @@ import styles from './ModelsPage.module.scss';
 
 /** The routes' and the lists' rhythm: on open, on refresh, every 30 s while visible. */
 const POLL_MS = 30_000;
-/**
- * After a write, the routes and the names are read at once and again at these delays (ms). The gateway answers the
- * write before its reload applies it (tens of milliseconds later), and `GET /provimux/names` carries no version to
- * tell an answer from before the write (models-page.md 8.8): without a second read the page would show the old
- * state, such as a kept name that "no account serves", until the next 30 s read.
- */
-const SETTLE_READS_MS = [1_000, 4_000];
 const fetchRoutes = (client: Parameters<typeof provimuxApi.modelRoutes>[0]) =>
   provimuxApi.modelRoutes(client);
 const fetchLists = (client: Parameters<typeof provimuxApi.modelLists>[0]) =>
@@ -151,19 +158,80 @@ export function ModelsPage() {
   const { load: loadLists } = lists;
   const { load: loadUsage } = usage;
   const { load: loadNames } = names;
-  const settleTimers = useRef<number[]>([]);
-  const readAgainSoon = useCallback(() => {
-    for (const timer of settleTimers.current) window.clearTimeout(timer);
-    settleTimers.current = SETTLE_READS_MS.map((delay) =>
-      window.setTimeout(() => void Promise.all([loadRoutes(), loadNames()]), delay)
-    );
-  }, [loadNames, loadRoutes]);
+  /**
+   * After a write of the configuration (models-page.md 8.1): the gateway answers it before its accounts have
+   * registered again, and its names describe the rule it applies now. The page reads them again until their
+   * `applied` marker is the configuration the write left (`waitApplied`); until then, and past the limit, the
+   * switch says the change is not applied yet. A gateway without the marker is read again at fixed delays.
+   */
+  const [pending, setPending] = useState<PendingWrite | null>(null);
+  const waitRef = useRef(0);
+  const fallbackTimers = useRef<number[]>([]);
+  const settle = useCallback(
+    async (target: string | null) => {
+      const id = ++waitRef.current;
+      for (const timer of fallbackTimers.current) window.clearTimeout(timer);
+      fallbackTimers.current = [];
+      const fallback = () => {
+        setPending(null);
+        fallbackTimers.current = FALLBACK_READS_MS.map((delay) =>
+          window.setTimeout(() => void Promise.all([loadRoutes(), loadNames()]), delay)
+        );
+      };
+      if (!target) {
+        fallback();
+        await Promise.all([loadRoutes(), loadNames()]);
+        return 'unsupported' as const;
+      }
+      setPending({ target, late: false });
+      const started = Date.now();
+      const outcome = await waitApplied({
+        target,
+        read: async () => {
+          const result = await loadNames();
+          if (result === null) return undefined;
+          if (result.ok) return result.data.applied;
+          // A gateway without the endpoint cannot say; any other failure is tried again.
+          return errorStatus(result.error) === 404 ? null : undefined;
+        },
+        sleepUntil: (ms) =>
+          new Promise((resolve) =>
+            window.setTimeout(resolve, Math.max(0, started + ms - Date.now()))
+          ),
+        cancelled: () => id !== waitRef.current,
+      });
+      if (outcome === 'cancelled') return outcome;
+      if (outcome === 'unsupported') fallback();
+      else if (outcome === 'late') setPending({ target, late: true });
+      else setPending(null);
+      await loadRoutes();
+      return outcome;
+    },
+    [loadNames, loadRoutes]
+  );
   useEffect(
     () => () => {
-      for (const timer of settleTimers.current) window.clearTimeout(timer);
+      waitRef.current += 1;
+      for (const timer of fallbackTimers.current) window.clearTimeout(timer);
     },
     []
   );
+  // Past the limit, the page's own 30 s reads still look: the line goes once an answer reflects the write.
+  const namesApplied = names.data?.applied ?? null;
+  useEffect(() => {
+    if (!pending?.late || !namesApplied || !appliedMatches(namesApplied, pending.target)) return;
+    setPending(null);
+    void loadRoutes();
+  }, [loadRoutes, namesApplied, pending]);
+  const applying = applyingOf(namesApplied, pending);
+  /**
+   * The configuration's tag a write left: the page's read after it when that moved (it may hold a later write from
+   * elsewhere, which the gateway then applies instead), else the write's own answer.
+   */
+  const tagAfter = useCallback((before: string | null, written: string | null) => {
+    const read = pageRef.current.draft?.base.etag ?? null;
+    return read !== null && read !== before ? read : written;
+  }, []);
   const now = screenNow(usePageClock(), routes.loadedAt, routes.offsetMs);
   const usageMap = useMemo(() => usageByName(usage.data), [usage.data]);
   const details = useModelDetails(lists.data);
@@ -286,10 +354,12 @@ export function ModelsPage() {
     useConfigStore.getState().clearCache();
     if (outcome.failure === null) showNotification(t('provimux.models.saved'), 'success');
     else showNotification(t('provimux.aliases.save_not_whole'), 'warning');
-    // His names follow his alias rows: with the switch on, what is served changes with a save.
-    readAgainSoon();
-    await Promise.all([read(), loadRoutes(), loadNames()]);
-  }, [loadNames, loadRoutes, read, readAgainSoon, send, showNotification, t]);
+    // His names follow his alias rows: with the switch on, what is served changes with a save. The save bar is
+    // free at once; the switch says while the gateway applies it.
+    await read();
+    if (outcome.confirmed.length) void settle(tagAfter(sent.base.etag, null));
+    else await Promise.all([loadRoutes(), loadNames()]);
+  }, [loadNames, loadRoutes, read, send, settle, showNotification, t, tagAfter]);
 
   const edit = useCallback(
     (change: (current: AliasDraft) => AliasDraft) => send({ type: 'edited', change }),
@@ -309,8 +379,9 @@ export function ModelsPage() {
       if (started === before) return false;
       setWriting(id);
       let done = false;
+      let written: string | null = null;
       try {
-        await exclusionsApi.write(base, change);
+        written = await exclusionsApi.write(base, change);
         done = true;
         showNotification(
           t(change.excluded ? 'provimux.excluded.added' : 'provimux.excluded.removed', {
@@ -342,10 +413,13 @@ export function ModelsPage() {
         send({ type: 'write-ended' });
         useConfigStore.getState().clearCache();
       }
-      await Promise.all([read(), loadRoutes()]);
+      await read();
+      // What accounts register moves with an exclusion: the names wait on it as on their own writes.
+      if (done) void settle(tagAfter(base.etag, written));
+      else await loadRoutes();
       return done;
     },
-    [loadRoutes, read, send, showNotification, t]
+    [loadRoutes, read, send, settle, showNotification, t, tagAfter]
   );
 
   /**
@@ -361,31 +435,13 @@ export function ModelsPage() {
       const started = send({ type: 'write-started' });
       if (started === before) return false;
       setWriting(write.id);
-      let done = false;
+      let written: string | null = null;
+      let failure: string | null = null;
       try {
-        await onlyMyNamesApi.write(base, write.body);
-        done = true;
-        const [first] = write.names;
-        const message =
-          write.kind === 'on'
-            ? t('provimux.names.turned_on')
-            : write.kind === 'off'
-              ? t('provimux.names.turned_off')
-              : write.kind === 'drop-ignored'
-                ? t('provimux.names.ignored_removed', { count: write.names.length })
-                : write.kind === 'unkeep'
-                  ? t(namesOn ? 'provimux.names.unkept_on' : 'provimux.names.unkept', {
-                      name: first,
-                    })
-                  : write.names.length > 1
-                    ? t('provimux.names.kept_many', { count: write.names.length })
-                    : t(namesOn ? 'provimux.names.kept_on' : 'provimux.names.kept', {
-                        name: first,
-                      });
-        showNotification(message, 'success');
+        written = await onlyMyNamesApi.write(base, write.body);
       } catch (error) {
         const reason = error instanceof NamesRequestError ? error.reason : 'error';
-        const message =
+        failure =
           reason === 'changed'
             ? t('provimux.names.write_changed')
             : reason === 'no-tag'
@@ -395,19 +451,46 @@ export function ModelsPage() {
                 : reason === 'refused'
                   ? t('provimux.names.write_refused', { message: getErrorMessage(error) })
                   : t('provimux.names.write_failed', { message: getErrorMessage(error) });
-        showNotification(message, reason === 'changed' ? 'warning' : 'error');
+        showNotification(failure, reason === 'changed' ? 'warning' : 'error');
       } finally {
-        setWriting(null);
         send({ type: 'write-ended' });
         useConfigStore.getState().clearCache();
       }
-      if (done) readAgainSoon();
-      await Promise.all([read(), loadRoutes(), loadNames()]);
-      return done;
+      await read();
+      if (failure !== null) {
+        setWriting(null);
+        await Promise.all([loadRoutes(), loadNames()]);
+        return false;
+      }
+      // The button stays busy until the gateway serves the change: its notification says it is done only then.
+      const outcome = await settle(tagAfter(base.etag, written));
+      setWriting(null);
+      if (outcome === 'cancelled') return true;
+      if (outcome === 'late') {
+        showNotification(t('provimux.names.not_applied_notice'), 'warning');
+        return true;
+      }
+      const [first] = write.names;
+      const on = write.kind === 'on' || (write.kind !== 'off' && namesOn);
+      const message =
+        write.kind === 'on'
+          ? t('provimux.names.turned_on')
+          : write.kind === 'off'
+            ? t('provimux.names.turned_off')
+            : write.kind === 'drop-ignored'
+              ? t('provimux.names.ignored_removed', { count: write.names.length })
+              : write.kind === 'unkeep'
+                ? t(on ? 'provimux.names.unkept_on' : 'provimux.names.unkept', { name: first })
+                : write.names.length > 1
+                  ? t('provimux.names.kept_many', { count: write.names.length })
+                  : t(on ? 'provimux.names.kept_on' : 'provimux.names.kept', { name: first });
+      showNotification(message, 'success');
+      return true;
     },
-    [loadNames, loadRoutes, namesOn, read, readAgainSoon, send, showNotification, t]
+    [loadNames, loadRoutes, namesOn, read, send, settle, showNotification, t, tagAfter]
   );
   const usageState = usageStateOf(usage.data, usage.error !== null && usage.data === null);
+  const usageSince = usageSinceOf(usage.data);
   const boardNames = useMemo(
     (): BoardNames | undefined =>
       namesStatus === 'unsupported'
@@ -416,14 +499,16 @@ export function ModelsPage() {
             answer: names.data,
             error: names.data === null ? names.error : null,
             usage: usageState,
+            usageSince,
+            applying,
             write: writeNames,
           },
-    [names.data, names.error, namesStatus, usageState, writeNames]
+    [applying, names.data, names.error, namesStatus, usageSince, usageState, writeNames]
   );
   // With the switch on, a save that takes a name's last alias away stops serving it: the bar says so.
   const dropped = useMemo(() => {
     if (!draft || !namesOn || !names.data) return [];
-    return droppedBySave(draft, setNamesOf(names.data, readSetting(draft.base.document)));
+    return droppedBySave(draft, setNamesOf(names.data, readSetting(draft.base.document), 'config'));
   }, [draft, names.data, namesOn]);
 
   const baseStatus = page.saving

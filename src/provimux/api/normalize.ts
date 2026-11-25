@@ -14,7 +14,9 @@ import type {
   ProvimuxModelRoute,
   ProvimuxModelRoutesResponse,
   ProvimuxNameAccount,
+  ProvimuxNamesApplied,
   ProvimuxNamesResponse,
+  ProvimuxRequestedModels,
   ProvimuxOtherName,
   ProvimuxOwnName,
   ProvimuxReasoning,
@@ -131,7 +133,11 @@ export const readModel = (value: unknown): ProvimuxModel | null => {
 
 export const readModelRoutes = (value: unknown): ProvimuxModelRoutesResponse => {
   const rec = isRec(value) ? value : {};
-  return { observed_at: time(rec.observed_at), models: list(rec.models, readModel) };
+  return {
+    observed_at: time(rec.observed_at),
+    models: list(rec.models, readModel),
+    applied: readNamesApplied(rec.applied),
+  };
 };
 
 export const readFailure = (value: unknown): ProvimuxLiveListFailure | null => {
@@ -459,6 +465,21 @@ export const readSavings = (value: unknown): ProvimuxSavingsResponse => {
     models: list(rec.models, readSavingsModel),
     models_truncated: rec.models_truncated === true,
     reported_cost_hosts: list(rec.reported_cost_hosts, str),
+    requested_models: readRequestedModels(rec.requested_models),
+  };
+};
+
+/** `requested_models` (include=requested_models); null when the answer has none. Names are kept as they came. */
+export const readRequestedModels = (value: unknown): ProvimuxRequestedModels | null => {
+  if (!isRec(value)) return null;
+  return {
+    from: day(value.from),
+    models: list(value.models, (item) => {
+      if (!isRec(item)) return null;
+      const model = str(item.model);
+      return model === null ? null : { model, requests: zero(item.requests) };
+    }),
+    truncated: value.truncated === true,
   };
 };
 
@@ -480,7 +501,31 @@ const readOwnName = (value: unknown): ProvimuxOwnName | null => {
   if (!isRec(value)) return null;
   const name = str(value.name);
   if (name === null) return null;
-  return { name, set_by: list(value.set_by, str), accounts: num(value.accounts) ?? 0 };
+  return {
+    name,
+    set_by: list(value.set_by, str),
+    accounts: num(value.accounts) ?? 0,
+    copies: list(value.copies, (copy) => {
+      if (!isRec(copy)) return null;
+      const id = str(copy.id);
+      return id === null ? null : { id, accounts: num(copy.accounts) ?? 0 };
+    }),
+  };
+};
+
+/**
+ * The only-my-names marker. Without one (a gateway older than it), null: the page then cannot tell an answer from
+ * before a write and reads again on its own clock. A generation that is not a number makes it unreadable too.
+ */
+export const readNamesApplied = (value: unknown): ProvimuxNamesApplied | null => {
+  if (!isRec(value)) return null;
+  const generation = num(value.generation);
+  if (generation === null) return null;
+  return {
+    generation,
+    config_etag: str(value.config_etag),
+    applying: value.applying === true,
+  };
 };
 
 const readOtherName = (value: unknown): ProvimuxOtherName | null => {
@@ -513,6 +558,7 @@ export const readNames = (value: unknown): ProvimuxNamesResponse => {
       applies: state.applies !== false,
       not_applied: state.applies === false ? (str(state.not_applied) ?? 'unknown') : null,
     },
+    applied: readNamesApplied(rec.applied),
     names: list(rec.names, readOwnName),
     keep_ignored: list(rec.keep_ignored, (item) => {
       if (!isRec(item) || typeof item.value !== 'string') return null;

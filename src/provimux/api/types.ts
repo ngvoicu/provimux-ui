@@ -85,6 +85,8 @@ export interface ProvimuxModel {
 export interface ProvimuxModelRoutesResponse {
   observed_at: Timestamp | null;
   models: ProvimuxModel[];
+  /** Which rule of models.only-my-names the answer reflects; null from a gateway without the marker. */
+  applied?: ProvimuxNamesApplied | null;
 }
 
 export interface ProvimuxLiveListFailure {
@@ -369,6 +371,28 @@ export interface ProvimuxSavingsResponse {
   models: ProvimuxSavingsModel[];
   models_truncated: boolean;
   reported_cost_hosts: string[];
+  /**
+   * Requests by the name the client sent (`include=requested_models`, only-my-names round 2): an alias under the
+   * alias, a prefixed name with its prefix, lower case. null when not asked for, or from a gateway without it.
+   */
+  requested_models: ProvimuxRequestedModels | null;
+}
+
+/** The Models page's 30 days of use: the savings answer, and the days before `requested_models.from` by model. */
+export interface ProvimuxModelUsage extends ProvimuxSavingsResponse {
+  /** The range's days before the requested names start, grouped by model; absent or null when not needed. */
+  before?: ProvimuxSavingsBreakdown | null;
+  /** Those days were needed and could not be read. */
+  before_failed?: boolean;
+}
+
+export interface ProvimuxRequestedModels {
+  /** The first day of the range that has requested names; the days before count only in the rows. null: none. */
+  from: ProvimuxDay | null;
+  /** Most requests first; `~other` holds the names folded past a day's limit. */
+  models: Array<{ model: string; requests: number }>;
+  /** More than 2000 names: the rest are left out. */
+  truncated: boolean;
 }
 
 // --- GET /provimux/names (models.only-my-names; design only-my-names.md, section 6) ---------------------------
@@ -394,6 +418,18 @@ export interface ProvimuxOwnName {
   set_by: ProvimuxNameSetBy[];
   /** Enabled accounts that register it now; 0 when nothing answers it. */
   accounts: number;
+  /** The name served under an account's prefix ("team-a/opus" for "opus"); empty from a gateway without it. */
+  copies: Array<{ id: string; accounts: number }>;
+}
+
+/**
+ * Which rule of models.only-my-names the gateway serves now. A write's answer reflects it once `config_etag` is
+ * the write's ETag and `applying` is false.
+ */
+export interface ProvimuxNamesApplied {
+  generation: number;
+  config_etag: string | null;
+  applying: boolean;
 }
 
 export interface ProvimuxOtherName {
@@ -418,6 +454,11 @@ export interface ProvimuxNamesResponse {
     /** Why it does not apply: 'home', or a reason this console does not know. */
     not_applied: 'home' | (string & {}) | null;
   };
+  /**
+   * The rule the answer describes: the one applied now, which after a write stays the one before it until every
+   * account has registered again. null from a gateway without the marker.
+   */
+  applied: ProvimuxNamesApplied | null;
   /** Every name the owner set. Sorted by name. */
   names: ProvimuxOwnName[];
   /** `keep` entries the gateway ignores: a pattern, or empty. */

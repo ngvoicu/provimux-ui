@@ -5,97 +5,115 @@
     "applies": true,
     "not_applied": null
   },
+  "applied": {
+    "generation": 7,
+    "config_etag": "\"owner-1\"",
+    "applying": false
+  },
   "names": [
     {
       "name": "claude-opus-5-5",
       "set_by": [
         "alias"
       ],
-      "accounts": 4
+      "accounts": 4,
+      "copies": []
     },
     {
       "name": "codex",
       "set_by": [
         "alias"
       ],
-      "accounts": 1
+      "accounts": 1,
+      "copies": []
     },
     {
       "name": "deepseek",
       "set_by": [
         "alias"
       ],
-      "accounts": 1
+      "accounts": 1,
+      "copies": []
     },
     {
       "name": "glm",
       "set_by": [
         "alias"
       ],
-      "accounts": 1
+      "accounts": 1,
+      "copies": []
     },
     {
       "name": "gpt-6.1-terra",
       "set_by": [
         "alias"
       ],
-      "accounts": 2
+      "accounts": 2,
+      "copies": []
     },
     {
       "name": "grok",
       "set_by": [
         "alias"
       ],
-      "accounts": 1
+      "accounts": 1,
+      "copies": []
     },
     {
       "name": "haiku",
       "set_by": [
         "alias"
       ],
-      "accounts": 1
+      "accounts": 1,
+      "copies": []
     },
     {
       "name": "kimi",
       "set_by": [
         "alias"
       ],
-      "accounts": 2
+      "accounts": 2,
+      "copies": []
     },
     {
       "name": "opus",
       "set_by": [
         "alias"
       ],
-      "accounts": 1
+      "accounts": 1,
+      "copies": []
     },
     {
       "name": "qwen-coder",
       "set_by": [
         "alias"
       ],
-      "accounts": 1
+      "accounts": 1,
+      "copies": []
     },
     {
       "name": "sonnet",
       "set_by": [
         "alias"
       ],
-      "accounts": 1
+      "accounts": 1,
+      "copies": []
     },
     {
       "name": "swe",
       "set_by": [
         "alias"
       ],
-      "accounts": 1
+      "accounts": 1,
+      "copies": []
     },
     {
       "name": "terra",
       "set_by": [
         "alias"
       ],
-      "accounts": 1
+      "accounts": 1,
+      "copies": []
     }
   ],
   "keep_ignored": [],

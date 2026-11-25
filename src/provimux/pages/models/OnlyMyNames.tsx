@@ -23,6 +23,8 @@ import {
   type UsageState,
 } from './namesSetting';
 import { providerName } from './labels';
+import type { NamesApplying } from './namesApplied';
+import { formatDay } from '../savings/logic';
 import shared from '../shared/Shared.module.scss';
 import page from './ModelsPage.module.scss';
 import styles from './OnlyMyNames.module.scss';
@@ -48,6 +50,10 @@ export interface NamesState {
   /** Names served that are neither his nor among `others`: accounts' prefixed copies of his names. */
   alsoServed: number;
   usage: UsageState;
+  /** The day from which the names tools sent are counted, when it falls inside the 30 days. */
+  usageSince?: string | null;
+  /** The page's last write is not applied by the gateway yet: the answer still describes the rule before it. */
+  applying?: NamesApplying;
   /** Why nothing can be written now, said in a line (edits not saved, no tag); null when it can. */
   blocked: string | null;
   /** A write or a read is running: every action waits, without a line. */
@@ -220,15 +226,25 @@ export function OnlyMyNamesSwitch({
   const { t } = useTranslation();
   const titleId = useId();
   const { answer, setting, others } = state;
-  const where = switchState(answer);
+  // The answer is the rule the gateway applies now; while a write is not applied yet, the switch stands where the
+  // configuration puts it, and its line says the gateway still serves the names as before (no counts: they are
+  // the old rule's).
+  const applied = switchState(answer);
+  const pending = applied !== 'not-applied' ? (state.applying ?? null) : null;
+  const where = pending ? (setting.enabled ? 'on' : 'off') : applied;
   const served = yourNames.length;
   const total = served + state.alsoServed + others.length;
-  const preview = previewOpen && where === 'off';
+  const preview = previewOpen && where === 'off' && applied === 'off';
   const switching = state.writing === 'switch';
 
   const toggle = (next: boolean) => {
     if (where === 'on' && !next) {
       void state.write({ body: switchBody(setting, false), kind: 'off', names: [], id: 'switch' });
+      return;
+    }
+    // Turned off and not applied yet: turning it back on needs no preview (the gateway still serves only his).
+    if (where === 'off' && next && applied === 'on') {
+      void state.write({ body: switchBody(setting, true), kind: 'on', names: [], id: 'switch' });
       return;
     }
     if (where === 'off') onPreview(next);
@@ -237,13 +253,19 @@ export function OnlyMyNamesSwitch({
   const stateText =
     where === 'not-applied'
       ? t('provimux.names.state_not_applied')
-      : where === 'on'
-        ? t('provimux.common.on')
-        : preview
-          ? t('provimux.names.state_preview')
-          : t('provimux.common.off');
+      : pending === 'applying'
+        ? t('provimux.names.state_applying')
+        : pending === 'late'
+          ? t('provimux.names.state_late')
+          : where === 'on'
+            ? t('provimux.common.on')
+            : preview
+              ? t('provimux.names.state_preview')
+              : t('provimux.common.off');
 
   const status = (() => {
+    if (pending === 'applying') return { tone: 'busy', text: t('provimux.names.status_applying') };
+    if (pending === 'late') return { tone: 'warning', text: t('provimux.names.status_late') };
     if (where === 'not-applied') {
       return {
         tone: undefined,
@@ -299,6 +321,7 @@ export function OnlyMyNamesSwitch({
             disabled={
               where === 'not-applied' ||
               switching ||
+              pending === 'applying' ||
               (where === 'on' && (state.blocked !== null || state.busy))
             }
             ariaLabel={t('provimux.names.switch_label')}
@@ -308,11 +331,23 @@ export function OnlyMyNamesSwitch({
         </div>
       </div>
 
-      {/* While the preview is open, its first line says it better. */}
-      {!preview ? (
-        <p className={styles.switchStatus} data-tone={status.tone} role="status">
-          <span>{status.text}</span>
-          {where === 'on' && others.length > 0 ? (
+      {/* While the preview is open, its first line says it better; not a change still being applied. */}
+      {!preview || pending ? (
+        <p
+          className={styles.switchStatus}
+          data-tone={status.tone}
+          role="status"
+          aria-busy={pending === 'applying' || undefined}
+        >
+          <span>
+            {pending === 'late' ? (
+              <IconAlertTriangle size={13} className={styles.statusIcon} aria-hidden="true" />
+            ) : pending === 'applying' ? (
+              <span className={styles.statusPulse} aria-hidden="true" />
+            ) : null}
+            {status.text}
+          </span>
+          {where === 'on' && !pending && others.length > 0 ? (
             <button type="button" className={page.textButton} onClick={onShowNotServed}>
               {t('provimux.names.show_not_served')}
             </button>
@@ -385,7 +420,7 @@ function PreviewPanel({
   yourNames: SwitchProps['yourNames'];
   onCancel: () => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [restOpen, setRestOpen] = useState(false);
   const [query, setQuery] = useState('');
   const { setting, others } = state;
@@ -451,6 +486,16 @@ function PreviewPanel({
         <p className={styles.usageNote}>
           <IconInfo size={13} />
           <span>{t('provimux.names.usage_loading')}</span>
+        </p>
+      ) : null}
+      {state.usageSince && (state.usage === 'known' || state.usage === 'partial') ? (
+        <p className={styles.usageNote}>
+          <IconInfo size={13} />
+          <span>
+            {t('provimux.names.usage_since', {
+              date: formatDay(state.usageSince, i18n.language, false),
+            })}
+          </span>
         </p>
       ) : null}
       {state.blocked !== null ? (

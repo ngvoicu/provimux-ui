@@ -10,6 +10,7 @@ import type {
   ProvimuxLiveListsResponse,
   ProvimuxModelListsResponse,
   ProvimuxModelRoutesResponse,
+  ProvimuxModelUsage,
   ProvimuxNamesResponse,
   ProvimuxSavingsPeriod,
   ProvimuxSavingsResponse,
@@ -58,6 +59,12 @@ export function serverCatalogFailure(error: unknown): string | null {
   if (record.ok !== false || !('catalogs' in record || 'sources' in record)) return null;
   return typeof record.error === 'string' && record.error ? record.error : 'catalog refresh failed';
 }
+
+/** The calendar day before a YYYY-MM-DD day. */
+export const dayBefore = (day: string): string => {
+  const [y, m, d] = day.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d - 1)).toISOString().slice(0, 10);
+};
 
 /** `?model=a&model=b`: the contract's repeatable parameter (axios would write `model[]=`). */
 const modelQuery = (models: readonly string[]) =>
@@ -143,13 +150,31 @@ export const provimuxApi = {
   },
 
   /**
-   * Requests per model over the last 30 days (the Models page's "used" names): one grouping, small. Rejects
-   * with the client's error (404 on stock CLIProxyAPI).
+   * What tools used over the last 30 days (the Models page's "used" names): requests per model, and per name the
+   * clients sent (`include=requested_models`; a gateway without it leaves it out). When the names start inside
+   * the range (days recorded before the gateway kept them), the days before are asked for by model too, so they
+   * still count. Rejects with the client's error (404 on stock CLIProxyAPI).
    */
-  async modelUsage(client: Client = apiClient): Promise<ProvimuxSavingsResponse> {
-    return readSavings(
-      await client.get<unknown>(`${PROVIMUX_PATHS.savings}?period=30d&group=model`)
+  async modelUsage(client: Client = apiClient): Promise<ProvimuxModelUsage> {
+    const answer = readSavings(
+      await client.get<unknown>(
+        `${PROVIMUX_PATHS.savings}?period=30d&group=model&include=requested_models`
+      )
     );
+    const from = answer.requested_models?.from ?? null;
+    if (from === null || from <= answer.range.from) return answer;
+    try {
+      const before = readSavings(
+        await client.get<unknown>(
+          `${PROVIMUX_PATHS.savings}?from=${answer.range.from}&to=${dayBefore(from)}&group=model`
+        )
+      );
+      const rows = before.breakdowns.find((b) => b.by.length === 1 && b.by[0] === 'model');
+      return { ...answer, before: rows ?? null, before_failed: !rows };
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') throw error;
+      return { ...answer, before: null, before_failed: true };
+    }
   },
 
   /** The presence check: today's totals only, small. Rejects with the client's error (404 on stock CLIProxyAPI). */

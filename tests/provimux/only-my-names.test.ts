@@ -12,7 +12,8 @@ import i18n from '../../src/i18n/index';
 import { normalizeAuthFilesResponse } from '@/services/api/authFiles';
 import type { AuthFilesResponse } from '@/types/authFile';
 import { readModelRoutes, readNames, readSavings } from '@/provimux/api/normalize';
-import type { ProvimuxNamesResponse } from '@/provimux/api/types';
+import { dayBefore, provimuxApi } from '@/provimux/api/provimuxApi';
+import type { ProvimuxModelUsage, ProvimuxNamesResponse } from '@/provimux/api/types';
 import { presenceOf } from '@/provimux/presence';
 import { nameKey } from '@/provimux/pages/aliases/collisions';
 import { changeRow, draftEntries, startDraft } from '@/provimux/pages/aliases/draft';
@@ -27,12 +28,19 @@ import type { AliasDraft, AliasState } from '@/provimux/pages/aliases/types';
 import {
   EMPTY_MODELS_FILTER,
   buildNames,
+  usageByName,
   sections,
   type ModelsFilter,
   type NameItem,
   type SetNames,
 } from '@/provimux/pages/models/catalog';
 import { NameCard } from '@/provimux/pages/models/NameCard';
+import {
+  APPLIED_LIMIT_MS,
+  applyingOf,
+  waitApplied,
+  type MarkerRead,
+} from '@/provimux/pages/models/namesApplied';
 import { ModelsBody } from '@/provimux/pages/models/ModelsBody';
 import type { BoardNames } from '@/provimux/pages/models/ModelsBoard';
 import {
@@ -44,14 +52,21 @@ import {
   previewOf,
   readSetting,
   refusedOf,
-  servedCopiesOf,
+  copyKeysOf,
   setNamesOf,
   switchBody,
   unkeepBody,
+  usageSinceOf,
   usageStateOf,
   yourNameKeys,
+  yourNamesOf,
 } from '@/provimux/pages/models/namesSetting';
-import { OnlyMyNamesSwitch, type NamesWrite } from '@/provimux/pages/models/OnlyMyNames';
+import {
+  OnlyMyNamesSwitch,
+  RefusedStrip,
+  type NamesState,
+  type NamesWrite,
+} from '@/provimux/pages/models/OnlyMyNames';
 import { onlyMyNamesApi, NamesRequestError } from '@/provimux/pages/models/onlyMyNamesApi';
 import type { DevinCooling } from '@/provimux/pages/modelRoutes/useDevinCooling';
 import { fakeProxy, restoreProxy } from './support/fakeProxy';
@@ -82,6 +97,22 @@ const ownerAnswer = (change?: (answer: Doc) => void): ProvimuxNamesResponse => {
   change?.(raw);
   return readNames(raw);
 };
+/** The answer once the gateway applied `keep`: each kept name is his (set_by keep), no longer another's. */
+const keptAnswer = (kept: readonly string[], change?: (answer: Doc) => void) =>
+  ownerAnswer((raw) => {
+    for (const name of kept) {
+      const other = (raw.others as Doc[]).find((o) => nameKey(o.name as string) === nameKey(name));
+      raw.others = (raw.others as Doc[]).filter((o) => o !== other);
+      const accounts = other ? (other.accounts as unknown[]).length : 0;
+      (raw.names as Doc[]).push({ name, set_by: ['keep'], accounts, copies: [] });
+    }
+    change?.(raw);
+  });
+/** The same answer from a gateway older than the `applied` marker. */
+const unmarked = (answer: ProvimuxNamesResponse): ProvimuxNamesResponse => ({
+  ...answer,
+  applied: null,
+});
 const credentials = () =>
   normalizeAuthFilesResponse(ownerFixture('credentials') as AuthFilesResponse).files;
 /** The owner's configuration with something changed, read as the page reads it. */
@@ -144,12 +175,14 @@ function renderBody(
 }
 const boardNames = (
   answer: ProvimuxNamesResponse | null,
-  write = async (_: NamesWrite) => true
-) => ({
+  write = async (_: NamesWrite) => true,
+  extra: Partial<BoardNames> = {}
+): BoardNames => ({
   answer,
   error: null,
   usage: 'known' as const,
   write,
+  ...extra,
 });
 /** The routes the gateway reports with the switch on: only the names in `served`. */
 const routesServing = (served: readonly string[]) => {
@@ -178,7 +211,7 @@ describe('whose names: the console and the gateway count the same ones', () => {
     const state = withSetting({ enabled: false, keep: ['claude-haiku-5-5', ' Gemini-3-Flash '] });
     const setting = readSetting(state.document);
     expect(setting.keep).toEqual(['claude-haiku-5-5', 'Gemini-3-Flash']);
-    const answer = ownerAnswer();
+    const answer = keptAnswer(['claude-haiku-5-5', 'gemini-3-flash']);
     const draft = startDraft(state);
     const items = ownerNames(draft).length;
     const kept = ownerNamesWith(draft, setNamesOf(answer, setting));
@@ -203,22 +236,40 @@ describe('whose names: the console and the gateway count the same ones', () => {
     await i18n.changeLanguage('en');
     const state = withSetting({ enabled: true, keep: ['gpt-9-preview'] });
     const draft = startDraft(state);
-    const items = ownerNamesWith(draft, setNamesOf(ownerAnswer(), readSetting(state.document)));
+    const answer = keptAnswer(['gpt-9-preview']);
+    expect(answer.names.find((own) => own.name === 'gpt-9-preview')?.accounts).toBe(0);
+    const items = ownerNamesWith(draft, setNamesOf(answer, readSetting(state.document)));
     const kept = nameOf(items, 'gpt-9-preview');
     expect([kept.own, kept.lines.length, kept.accounts]).toEqual([true, 0, 0]);
     expect(textOf(renderCard(kept, draft))).toContain('No account offers this name now');
   });
 
-  test('a name kept a moment ago counts as his before the gateway’s answer catches up, and leaves it as fast', () => {
-    const answer = ownerAnswer((raw) => {
-      (raw.names as Doc[]).push({ name: 'gpt-6.2-sol', set_by: ['keep'], accounts: 1 });
-    });
-    // The read's keep no longer lists gpt-6.2-sol (Stop keeping was just written), and lists gemini-3-flash.
+  test('a write not applied yet: his names are the gateway’s (the rule it serves now), not the read’s', () => {
+    // gpt-6.2-sol was kept and Stop keeping was just written; gemini-3-flash was just kept. The gateway still
+    // applies the rule before: its answer is what it serves now.
+    const answer = keptAnswer(['gpt-6.2-sol']);
+    const setting = readSetting(withSetting({ enabled: false, keep: ['gemini-3-flash'] }).document);
+    const yours = yourNameKeys(answer, setting);
+    expect(yours.has('gpt-6.2-sol')).toBe(true);
+    expect(yours.has('gemini-3-flash')).toBe(false);
+    expect(othersOf(answer, yours, null).map((o) => o.key)).toContain('gemini-3-flash');
+    expect([...setNamesOf(answer, setting).kept]).toEqual(['gpt-6.2-sol']);
+    // A save of the file keeps what the file keeps: the read's.
+    expect([...setNamesOf(answer, setting, 'config').kept]).toEqual(['gemini-3-flash']);
+  });
+
+  test('a gateway without the applied marker: a name kept a moment ago counts as his at once, as before', () => {
+    const answer = unmarked(keptAnswer(['gpt-6.2-sol']));
     const setting = readSetting(withSetting({ enabled: false, keep: ['gemini-3-flash'] }).document);
     const yours = yourNameKeys(answer, setting);
     expect(yours.has('gemini-3-flash')).toBe(true);
     expect(yours.has('gpt-6.2-sol')).toBe(false);
     expect(othersOf(answer, yours, null).map((o) => o.key)).not.toContain('gemini-3-flash');
+    expect(
+      yourNamesOf(answer, setNamesOf(answer, setting), yours).find(
+        (n) => n.key === 'gemini-3-flash'
+      )
+    ).toEqual({ key: 'gemini-3-flash', name: 'gemini-3-flash', kept: true });
   });
 });
 
@@ -266,11 +317,15 @@ describe('the preview: what stops being served, used names first', () => {
 
   test('used names kept: the button says how many names stay served; usage not known: one line says so', async () => {
     await i18n.changeLanguage('en');
-    const state = withSetting({
-      enabled: false,
-      keep: ['claude-haiku-5-5', 'gpt-6.1-codex', 'gemini-3-flash', 'gpt-6.2-sol', 'swe-2-flash'],
-    });
-    const text = textOf(renderPreview(pageWith(state), ownerAnswer()));
+    const kept = [
+      'claude-haiku-5-5',
+      'gpt-6.1-codex',
+      'gemini-3-flash',
+      'gpt-6.2-sol',
+      'swe-2-flash',
+    ];
+    const state = withSetting({ enabled: false, keep: kept });
+    const text = textOf(renderPreview(pageWith(state), keptAnswer(kept)));
     expect(text).toContain(
       '23 names will stop being served. None of them was used in the last 30 days.'
     );
@@ -427,7 +482,7 @@ describe('Keep: the whole object, at once, with If-Match on the page’s read', 
         draft = changeRow(draft, row.id, { alias: alias === 'sonnet' ? 'sonnet-5' : null });
       }
     }
-    const setNames = setNamesOf(ownerAnswer(), readSetting(draft.base.document));
+    const setNames = setNamesOf(ownerAnswer(), readSetting(draft.base.document), 'config');
     // glm stays: it is kept. haiku goes; sonnet is renamed, so the old name goes.
     expect(droppedBySave(draft, setNames).sort()).toEqual(['haiku', 'sonnet']);
   });
@@ -498,30 +553,36 @@ describe('the switch on the page', () => {
 
   test('an account’s prefixed copy of his name is served: counted as served, never under Not served', async () => {
     await i18n.changeLanguage('en');
-    // The gateway serves team/<his name> on an account with prefix team (only-my-names.md 3.3) and lists it in
-    // neither names nor others; model-routes lists it, as it lists every served name.
+    // The gateway serves team/<his name> on an account with prefix team (only-my-names.md 3.3) and lists it
+    // under the name (copies); model-routes lists it, as it lists every served name.
     const state = withSetting({ enabled: true, keep: ['claude-haiku-5-5'] });
-    const answer = ownerAnswer((raw) => {
-      raw.only_my_names = { enabled: true, applies: true, not_applied: null };
-      raw.others = (raw.others as Doc[]).filter((other) => other.name !== 'claude-haiku-5-5');
-      (raw.names as Doc[]).push({ name: 'claude-haiku-5-5', set_by: ['keep'], accounts: 2 });
-    });
-    const routes = routesServing(answer.names.map((own) => own.name));
-    const copy = { ...structuredClone(routes.models[0]), id: `team/${routes.models[0].id}` };
-    routes.models.push(copy);
-    const yours = yourNameKeys(answer, readSetting(state.document));
-    expect([...servedCopiesOf(readModelRoutes(routes), answer, yours)]).toEqual([
-      copy.id.toLowerCase(),
+    const routes = routesServing([
+      ...ownerAnswer().names.map((own) => own.name),
+      'claude-haiku-5-5',
     ]);
-    const text = textOf(renderBody(pageWith(state), boardNames(answer), { routes }));
+    const base = routes.models[0].id;
+    const copy = { ...structuredClone(routes.models[0]), id: `team/${base}` };
+    routes.models.push(copy);
+    const withCopy = (raw: Doc) => {
+      const own = (raw.names as Doc[]).find((name) => name.name === base)!;
+      own.copies = [{ id: copy.id, accounts: 1 }];
+    };
+    const answer = keptAnswer(['claude-haiku-5-5'], (raw) => {
+      raw.only_my_names = { enabled: true, applies: true, not_applied: null };
+      withCopy(raw);
+    });
+    expect(answer.names.find((own) => own.name === base)?.copies).toEqual([
+      { id: copy.id, accounts: 1 },
+    ]);
+    expect([...copyKeysOf(answer)]).toEqual([copy.id.toLowerCase()]);
+    const html = renderBody(pageWith(state), boardNames(answer), { routes });
+    const text = textOf(html);
     expect(text).toContain('On: 15 names served, 27 not served.');
     expect(text).toContain('Not served 27');
-    expect(text).toContain("Show the 27 names that aren't served");
+    // The copy is drawn with the served names, as the routes list it.
+    expect(text).toContain(`Show 1 other model ${copy.id}`);
     // Off, the same file: every name is counted once, the copy included.
-    const off = ownerAnswer((raw) => {
-      raw.others = (raw.others as Doc[]).filter((other) => other.name !== 'claude-haiku-5-5');
-      (raw.names as Doc[]).push({ name: 'claude-haiku-5-5', set_by: ['keep'], accounts: 2 });
-    });
+    const off = keptAnswer(['claude-haiku-5-5'], withCopy);
     const offText = textOf(
       renderBody(
         pageWith(withSetting({ enabled: false, keep: ['claude-haiku-5-5'] })),
@@ -530,6 +591,15 @@ describe('the switch on the page', () => {
       )
     );
     expect(offText).toContain('Off: all 42 names are served, 14 of them yours.');
+    // A name the routes list that the gateway names nowhere is not guessed to be a copy: with the switch on, it
+    // is not his, so it is under Not served.
+    const unlisted = keptAnswer(['claude-haiku-5-5'], (raw) => {
+      raw.only_my_names = { enabled: true, applies: true, not_applied: null };
+    });
+    expect(copyKeysOf(unlisted).size).toBe(0);
+    expect(textOf(renderBody(pageWith(state), boardNames(unlisted), { routes }))).toContain(
+      'Not served 28'
+    );
   });
 
   test('on with no names: it says nothing is served; Home: the switch is off and says why', async () => {
@@ -709,6 +779,358 @@ describe('three line problems on a name’s card', () => {
   });
 });
 
+describe('after a write: the gateway says when it serves it (applied)', () => {
+  const marker = (config_etag: string | null, applying = false, generation = 8) => ({
+    generation,
+    config_etag,
+    applying,
+  });
+
+  test('the marker is read from the names and the routes; a gateway without it gives null, and no copies', () => {
+    expect(ownerAnswer().applied).toEqual({
+      generation: 7,
+      config_etag: '"owner-1"',
+      applying: false,
+    });
+    expect(ownerAnswer((raw) => delete raw.applied).applied).toBeNull();
+    expect(ownerAnswer((raw) => (raw.applied = { config_etag: '"x"' })).applied).toBeNull();
+    const old = ownerAnswer((raw) => {
+      for (const own of raw.names as Doc[]) delete own.copies;
+    });
+    expect(old.names.every((own) => own.copies.length === 0)).toBe(true);
+    expect(readModelRoutes({ models: [], applied: marker('"t2"', true) }).applied).toEqual(
+      marker('"t2"', true)
+    );
+    expect(readModelRoutes({ models: [] }).applied).toBeNull();
+  });
+
+  test('applied once the marker is the write’s tag and nothing is on its way; late past the limit', () => {
+    const pending = { target: '"t2"', late: false };
+    expect(applyingOf(marker('"t2"'), null)).toBeNull();
+    expect(applyingOf(marker('"t1"'), pending)).toBe('applying');
+    // The new config read, its accounts not all registered again yet.
+    expect(applyingOf(marker('"t2"', true), pending)).toBe('applying');
+    expect(applyingOf(marker('"t2"'), pending)).toBeNull();
+    expect(applyingOf(marker('"t1"'), { ...pending, late: true })).toBe('late');
+    // A gateway that does not say: nothing to wait for.
+    expect(applyingOf(null, pending)).toBeNull();
+  });
+
+  /** waitApplied against a scripted gateway and a clock that only moves when the loop sleeps. */
+  async function run(markers: MarkerRead[], cancelAfter?: number) {
+    let now = 0;
+    const at: number[] = [];
+    let reads = 0;
+    const outcome = await waitApplied({
+      target: '"t2"',
+      read: async () => {
+        at.push(now);
+        const next = markers[Math.min(reads, markers.length - 1)];
+        reads += 1;
+        return next;
+      },
+      sleepUntil: async (ms) => {
+        now = ms;
+      },
+      cancelled: () => cancelAfter !== undefined && reads >= cancelAfter,
+    });
+    return { outcome, at, reads };
+  }
+
+  test('reads at once, then soon and more slowly, until the answer reflects the write', async () => {
+    const applied = await run([marker('"t1"'), marker('"t2"', true), marker('"t2"')]);
+    expect(applied).toEqual({ outcome: 'applied', at: [0, 150, 300], reads: 3 });
+    // Failed reads are tried again.
+    expect((await run([undefined, marker('"t2"')])).outcome).toBe('applied');
+  });
+
+  test('never applied: late at the limit, after about one read a second', async () => {
+    const late = await run([marker('"t1"')]);
+    expect(late.outcome).toBe('late');
+    expect(late.at[late.at.length - 1]).toBe(APPLIED_LIMIT_MS);
+    expect(late.reads).toBeLessThanOrEqual(25);
+    expect(late.at.slice(0, 4)).toEqual([0, 150, 300, 600]);
+  });
+
+  test('a gateway without the marker: one read, and the page falls back to its fixed reads', async () => {
+    expect(await run([null])).toEqual({ outcome: 'unsupported', at: [0], reads: 1 });
+    // A newer write took over: this wait stops.
+    expect((await run([marker('"t1"')], 2)).outcome).toBe('cancelled');
+  });
+
+  test('turned on, not applied yet: the switch says so, and no count of the rule before is shown as the new', async () => {
+    await i18n.changeLanguage('en');
+    // The file says on; the gateway still applies off.
+    const page = pageWith(withSetting({ enabled: true, keep: [] }));
+    const html = renderPreview(page, ownerAnswer(), 'known', { applying: 'applying', open: false });
+    const text = textOf(html);
+    expect(text).toContain('Applying…');
+    expect(text).toContain(
+      'Applying your change. Until the gateway has, it serves the names as before.'
+    );
+    expect(text).not.toContain('Off: all');
+    expect(text).not.toContain('On:');
+    // The switch stands where the file puts it, and waits.
+    const input = html.match(/<input[^>]*type="checkbox"[^>]*>/)![0];
+    expect(input).toContain('checked=""');
+    expect(input).toContain('disabled=""');
+  });
+
+  test('not applied in time: the switch says plainly the gateway still serves the names as before', async () => {
+    await i18n.changeLanguage('en');
+    const page = pageWith(withSetting({ enabled: true, keep: [] }));
+    const html = renderPreview(page, ownerAnswer(), 'known', { applying: 'late', open: false });
+    const text = textOf(html);
+    expect(text).toContain(
+      "The gateway hasn't applied your change yet, so it still serves the names as before."
+    );
+    expect(text).not.toContain('Applying…');
+    // Not "On": the switch stands where the file puts it, and says it is not applied yet.
+    expect(text).toContain('Not applied yet');
+    expect(text).not.toMatch(/\bOn\b/);
+    expect(text).not.toContain("Show what isn't served");
+    // Late, the switch can be used again (to turn it off, for one).
+    expect(html).not.toMatch(/<input[^>]*type="checkbox"[^>]*disabled=""/);
+    expect(html).toMatch(/data-tone="warning"/);
+  });
+
+  test('turned off, not applied yet: what is refused is still drawn as not served, as it still is', async () => {
+    await i18n.changeLanguage('en');
+    const state = withSetting({ enabled: false, keep: [] });
+    const answer = ownerAnswer((raw) => {
+      raw.only_my_names = { enabled: true, applies: true, not_applied: null };
+    });
+    const served = answer.names.map((own) => own.name);
+    const text = textOf(
+      renderBody(pageWith(state), boardNames(answer, undefined, { applying: 'applying' }), {
+        routes: routesServing(served),
+      })
+    );
+    expect(text).toContain('Applying your change.');
+    expect(text).toContain('Not served 28');
+    expect(text).not.toContain('On: 13 names served');
+  });
+
+  test('a name kept while on, not applied yet, stays under Not served until the gateway serves it', async () => {
+    await i18n.changeLanguage('en');
+    const state = withSetting({ enabled: true, keep: ['gpt-6.1-codex'] });
+    const before = ownerAnswer((raw) => {
+      raw.only_my_names = { enabled: true, applies: true, not_applied: null };
+    });
+    const served = before.names.map((own) => own.name);
+    const pendingText = textOf(
+      renderBody(pageWith(state), boardNames(before, undefined, { applying: 'applying' }), {
+        routes: routesServing(served),
+      })
+    );
+    expect(pendingText).toContain('Your names 13');
+    expect(pendingText).toContain('Not served 28');
+    const after = keptAnswer(['gpt-6.1-codex'], (raw) => {
+      raw.only_my_names = { enabled: true, applies: true, not_applied: null };
+    });
+    const appliedText = textOf(
+      renderBody(pageWith(state), boardNames(after), {
+        routes: routesServing([...served, 'gpt-6.1-codex']),
+      })
+    );
+    expect(appliedText).toContain('Your names 14');
+    expect(appliedText).toContain('Not served 27');
+    expect(appliedText).toContain('On: 14 names served, 27 not served.');
+  });
+});
+
+describe('usage by the name tools sent (requested_models)', () => {
+  /** The owner's 30 days, with names as the clients sent them from `from`. */
+  const usageWith = (
+    requested: Doc | null,
+    before?: ProvimuxModelUsage['before'],
+    beforeFailed?: boolean
+  ): ProvimuxModelUsage => {
+    const raw = structuredClone(ownerFixture('usage')) as Doc;
+    if (requested) raw.requested_models = requested;
+    const answer: ProvimuxModelUsage = readSavings(raw);
+    if (before !== undefined) answer.before = before;
+    if (beforeFailed) answer.before_failed = true;
+    return answer;
+  };
+  const sent = [
+    { model: 'opus', requests: 1500, failures: 0, tokens: 1 },
+    { model: 'team-a/opus', requests: 40, failures: 0, tokens: 1 },
+    { model: 'gpt-6.1-codex', requests: 9, failures: 0, tokens: 1 },
+  ];
+
+  test('the whole range covered: an alias counts under the alias, a prefixed name with its prefix, nothing else', () => {
+    const usage = usageWith({ from: '2026-10-26', models: sent, truncated: false });
+    expect(usageByName(usage)).toEqual({ opus: 1500, 'team-a/opus': 40, 'gpt-6.1-codex': 9 });
+    expect(usageStateOf(usage, false)).toBe('known');
+    expect(usageSinceOf(usage)).toBeNull();
+    // The preview's used names follow: claude-haiku-5-5 ran 90 times, but under an alias, so no tool sent it.
+    const answer = ownerAnswer();
+    const preview = previewOf(
+      othersOf(
+        answer,
+        yourNameKeys(answer, readSetting(ownerState().document)),
+        usageByName(usage)
+      ),
+      13
+    );
+    expect(preview.used.map((item) => [item.name, item.requests])).toEqual([['gpt-6.1-codex', 9]]);
+  });
+
+  test('a name’s card counts the requests sent under that name', async () => {
+    await i18n.changeLanguage('en');
+    const usage = usageByName(usageWith({ from: '2026-10-26', models: sent, truncated: false }));
+    const opus = nameOf(ownerNames(undefined, undefined, usage), 'opus');
+    expect(opus.requests).toBe(1500);
+    expect(textOf(renderCard(opus, startDraft(ownerState())))).toContain(
+      '1500 requests in 30 days'
+    );
+  });
+
+  test('names counted since a day inside the range: the days before count by model, and one line says so', async () => {
+    await i18n.changeLanguage('en');
+    const beforeRows = readSavings(ownerFixture('usage')).breakdowns[0];
+    const usage = usageWith({ from: '2026-11-20', models: sent, truncated: false }, beforeRows);
+    expect(usageSinceOf(usage)).toBe('2026-11-20');
+    const map = usageByName(usage)!;
+    // gpt-6.1-codex: 9 sent since the 20th, and 75 by model before it.
+    expect(map['gpt-6.1-codex']).toBe(84);
+    expect(map['team-a/opus']).toBe(40);
+    expect(usageStateOf(usage, false)).toBe('known');
+    const text = textOf(
+      renderPreview(pageWith(ownerState()), ownerAnswer(), 'known', {
+        usageSince: '2026-11-20',
+        usageMap: map,
+      })
+    );
+    expect(text).toContain(
+      'Names are counted as your tools sent them since Nov 20; before that, under the model that answered.'
+    );
+    // The days before, when they could not be read: the order by use is not complete.
+    expect(
+      usageStateOf(
+        usageWith({ from: '2026-11-20', models: sent, truncated: false }, null, true),
+        false
+      )
+    ).toBe('partial');
+  });
+
+  test('names folded into ~other, or left out: the preview says its order by use is not complete', async () => {
+    await i18n.changeLanguage('en');
+    const folded = usageWith({
+      from: '2026-10-26',
+      models: [...sent, { model: '~other', requests: 3, failures: 0, tokens: 0 }],
+      truncated: false,
+    });
+    expect(usageStateOf(folded, false)).toBe('partial');
+    expect(usageByName(folded)).not.toHaveProperty('~other');
+    expect(
+      usageStateOf(usageWith({ from: '2026-10-26', models: sent, truncated: true }), false)
+    ).toBe('partial');
+    const text = textOf(
+      renderPreview(pageWith(ownerState()), ownerAnswer(), 'known', { usage: 'partial' })
+    );
+    expect(text).toContain('so the order by use is not complete');
+  });
+
+  test('a gateway without it, or without names in the range: the rows by model, as before', () => {
+    const rows = usageByName(readSavings(ownerFixture('usage')));
+    expect(usageByName(usageWith(null))).toEqual(rows);
+    expect(usageByName(usageWith({ from: null, models: [], truncated: false }))).toEqual(rows);
+    expect(usageSinceOf(usageWith(null))).toBeNull();
+  });
+
+  test('the page asks for the names; for the days before them, by model', async () => {
+    const asked: string[] = [];
+    const answers = (requested: Doc | null, failBefore = false) => ({
+      get: async (path: string) => {
+        asked.push(path);
+        if (path.includes('from=')) {
+          if (failBefore) throw Object.assign(new Error('boom'), { status: 500 });
+          return ownerFixture('usage');
+        }
+        const raw = structuredClone(ownerFixture('usage')) as Doc;
+        if (requested) raw.requested_models = requested;
+        return raw;
+      },
+      post: async () => undefined,
+      put: async () => undefined,
+    });
+    type Client = Parameters<typeof provimuxApi.modelUsage>[0];
+    const whole = await provimuxApi.modelUsage(
+      answers({ from: '2026-10-26', models: sent, truncated: false }) as unknown as Client
+    );
+    expect(asked).toEqual(['/provimux/savings?period=30d&group=model&include=requested_models']);
+    expect(whole.before).toBeUndefined();
+    asked.length = 0;
+    const part = await provimuxApi.modelUsage(
+      answers({ from: '2026-11-20', models: sent, truncated: false }) as unknown as Client
+    );
+    expect(asked[1]).toBe('/provimux/savings?from=2026-10-26&to=2026-11-19&group=model');
+    expect(part.before?.rows.length).toBeGreaterThan(0);
+    const failed = await provimuxApi.modelUsage(
+      answers({ from: '2026-11-20', models: sent, truncated: false }, true) as unknown as Client
+    );
+    expect([failed.before, failed.before_failed]).toEqual([null, true]);
+    // A gateway without the field asks once.
+    asked.length = 0;
+    await provimuxApi.modelUsage(answers(null) as unknown as Client);
+    expect(asked).toHaveLength(1);
+    expect([dayBefore('2026-03-01'), dayBefore('2026-01-01')]).toEqual([
+      '2026-02-28',
+      '2025-12-31',
+    ]);
+  });
+});
+
+describe('the refused strip', () => {
+  test('most refused first, then by name; the name is the one the gateway resolved', async () => {
+    await i18n.changeLanguage('en');
+    const answer = ownerAnswer((raw) => {
+      raw.only_my_names = { enabled: true, applies: true, not_applied: null };
+      raw.refused = {
+        since: '2026-11-24T13:00:00Z',
+        names: [
+          { name: 'gpt-6.2-sol', requests: 2, last_at: '2026-11-24T13:59:00Z' },
+          { name: 'grok-tts', requests: 7, last_at: '2026-11-24T13:58:00Z' },
+          { name: 'gemini-3-flash', requests: 2, last_at: '2026-11-24T13:57:00Z' },
+        ],
+        truncated: false,
+      };
+    });
+    const yours = yourNameKeys(answer, readSetting(ownerState().document));
+    const refused = refusedOf(answer, yours);
+    expect(refused.map((r) => [r.name, r.requests])).toEqual([
+      ['grok-tts', 7],
+      ['gemini-3-flash', 2],
+      ['gpt-6.2-sol', 2],
+    ]);
+    const text = textOf(
+      renderToStaticMarkup(
+        createElement(RefusedStrip, {
+          state: {
+            answer,
+            setting: readSetting(ownerState().document),
+            yours,
+            others: othersOf(answer, yours, null),
+            alsoServed: 0,
+            usage: 'known',
+            blocked: null,
+            busy: false,
+            writing: null,
+            write: async () => true,
+            nowMs: OWNER_NOW,
+          },
+          refused,
+        })
+      )
+    );
+    expect(text.indexOf('grok-tts')).toBeLessThan(text.indexOf('gemini-3-flash'));
+    // No string promises the name was the one the tool sent.
+    expect(text).not.toMatch(/sent|your tool asked for/i);
+  });
+});
+
 // --- helpers ------------------------------------------------------------------------------------------------
 
 function ownerNamesWith(draft: AliasDraft, setNames: SetNames): NameItem[] {
@@ -746,10 +1168,11 @@ function CardWithUnkeep({ item, draft }: { item: NameItem; draft: AliasDraft }) 
 function renderPreview(
   page: PageState,
   answer: ProvimuxNamesResponse,
-  usage: 'known' | 'unknown' = 'known'
+  usage: 'known' | 'unknown' = 'known',
+  extra: Partial<NamesState> & { open?: boolean; usageMap?: Record<string, number> } = {}
 ) {
   return renderToStaticMarkup(
-    createElement(MemoryRouter, null, createElement(PreviewHarness, { page, answer, usage }))
+    createElement(MemoryRouter, null, createElement(PreviewHarness, { page, answer, usage, extra }))
   );
 }
 
@@ -757,26 +1180,19 @@ function PreviewHarness({
   page,
   answer,
   usage,
+  extra,
 }: {
   page: PageState;
   answer: ProvimuxNamesResponse;
   usage: 'known' | 'unknown';
+  extra: Partial<NamesState> & { open?: boolean; usageMap?: Record<string, number> };
 }) {
   const draft = page.draft!;
   const setting = readSetting(draft.base.document);
   const yours = yourNameKeys(answer, setting);
-  const others = othersOf(answer, yours, usage === 'known' ? ownerUsage() : null);
-  const kept = new Set(setting.keep.map(nameKey));
-  const yourNames = [
-    ...answer.names.map((own) => ({
-      key: nameKey(own.name),
-      name: own.name,
-      kept: kept.has(nameKey(own.name)),
-    })),
-    ...setting.keep
-      .filter((name) => !answer.names.some((own) => nameKey(own.name) === nameKey(name)))
-      .map((name) => ({ key: nameKey(name), name, kept: true })),
-  ];
+  const { open = true, usageMap, ...state } = extra;
+  const others = othersOf(answer, yours, usage === 'known' ? (usageMap ?? ownerUsage()) : null);
+  const yourNames = yourNamesOf(answer, setNamesOf(answer, setting), yours);
   return createElement(OnlyMyNamesSwitch, {
     state: {
       answer,
@@ -789,9 +1205,11 @@ function PreviewHarness({
       writing: null,
       write: async () => true,
       nowMs: OWNER_NOW,
+      alsoServed: 0,
+      ...state,
     },
     yourNames,
-    previewOpen: true,
+    previewOpen: open,
     onPreview: noop,
     onShowNotServed: noop,
   });
