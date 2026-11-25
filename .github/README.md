@@ -38,7 +38,8 @@ repository) &nbsp;·&nbsp; **[providers.dev](https://providers.dev)**
 - **[Provimux's own pages](#provimuxs-own-pages)**: **Accounts**, every subscription and API key in one list, whether
   each works now and its priority, added, fixed, turned off or removed there; **Models**, every model name you can send,
   with the API keys and logins that serve it in the order they are tried, the cooldowns Provimux recorded and each
-  login's list; your own names (one model, or several under one name) made and saved there.
+  login's list; your own names (one model, or several under one name) made and saved there, and a switch to serve
+  only them.
 - **[The providers.dev look](#the-providersdev-look)**: "Provimux by providers.dev" throughout, in three themes.
 - **[The Provimux version](#the-provimux-version-and-the-console-on-the-system-page)** and the console's update source
   on the System page.
@@ -49,23 +50,29 @@ Then: [Use it](#use-it) · [Versions and releases](#versions-and-releases) · [B
 
 ### Provimux's own pages
 
-In the sidebar under Gateway, **Accounts** (in the place of AI Providers, Auth Files and OAuth Login, which keep their
-addresses), **Models** (it replaced Aliases, Model routes and Model lists, whose addresses lead to it) and **Savings**.
+In the sidebar under Gateway, **Accounts** (in the place of AI Providers, Auth Files and OAuth Login), **Models** (it
+replaced Aliases, Model routes and Model lists, whose addresses lead to it) and **Savings**. The three pages Accounts
+replaced keep their addresses and stay one click away, at the end of Gateway under **Advanced settings**, with plain
+names: API keys (AI Providers), Subscriptions (Auth Files) and Ways to sign in (OAuth Login).
 
 **Accounts.** Every subscription (a login) and every API key, one card per service (Claude, ChatGPT · OpenAI, Gemini,
 OpenRouter, Devin…), the one tried first on top. A row says the kind (subscription in green, API key in amber), who it
 is (the e-mail, or the key's host and its masked tail), whether it works now in one word (Working, Signed out, Cooling
 down until 15:17, Key refused, Off) and its priority, with the fix when one is needed (**Sign in again**, **Replace
 key**) and an on/off switch. **Add account** asks for the service first, then a subscription (OAuth Login's own
-sign-in) or a key (stored where AI Providers stores it). An account's panel changes its priority, opens Models on what
-it serves, and links to its other settings on AI Providers or Auth Files. Each change is the call the original page
-makes for it; a key's is written only if the configuration is still the one the page read.
+sign-in) or a key (stored where AI Providers stores it). An account's panel changes its priority and opens Models on
+what it serves; **Change settings** edits the rest there: a key's settings as AI Providers has them, a subscription's
+note, retries and the others the console can show (its proxy, prefix, headers and the rest are in Subscriptions, under
+Advanced settings). With Provimux, a key's panel also says whether its model list keeps itself up to date, when it was
+refreshed and what it learned by itself, and its settings have a **Fixed list** switch. Each change is the call the
+original page makes for it (the fixed list, which the original does not have, is a request of its own); a key's is
+written only if the configuration is still the one the page read.
 
 
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/models-desktop-dark.png">
-  <img alt="The Models page. Chips read 41 names, 13 of yours, 4 on several routes, 2 cooling down, 1 needs a look. Below a search field, a filter by what serves a name, the views All, Several routes, Cooling down and Needs a look, and a New name button, the section Your names: opus, served by a Claude subscription, 1840 requests in 30 days; claude-opus-5-5, served in this order by a Claude subscription at priority 10, a Devin subscription at priority 5 that is cooling down, and a Claude API key and OpenRouter sharing priority 0; sonnet, marked Needs a look, with a second route Provimux ignores because the login type already uses the name." src="assets/models-desktop-light.png">
+  <img alt="The Models page, on its Names tab, beside Excluded models (0). A card Serve only my names, switched off: Tools can ask only for the names under Your names. Every other model is refused. Off: all 41 names are served, 13 of them yours. Chips read 41 names, 13 of yours, 4 served by more than one account, 2 cooling down, 1 needs a look. Below a search field, the filter Any account, the views All, More than one account, Cooling down and Needs a look, and a New name button, the section Your names: opus, 1 account, 1840 requests in 30 days, served by a Claude subscription; claude-opus-5-5, 4 accounts, served in this order by a Claude subscription at priority 10, a Devin subscription at priority 5 that is cooling down, and a Claude API key and OpenRouter sharing priority 0; terra, served by a Codex subscription; sonnet, marked Needs a look, with a second route Provimux ignores because the login type already uses the name; haiku, served by a Claude API key." src="assets/models-desktop-light.png">
 </picture>
 
 **Models.** Every model name a client can send is a row: the models your subscriptions and keys serve under their own
@@ -79,13 +86,42 @@ says something about limits only when one is estimated: "new: limits estimated" 
 has yet, "limits estimated" for a limit no list states, each with one line on why.
 
 **New name** makes a name and puts models under it; on a name, **Edit** renames it, adds or takes out models, or
-removes it. A row Provimux would ignore, or never use, says so in one sentence. An API key's priority is edited on its
-route (it applies to every model of the key); a login's priority is in its file, changed on Accounts. Everything is saved
-with one action, as configuration rows (`api-keys.<family>`, `oauth.model-alias`) written only if the file is still
-the one the page read. Below the list: the **live model lists** switch with a refresh request, and, when you have them,
+removes it. A row Provimux would ignore, or never use, says so in one sentence. A route of a model an API key learned
+from its service's list is marked "learned"; when a subscription serves that model too, the name says so, with the
+ways to keep those requests on the subscription. A second tab, **Excluded models**, lists every model an account never
+serves, with every place that excludes it and whether anything still serves it; **Exclude a model** adds one, and
+says before writing what it will mean. An API key's priority is edited on its route (it applies to every model of the
+key); a login's priority is in its file, changed on Accounts. Everything is saved with one action, as configuration
+rows (`api-keys.<family>`, `oauth.model-alias`) written only if the file is still the one the page read. Below the list: the **live model lists** switch with a refresh request, and, when you have them,
 **Devin's quota pause per model** (`oauth.providers.devin.model-level-cooling`) and **OpenRouter**, the
 OpenAI-compatible entries on openrouter.ai that Provimux gives cache markers, a session header and OpenRouter's own
 limits (on AI Providers such an entry carries an "OpenRouter · Provimux" tag).
+
+**Serve only my names.** With Provimux v8.1.3-pmx.2 or newer, a switch at the top of Models: while it is on, tools can
+ask only for the names under Your names (the names you made, and models you keep under their own name), and every
+other model is refused. Turning it on first opens a preview of what it changes ("28 names will stop being served. 5 of
+them were used in the last 30 days."): the names that stay served, the names your tools used in the last 30 days, most
+used first, each with its requests, who serves it and **Keep** (**Keep all** keeps every one), and the rest folded. The
+button says how many used names would be refused, and with no name of your own it waits until you keep one. **Keep**
+serves a model under its own name and **Stop keeping** takes it off again, each written at once
+(`models.only-my-names.keep`) only if the file is still the one the page read. Turning the switch off is one click.
+
+While it is on, the list has Your names, then **Your names under a prefix** (an account's prefix in front of one of
+your names, served as that name is), then **Not served**, every other name with who offers it and Keep. When tools
+asked for names that aren't served, a strip under the switch says which, how many times and when last, with Keep.
+Names are exact, as Provimux compares them: keeping `GPT-5.5` does not keep `gpt-5.5`, and the page shows them as two
+names; `opus(high)` is not a name of its own, and is served when `opus` is. Use is counted by the name a tool sent
+(before Provimux recorded names, by the model that answered, and the page says from when). On an older Provimux, and
+on CLIProxyAPI, the section is not shown. How Provimux applies the switch is in
+[its README](https://github.com/ngvoicu/provimux/blob/main/.github/README.md#serve-only-my-names).
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/models-only-my-names-dark.png">
+  <img alt="The preview of Serve only my names, the switch reading Not on yet. 28 names will stop being served. 5 of them were used in the last 30 days. Stay served: the 13 names claude-opus-5-5, codex, deepseek, glm, gpt-6.1-terra, grok, haiku, kimi, opus, qwen-coder, sonnet, swe and terra. Used in the last 30 days, with a Keep all 5 button: claude-haiku-5-5, 90 requests in 30 days, Claude subscription; gpt-6.1-codex, 75, Codex subscription; gemini-3-flash, 40, Gemini API key, paid per token; gpt-6.2-sol, 30, Codex subscription; swe-2-flash, 12, Devin subscription; each with Keep. Not used in 30 days: 23 names, folded. At the bottom: 5 names your tools used are not kept: a tool that asks for one will get an error, with Cancel and Turn on: 5 used names will be refused." src="assets/models-only-my-names-light.png">
+</picture>
+
+**Routing.** While the switch is on, the Routing page says under the model field that a name that isn't yours is
+refused before routing, and for the name you type whether it is served or refused, with a link to Models.
 
 Routes, lists and use come from endpoints only Provimux has (`/v8/management/provimux/…`, described in
 [Provimux's README](https://github.com/ngvoicu/provimux/blob/main/.github/README.md#model-routes-and-live-list-status-for-the-console)).
@@ -118,7 +154,8 @@ Connected to Provimux, the Management Center Info page shows its version and the
 version, as the original does. The quick links point to Provimux, providers.dev, CLIProxyAPI and the original console.
 From v1.28.3-pmx.2 it also shows which console release is installed, and its update source: where the server's updater
 fetches new releases (`management.panel-github-repository`, resolved with the updater's own rules, so a value the
-updater cannot use shows the default it falls back to) and whether it updates itself.
+updater cannot use shows the default it falls back to) and whether it updates itself. From v1.29.2-pmx.3 the
+original's list of available models gives way to one line that leads to Models.
 
 ### No sponsors or affiliate links
 
@@ -174,10 +211,10 @@ of a [release](https://github.com/ngvoicu/provimux-ui/releases) of this reposito
 4. Open `http://127.0.0.1:8317/management.html` (on the same machine; from another machine, use the server's
    address) and sign in with your management key (`management.secret-key`).
 
-**Accounts.** Add API keys on the AI Providers page. For a company, use API keys and cloud accounts (for example
-Vertex), billed to the company under its own agreement with the provider.
+**Accounts.** Add API keys with **Add account** on the Accounts page. For a company, use API keys and cloud accounts
+(for example Vertex), billed to the company under its own agreement with the provider.
 
-The OAuth Login page adds subscription logins (`oauth`). Provimux also accepts subscription logins for your own
+**Add account** adds subscription logins (`oauth`) too. Provimux also accepts subscription logins for your own
 account, for your own use. Whether a provider allows a third-party tool to use its subscription login is that
 provider's decision: Anthropic's terms do not allow it, and OpenAI has not authorized it. Read your provider's terms
 before you add a login; the account is yours and so is the risk. Provimux is not affiliated with or endorsed by
@@ -217,8 +254,9 @@ runs the tests, the linter and the build.
 
 Provimux is free and stays open source (MIT). For companies that run it, providers.dev offers support plans:
 **Community** (free: GitHub issues and discussions, best effort) and **Team**, **Business** and **Priority** (paid),
-listed with prices and terms at [providers.dev/support](https://providers.dev/support/). A paid plan buys a private
-channel and a first reply within a stated number of business days: a reply, not a promised fix. Provimux has one
+listed with prices and terms at
+[provimux.providers.dev/support](https://provimux.providers.dev/support/). A paid plan buys a private channel and a
+first reply within a stated number of business days: a reply, not a promised fix. Provimux has one
 maintainer, and we say so: announced holidays pause the clock, there is no 24/7 and no uptime promise for a service
 you host yourself, and the code stays MIT, so you can always fork it.
 
