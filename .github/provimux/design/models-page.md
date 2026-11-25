@@ -31,6 +31,18 @@ under a name gets a line of its own: new, moved, ignored, or not reported.
   first, unsaved names on top; then the names used in 30 days; then the rest, folded until a search or filter.
 - Order: among the tried routes (not removed, not ignored, not shadowed, not turned off), the highest priority first;
   equal priorities share a rank. When a tried route's priority is not known, no route of the name is ranked.
+- Accounts: a name's row says how many accounts Provimux can send it to ("2 accounts"), and the summary chip and
+  the view "More than one account" ("20 served by more than one account") hold the names with more than one. That
+  is where the order of priority matters, and where a paid key can share the requests with a subscription. It counts
+  the tried routes, each account once, as Accounts counts them: a login; an API key; an OpenAI-compatible entry with
+  all its keys (a pool of several models under one name in it is one account). Where the proxy reports what it
+  serves, a row it does not serve now (a model the key excludes, a login type no login of which offers it) is not
+  one; a signed-out or cooling login still is, as Accounts says it is skipped only meanwhile. The same model under
+  another name (`devin/claude-opus-5-5`, OpenRouter's `anthropic/claude-opus-5.5`) is another name, with its own
+  accounts: a request for one never goes to another's account. The owner read "20 on several routes" as "models I
+  can reach in several ways", so the words are "account", never "route" or "fallback" (with the same priority, the
+  accounts share the requests), and the filter beside them, "Served by", starts at "Any account". Joining such names
+  is "Your names"' work.
 - Problems, one sentence each: a row Provimux ignores (`incomplete`, `same-as-name`, `duplicate`), a row a key never
   uses (`shadowed`), one service answering the name with different models (`several-models`, not a pool). A name
   served by several services is not a problem: it is a pool.

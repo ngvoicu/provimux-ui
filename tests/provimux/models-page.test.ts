@@ -6,7 +6,9 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter, matchRoutes } from 'react-router-dom';
 import i18n from '../../src/i18n/index';
-import { readModelLists } from '@/provimux/api/normalize';
+import { normalizeAuthFilesResponse } from '@/services/api/authFiles';
+import type { AuthFilesResponse } from '@/types/authFile';
+import { readModelLists, readModelRoutes } from '@/provimux/api/normalize';
 import { buildNames } from '@/provimux/pages/models/catalog';
 import { startDraft } from '@/provimux/pages/aliases/draft';
 import {
@@ -97,7 +99,13 @@ describe('the list', () => {
       'swe-2-flash',
     ]);
     expect(parts.rest).toHaveLength(23);
-    expect(summarizeNames(items)).toMatchObject({ names: 41, yours: 13, cooling: 2, problems: 1 });
+    expect(summarizeNames(items)).toMatchObject({
+      names: 41,
+      yours: 13,
+      several: 4,
+      cooling: 2,
+      problems: 1,
+    });
     expect(nameOf(items, 'opus').requests).toBe(1840);
   });
 
@@ -120,7 +128,7 @@ describe('the list', () => {
     ]);
     expect(opus.lines[1].cooldown).toMatchObject({ reason: 'quota', http_status: 429 });
     expect(opus.lines.map((l) => l.list?.source ?? null)).toEqual(['live', 'live', null, null]);
-    expect(opus).toMatchObject({ own: true, active: 4, problems: [], edited: false });
+    expect(opus).toMatchObject({ own: true, accounts: 4, problems: [], edited: false });
   });
 
   test('a row Provimux ignores is a problem, in one plain sentence', async () => {
@@ -128,7 +136,7 @@ describe('the list', () => {
     const draft = startDraft(ownerState());
     const sonnet = nameOf(ownerNames(draft), 'sonnet');
     expect(sonnet.problems).toEqual(['ignored']);
-    expect(sonnet.active).toBe(1);
+    expect(sonnet.accounts).toBe(1);
     const ignored = sonnet.lines.find((line) => line.issue === 'duplicate')!;
     expect(ignored).toMatchObject({ upstream: 'claude-sonnet-4-5', rank: null, state: 'idle' });
     const text = textOf(renderCard(sonnet, draft));
@@ -149,9 +157,142 @@ describe('the list', () => {
       ['openai-compatible-openrouter', null, 0],
       ['devin', null, null],
     ]);
+    // Without what the proxy serves, the configuration's rows are all there is to count.
+    expect(opus.accounts).toBe(3);
     // A name only API keys serve: their priorities are in the configuration, so its order is known.
     expect(nameOf(items, 'deepseek').lines[0]).toMatchObject({ rank: 1, priority: 0 });
     expect(nameOf(items, 'opus').requests).toBeNull();
+  });
+});
+
+// The owner: "20 on several routes is not correct, for example devin/claude-opus-5-5 is on the same route as
+// claude-opus-5-5 or openrouter claude-opus-5.5". The count is of the accounts one name is sent to.
+describe('how many accounts a name is sent to', () => {
+  interface Key {
+    'api-key': string;
+    auth_index: string;
+    'excluded-models'?: string[];
+  }
+  interface Config {
+    'api-keys': {
+      claude: Array<{ keys: Key[] }>;
+      'openai-compatibility': Array<{ keys: Key[]; models: Array<{ name: string; alias: string }> }>;
+    };
+  }
+  interface Routes {
+    models: Array<{ id: string; routes: Array<{ auth_index: string; login: object }> }>;
+  }
+  const credentials = () =>
+    normalizeAuthFilesResponse(ownerFixture('credentials') as AuthFilesResponse).files;
+  const stateWith = (change: (config: Config) => void): AliasState => {
+    const config = structuredClone(ownerFixture('config')) as Config;
+    change(config);
+    return { ...readAliasState(config, credentials()), etag: '"owner-1"' };
+  };
+  const routesWith = (change: (routes: Routes) => void) => {
+    const routes = structuredClone(ownerFixture('model-routes')) as Routes;
+    change(routes);
+    return readModelRoutes(routes);
+  };
+  const several = (items: ReturnType<typeof ownerNames>, draft: ReturnType<typeof startDraft>) =>
+    keys(
+      items.filter((item) =>
+        matches(item, { ...EMPTY_MODELS_FILTER, view: 'several' }, draft.base.entries)
+      )
+    ).sort();
+
+  test('a name and the same model under other names: each counts its own accounts', async () => {
+    await i18n.changeLanguage('en');
+    const draft = startDraft(ownerState());
+    const items = ownerNames(draft);
+    // Devin's own name for the model is a name of its own, with one account: Devin's.
+    expect(nameOf(items, 'devin/claude-opus-5-5').accounts).toBe(1);
+    expect(nameOf(items, 'claude-opus-5-5').accounts).toBe(4);
+    expect(several(items, draft)).toEqual(
+      ['claude-opus-5-5', 'claude-sonnet-5-5', 'gpt-6.1-terra', 'kimi'].sort()
+    );
+    const card = textOf(renderCard(nameOf(items, 'claude-opus-5-5'), draft));
+    expect(card).toContain('4 accounts');
+    expect(card).not.toMatch(/\d+ routes?\b/);
+    expect(textOf(renderCard(nameOf(items, 'deepseek'), draft))).toContain('1 account');
+  });
+
+  test('each account once, as Accounts counts them: every login; an OpenAI-compatible entry with all its keys', () => {
+    const state = stateWith((config) => {
+      config['api-keys']['openai-compatibility'][0].keys.push({
+        'api-key': 'fixture-key-openrouter-2',
+        auth_index: 'ak-openrouter-2',
+      });
+    });
+    const routes = routesWith((answer) => {
+      for (const model of answer.models) {
+        const openrouter = model.routes.find((route) => route.auth_index === 'ak-openrouter-1');
+        if (openrouter) model.routes.push({ ...openrouter, auth_index: 'ak-openrouter-2' });
+        if (model.id !== 'claude-opus-5-5') continue;
+        const claude = model.routes.find((route) => route.auth_index === 'li-claude-1')!;
+        model.routes.push({
+          ...claude,
+          auth_index: 'li-claude-2',
+          login: { name: 'claude-home.json', email: 'home@example.com', label: 'home@example.com' },
+        });
+      }
+    });
+    const draft = startDraft(state);
+    const items = ownerNames(draft, routes);
+    const opus = nameOf(items, 'claude-opus-5-5');
+    // Two Claude logins, Devin, the Claude key, and OpenRouter with its two keys.
+    expect(opus.lines).toHaveLength(6);
+    expect(opus.accounts).toBe(5);
+    // A name only OpenRouter serves is one account, whatever its number of keys.
+    expect(nameOf(items, 'deepseek').lines).toHaveLength(2);
+    expect(nameOf(items, 'deepseek').accounts).toBe(1);
+    expect(several(items, draft)).not.toContain('deepseek');
+  });
+
+  test('two models under one name in one OpenAI-compatible entry are one account', () => {
+    const state = stateWith((config) => {
+      config['api-keys']['openai-compatibility'][0].models.push({
+        name: 'deepseek/deepseek-v4-pro',
+        alias: 'deepseek',
+      });
+    });
+    const draft = startDraft(state);
+    const deepseek = nameOf(ownerNames(draft), 'deepseek');
+    expect(deepseek.lines.map((line) => line.upstream)).toEqual([
+      'deepseek/deepseek-v4',
+      'deepseek/deepseek-v4-pro',
+    ]);
+    expect(deepseek.accounts).toBe(1);
+  });
+
+  test('a row Provimux does not serve now, or a key turned off, is not an account', async () => {
+    await i18n.changeLanguage('en');
+    // The Claude key's row for claude-sonnet-5-5 stays, but the proxy no longer serves it there (excluded).
+    const routes = routesWith((answer) => {
+      const sonnet = answer.models.find((model) => model.id === 'claude-sonnet-5-5')!;
+      sonnet.routes = sonnet.routes.filter((route) => route.auth_index !== 'ak-anthropic-1');
+    });
+    const draft = startDraft(ownerState());
+    const items = ownerNames(draft, routes);
+    const sonnet = nameOf(items, 'claude-sonnet-5-5');
+    expect(sonnet.lines.map((line) => [line.access, line.state])).toEqual([
+      ['sub', 'live'],
+      ['api', 'idle'],
+    ]);
+    expect(sonnet.accounts).toBe(1);
+    const card = textOf(renderCard(sonnet, draft, routes));
+    expect(card).toContain('1 account');
+    expect(card).toContain("Provimux doesn't serve this route now");
+    expect(several(items, draft)).not.toContain('claude-sonnet-5-5');
+
+    // The Claude key turned off: none of its models counts it, even where the proxy says nothing.
+    const off = startDraft(
+      stateWith((config) => {
+        config['api-keys'].claude[0].keys[0]['excluded-models'] = ['*'];
+      })
+    );
+    expect(nameOf(ownerNames(off), 'claude-opus-5-5').accounts).toBe(3);
+    expect(nameOf(ownerNames(off, null, null), 'claude-opus-5-5').accounts).toBe(2);
   });
 });
 
@@ -241,7 +382,7 @@ describe('editing', () => {
     draft = addToName(draft, candidate(draft, 'fast', 'login/codex\ngpt-6.1-codex-mini'), 'fast');
     draft = addToName(draft, candidate(draft, 'fast', 'claude/0/0\nclaude-haiku-5-5'), 'fast');
     const fast = nameOf(ownerNames(draft), 'fast');
-    expect(fast).toMatchObject({ own: true, fresh: true, edited: true, active: 2 });
+    expect(fast).toMatchObject({ own: true, fresh: true, edited: true, accounts: 2 });
     expect(fast.lines.map((l) => [l.state, l.rank, l.provider, l.upstream])).toEqual([
       ['new', 1, 'codex', 'gpt-6.1-codex-mini'],
       ['new', 2, 'claude', 'claude-haiku-5-5'],
@@ -263,7 +404,7 @@ describe('editing', () => {
     const items = ownerNames(draft);
     const grok = nameOf(items, 'grok');
     expect(grok.lines.map((l) => l.state)).toEqual(['removed']);
-    expect(grok.active).toBe(0);
+    expect(grok.accounts).toBe(0);
     expect(draft.rows.find((r) => r.id === 'openai-compatibility/0/g#6')?.alias).toBeNull();
     expect(nameOf(items, 'x-ai/grok-5').lines[0].state).toBe('new');
     expect(planCommit(draft).map((u) => u.store)).toEqual(['api-key']);

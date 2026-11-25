@@ -135,8 +135,13 @@ export interface NameItem {
   /** A name the owner made: an alias row of the configuration (in the read or the draft) gives it. */
   own: boolean;
   lines: RouteLine[];
-  /** Routes that serve it, or will once saved: lines neither removed nor ignored. */
-  active: number;
+  /**
+   * How many accounts Provimux can send a request for this name to, or will once saved (design models-page.md
+   * 2): of the lines tried, those it serves now (a row it does not serve is left out, where it says what it
+   * serves), each account once, as Accounts counts them (a login; an API key; an OpenAI-compatible entry
+   * with all its keys). Another name for the same model has accounts of its own.
+   */
+  accounts: number;
   problems: NameProblem[];
   /** The draft changes something of this name. */
   edited: boolean;
@@ -284,6 +289,28 @@ const namesOf = (row: AliasRow, entry: AliasEntry, state: Pick<AliasState, 'forc
 /** Lines tried: neither removed, ignored, shadowed nor turned off. */
 const tried = (line: RouteLine) =>
   line.state !== 'removed' && !line.off && !isBlocking(line.issue) && line.issue !== 'shadowed';
+
+/**
+ * The account behind a line, as Accounts counts them: a login (by its auth index); an API key, or an
+ * OpenAI-compatible entry with all its keys (by the page's entry); else what the line has.
+ */
+const accountOf = (line: RouteLine): string =>
+  line.access === 'sub' && line.authIndex
+    ? `login:${line.authIndex}`
+    : line.entryId
+      ? `entry:${line.entryId}`
+      : `index:${line.authIndex ?? line.key}`;
+
+/**
+ * The accounts a name is sent to (`NameItem.accounts`). Where the proxy says what it serves, a row it does
+ * not serve now (`idle`: a model the key excludes, a login type no login of which offers it) is not one.
+ */
+const accountsOf = (lines: readonly RouteLine[], servedKnown: boolean): number =>
+  new Set(
+    lines
+      .filter((line) => tried(line) && !(servedKnown && line.state === 'idle'))
+      .map(accountOf)
+  ).size;
 
 /**
  * Ranks the tried lines by priority, highest first. When the priority of a tried line is not known (a
@@ -538,7 +565,7 @@ export function buildNames(input: CatalogInput): NameItem[] {
       name: found.name,
       own: aliasKeys.has(key),
       lines,
-      active: lines.filter(tried).length,
+      accounts: accountsOf(lines, routes !== null),
       problems,
       edited: lines.some((line) => line.state !== 'live' && line.state !== 'idle'),
       fresh: configLines.length > 0 && configLines.every((line) => line.state === 'new'),
@@ -785,7 +812,7 @@ export function matches(
   filter: ModelsFilter,
   entries: readonly AliasEntry[]
 ): boolean {
-  if (filter.view === 'several' && item.active < 2) return false;
+  if (filter.view === 'several' && item.accounts < 2) return false;
   if (filter.view === 'cooling' && !coolingNow(item)) return false;
   if (filter.view === 'problems' && item.problems.length === 0) return false;
   if (filter.view === 'learned' && !item.learned) return false;
@@ -811,6 +838,7 @@ export function matches(
 export interface NamesSummary {
   names: number;
   yours: number;
+  /** Names Provimux can send to more than one account. */
   several: number;
   cooling: number;
   problems: number;
@@ -824,7 +852,7 @@ export function summarizeNames(items: readonly NameItem[]): NamesSummary {
   return {
     names: items.length,
     yours: items.filter((item) => sectionOf(item) === 'yours').length,
-    several: items.filter((item) => item.active > 1).length,
+    several: items.filter((item) => item.accounts > 1).length,
     cooling: items.filter(coolingNow).length,
     problems: items.filter((item) => item.problems.length > 0).length,
     learned: items.filter((item) => item.learned).length,

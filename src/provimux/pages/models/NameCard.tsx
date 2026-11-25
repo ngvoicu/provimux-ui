@@ -64,9 +64,9 @@ export const NameCard = memo(function NameCard(props: NameCardProps) {
   const { t } = useTranslation();
   const { item, open, locked } = props;
   const meta = [
-    item.active === 0
-      ? t('provimux.models.routes_none')
-      : t('provimux.models.routes_count', { count: item.active }),
+    item.accounts === 0
+      ? t('provimux.models.accounts_none')
+      : t('provimux.models.accounts_count', { count: item.accounts }),
     item.requests !== null && item.requests > 0
       ? t('provimux.models.requests', { count: item.requests })
       : null,

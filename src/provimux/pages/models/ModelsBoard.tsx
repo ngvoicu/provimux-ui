@@ -288,6 +288,7 @@ export function ModelsBoard(props: ModelsBoardProps) {
           className={shared.chip}
           aria-pressed={filter.view === 'several'}
           disabled={summary.several === 0}
+          title={t('provimux.models.count_several_title')}
           onClick={() => toggleView('several')}
         >
           {t('provimux.models.count_several', { count: summary.several })}
