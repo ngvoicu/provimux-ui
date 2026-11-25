@@ -54,6 +54,12 @@ export interface WaitOptions {
   cancelled: () => boolean;
   reads?: readonly number[];
   limitMs?: number;
+  /**
+   * The configuration's tag now, or null when unknown. Asked when an answer does not carry `target`: another writer
+   * may have changed the file after the write, and the gateway's tag is exact, so an answer whose tag is the file's
+   * as it is now applies the file the write is part of (the gateway's only-my-names.md 16.6).
+   */
+  current?: () => Promise<string | null>;
 }
 
 /**
@@ -76,6 +82,11 @@ export async function waitApplied(
     if (options.cancelled()) return 'cancelled';
     if (marker === null) return 'unsupported';
     if (marker !== undefined && appliedMatches(marker, options.target)) return 'applied';
+    if (marker && !marker.applying && marker.config_etag && options.current) {
+      const now = await options.current().catch(() => null);
+      if (options.cancelled()) return 'cancelled';
+      if (now !== null && now === marker.config_etag) return 'applied';
+    }
   }
   return 'late';
 }

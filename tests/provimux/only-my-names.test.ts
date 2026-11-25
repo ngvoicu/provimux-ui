@@ -819,7 +819,11 @@ describe('after a write: the gateway says when it serves it (applied)', () => {
   });
 
   /** waitApplied against a scripted gateway and a clock that only moves when the loop sleeps. */
-  async function run(markers: MarkerRead[], cancelAfter?: number) {
+  async function run(
+    markers: MarkerRead[],
+    cancelAfter?: number,
+    current?: () => Promise<string | null>
+  ) {
     let now = 0;
     const at: number[] = [];
     let reads = 0;
@@ -835,9 +839,31 @@ describe('after a write: the gateway says when it serves it (applied)', () => {
         now = ms;
       },
       cancelled: () => cancelAfter !== undefined && reads >= cancelAfter,
+      current,
     });
     return { outcome, at, reads };
   }
+
+  test('another writer changed the file after the write: applied once the gateway applies the file as it is now', async () => {
+    // The write left "t2"; another writer then left "t3" and the gateway applies "t3", which holds the write.
+    let asked = 0;
+    const now = async () => {
+      asked += 1;
+      return '"t3"';
+    };
+    expect(await run([marker('"t3"')], undefined, now)).toEqual({
+      outcome: 'applied',
+      at: [0],
+      reads: 1,
+    });
+    expect(asked).toBe(1);
+    // Not yet committed (the gateway still applies "t1", the file is at "t2"): it waits, as before.
+    const waiting = await run([marker('"t1"'), marker('"t2"')], undefined, async () => '"t2"');
+    expect(waiting.outcome).toBe('applied');
+    expect(waiting.reads).toBe(2);
+    // The file unknown (the read failed, or it is back at the tag the write was conditional on): late, as before.
+    expect((await run([marker('"t3"')], undefined, async () => null)).outcome).toBe('late');
+  });
 
   test('reads at once, then soon and more slowly, until the answer reflects the write', async () => {
     const applied = await run([marker('"t1"'), marker('"t2"', true), marker('"t2"')]);

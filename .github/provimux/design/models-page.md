@@ -313,8 +313,10 @@ reflects a write), `copies` (a name's prefixed copies; the page's guess from the
   an object there is the gateway design's own [infer] (its test C2). If it refuses, Keep says "The gateway refused
   the change" with its message, and nothing else breaks.
 - `applied.config_etag` matches only the configuration the gateway last read: when another writer changes the file
-  between the page's write and its read after it, the page waits on the later tag; when one changes it after that
-  read, the page cannot tell and says the change is not applied until its next read of the configuration.
+  between the page's write and its read after it, the page waits on the later tag. When one changes it after that
+  read, an answer carries neither tag: the page then reads the configuration's tag alone, and an answer whose tag
+  is the file's as it is now (and not the tag the write was conditional on) applies the file the write is part of
+  (the gateway's tag is exact, its only-my-names.md 16.6). Before this, the page said "Not applied yet" for good.
 - `requested_models` has no days: before its `from`, the page counts by the model that answered (an alias's traffic
   under the vendor's model, a prefix lost), and says from when names are counted. It is not filtered and has no
   per-key split: the preview cannot say which tool sent a name.

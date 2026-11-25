@@ -168,7 +168,7 @@ export function ModelsPage() {
   const waitRef = useRef(0);
   const fallbackTimers = useRef<number[]>([]);
   const settle = useCallback(
-    async (target: string | null) => {
+    async (target: string | null, before: string | null = null) => {
       const id = ++waitRef.current;
       for (const timer of fallbackTimers.current) window.clearTimeout(timer);
       fallbackTimers.current = [];
@@ -207,6 +207,11 @@ export function ModelsPage() {
               setPending({ target, late: false });
           }
           return marker;
+        },
+        // The file as it is now, unless it is back at the tag the write was conditional on.
+        current: async () => {
+          const now = await onlyMyNamesApi.configTag();
+          return now !== null && now !== before ? now : null;
         },
         sleepUntil: (ms) =>
           new Promise((resolve) =>
@@ -371,7 +376,7 @@ export function ModelsPage() {
     // His names follow his alias rows: with the switch on, what is served changes with a save. The save bar is
     // free at once; the switch says while the gateway applies it.
     await read();
-    if (outcome.confirmed.length) void settle(tagAfter(sent.base.etag, null));
+    if (outcome.confirmed.length) void settle(tagAfter(sent.base.etag, null), sent.base.etag);
     else await Promise.all([loadRoutes(), loadNames()]);
   }, [loadNames, loadRoutes, read, send, settle, showNotification, t, tagAfter]);
 
@@ -429,7 +434,7 @@ export function ModelsPage() {
       }
       await read();
       // What accounts register moves with an exclusion: the names wait on it as on their own writes.
-      if (done) void settle(tagAfter(base.etag, written));
+      if (done) void settle(tagAfter(base.etag, written), base.etag);
       else await loadRoutes();
       return done;
     },
@@ -477,7 +482,7 @@ export function ModelsPage() {
         return false;
       }
       // The button stays busy until the gateway serves the change: its notification says it is done only then.
-      const outcome = await settle(tagAfter(base.etag, written));
+      const outcome = await settle(tagAfter(base.etag, written), base.etag);
       setWriting(null);
       if (outcome === 'cancelled') return true;
       if (outcome === 'late') {
