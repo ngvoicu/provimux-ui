@@ -749,7 +749,20 @@
       "write_changed": "自本頁讀取以來，設定已在別處變更，因此沒有寫入任何內容。本頁已重新讀取：請再試一次。",
       "write_refused": "閘道拒絕了此變更：{{message}}",
       "write_failed": "未儲存：{{message}}",
-      "save_drops_other": "{{count}} 個名稱將不再提供：{{names}}"
+      "save_drops_other": "{{count}} 個名稱將不再提供：{{names}}",
+      "section_copies": "帶前綴的你的名稱",
+      "section_copies_hint": "帳號前綴加在你的某個名稱前：與該名稱一樣提供服務。"
+    },
+    "routing": {
+      "names_rule": "「只提供我的名稱」已開啟：不屬於你的名稱會在路由前被拒絕。",
+      "names_refused": "{{name}} 不是你的名稱，閘道會在路由前拒絕它。下面的層級只顯示哪些帳號提供它。",
+      "names_yours": "{{name}} 是你的名稱，在「只提供我的名稱」開啟時會提供服務。",
+      "names_yours_copy": "{{name}} 會提供服務：它是你的名稱 {{base}} 加上帳號前綴。",
+      "names_yours_none": "{{name}} 是你的名稱，但目前沒有帳號提供它。",
+      "names_link": "查看模型",
+      "names_who_link": "在模型頁查看哪些帳號回應它",
+      "names_keep_link": "在模型頁保留它",
+      "names_tier_refused": "{{name}} 不會到達這裡：在路由前被拒絕"
     }
   }
 }

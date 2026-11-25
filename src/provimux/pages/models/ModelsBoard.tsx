@@ -120,6 +120,9 @@ const NOT_SERVED_ID = 'pmx-models-not-served';
 /** How many of the other models are drawn at once; the rest on "Show more". */
 const OTHER_PAGE = 60;
 
+const byUseThenName = (a: NameItem, b: NameItem) =>
+  (b.requests ?? 0) - (a.requests ?? 0) || a.name.localeCompare(b.name);
+
 /**
  * The names, in three parts: the owner's own names, the models used in the last 30 days, and every other
  * model (folded until asked for, or until a search or filter narrows the list). Above them the summary,
@@ -428,23 +431,33 @@ export function ModelsBoard(props: ModelsBoardProps) {
     />
   );
 
-  const section = (id: Section, list: NameItem[], body?: ReactNode) => (
+  const section = (id: Section | 'copies', list: NameItem[], body?: ReactNode) => (
     <section className={styles.section} aria-labelledby={`pmx-models-${id}`}>
       <div className={styles.sectionHead}>
         <h2 id={`pmx-models-${id}`} className={styles.sectionTitle}>
-          {t(`provimux.models.section_${id}`)}
+          {id === 'copies'
+            ? t('provimux.names.section_copies')
+            : t(`provimux.models.section_${id}`)}
           <span className={styles.sectionCount}>{list.length}</span>
         </h2>
         <p className={styles.sectionHint}>
-          {id === 'yours' && namesApply
-            ? t('provimux.names.section_yours_hint')
-            : t(`provimux.models.section_${id}_hint`)}
+          {id === 'copies'
+            ? t('provimux.names.section_copies_hint')
+            : id === 'yours' && namesApply
+              ? t('provimux.names.section_yours_hint')
+              : t(`provimux.models.section_${id}_hint`)}
         </p>
       </div>
       {body ?? <div className={styles.cards}>{list.map(card)}</div>}
     </section>
   );
 
+  // With the switch on, the cards that are not his names are the prefixed copies served with them (8.4): one
+  // section of their own, most used first, instead of "Used in the last 30 days" and "Other models".
+  const copies = useMemo(
+    () => (onlyMine ? [...parts.used, ...parts.rest].sort(byUseThenName) : []),
+    [onlyMine, parts]
+  );
   const showOther = narrowed || otherOpen;
   const otherShown = parts.rest.slice(0, otherLimit);
 
@@ -654,6 +667,9 @@ export function ModelsBoard(props: ModelsBoardProps) {
                 ) : undefined
               )
             : null}
+        {/* With it on, only what is served is drawn here: his names, their prefixed
+        copies, then Not served (8.4). */}
+        {onlyMine && copies.length ? section('copies', copies) : null}
         {namesState && onlyMine ? (
           filter.view === 'all' && (notServedShown.length || !narrowed) ? (
             <NotServedSection
@@ -666,8 +682,8 @@ export function ModelsBoard(props: ModelsBoardProps) {
             />
           ) : null
         ) : null}
-        {parts.used.length ? section('used', parts.used) : null}
-        {parts.rest.length
+        {!onlyMine && parts.used.length ? section('used', parts.used) : null}
+        {!onlyMine && parts.rest.length
           ? section(
               'rest',
               parts.rest,

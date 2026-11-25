@@ -51,6 +51,8 @@ import { RoutingSaveBar } from './components/RoutingSaveBar';
 import { usePageTransitionLayer } from '@/components/common/PageTransitionLayer';
 import { TierLadder } from './components/TierLadder';
 import { WeightDialog } from './components/WeightDialog';
+import { useProvimuxRoutingNames } from '@/provimux/routing/useRoutingNames';
+import { ProvimuxRoutingNamesNote, ProvimuxRoutingTierNote } from '@/provimux/routing/RoutingNames';
 import styles from './RoutingPage.module.scss';
 
 // Cooldown chips count down coarsely; one shared timer for the whole board.
@@ -204,6 +206,7 @@ export function RoutingPage() {
     [board, draft]
   );
   const selectedModel = model.trim() || null;
+  const provimuxNames = useProvimuxRoutingNames(selectedModel);
   const preview = useMemo(
     () => (board && draft ? resolveRoute(board, draft, catalog, selectedModel, nowMs) : null),
     [board, draft, catalog, selectedModel, nowMs]
@@ -325,6 +328,7 @@ export function RoutingPage() {
           {t('routing.models_loading', { done: modelProgress.done, total: modelProgress.total })}
         </span>
       ) : null}
+      <ProvimuxRoutingNamesNote verdict={provimuxNames} />
     </div>
   );
 
@@ -366,6 +370,7 @@ export function RoutingPage() {
             nowMs={nowMs}
             theme={resolvedTheme}
             entryControl={entryControl}
+            stateNote={<ProvimuxRoutingTierNote verdict={provimuxNames} />}
             onMove={handleMove}
             onStep={handleStep}
             onEditWeights={handleEditWeights}

@@ -269,7 +269,12 @@ offers this name now. It is served as soon as one does." Then **Not served**: ev
 offers it and Keep, used ones first, folded ("Show the 547 names that aren't served (2 used in 30 days)"). The search
 and "Served by" filter narrow it and unfold it; a view (More than one account, Cooling down, …) hides it, since its
 rows have no routes. "Used in the last 30 days" and "Other models" are not drawn while it is on: everything not his is
-under Not served.
+under Not served. The one kind of card that is served and not his, an account's prefixed copy of one of his names
+(`team-a/opus`, the answer's `copies`), has a section of its own between Your names and Not served, **Your names under
+a prefix** ("An account's prefix in front of one of your names: served as that name is."), most used first: before,
+a used copy showed under "Used in the last 30 days" while the switch was on, which this section said was not drawn,
+and an unused one under "Other models". A section of its own, not Your names: the count and the hint of Your names
+are the names he set, and a copy is not one.
 
 ### 8.5 What was refused
 
@@ -285,6 +290,10 @@ one line says only the first 256 are counted.
 With the switch on, a save that takes a name's last alias away, the name neither kept nor set in a login's file,
 stops serving it: the save bar says so after the count of changes ("2 names will no longer be served: haiku, sonnet")
 (`droppedBySave`). A rename counts as the old name going.
+
+A save leaves the page with no draft (it carries nothing, aliases-page.md 3.6) until the read after it answers. Until
+then the page draws the draft it had, locked, under the "Reading…" line (`held`, `ModelsBody`), never the skeleton:
+the panel stayed away for the 50 ms or so of that read before.
 
 ### 8.7 Files and tests
 
@@ -320,6 +329,38 @@ reflects a write), `copies` (a name's prefixed copies; the page's guess from the
 - `requested_models` has no days: before its `from`, the page counts by the model that answered (an alias's traffic
   under the vendor's model, a prefix lost), and says from when names are counted. It is not filtered and has no
   per-key split: the preview cannot say which tool sent a name.
-- A prefixed copy is drawn as the routes list it (with the served names; under "Other models" while the switch is on),
-  not on its name's card: `copies` gives its accounts, not its routes.
+- A prefixed copy is drawn as the routes list it (with the served names; under Your names under a prefix while the
+  switch is on, 8.4), not on its name's card: `copies` gives its accounts, not its routes.
 - A refused name does not say which client key asked: the strip can say what and when, not which tool.
+
+### 8.9 On the Routing page
+
+Upstream's Routing page previews a typed model through the tiers from what each account offers (its channel's
+model definitions, a login's models, a key's fixed list), not from what is served. With the switch on, the gateway
+refuses a name that is not his before any tier is tried, so a name an account offers read "Serving requests →
+<account> 100%" though it is refused, and one of his alias names read "Does not offer this model". The page's view of
+what accounts offer stays (the gateway's design accepts it: only-my-names.md 16.1, cost 3); what it must not do is
+let a refused name read as working.
+
+It reads `GET /provimux/names` on open and every 30 s while visible (`useProvimuxRoutingNames`; the header's refresh
+stays upstream's). While the answer says the switch is on (`switchState` "on"), under the model field, in the page's
+hint style:
+
+| Typed | The line |
+| --- | --- |
+| nothing | "Serve only my names is on: a name that isn't yours is refused before routing. **See Models**" |
+| a name that is not served under the rule | in the warning tone, an alert: "gpt-4o isn't one of your names, so the gateway refuses it before routing. The tiers below only show which accounts offer it. **Keep it on Models**"; and beside each tier line that says the tier serves ("Serving requests", Standby, "may serve"): "Not for gpt-4o: refused before routing" |
+| one of his names | "opus is one of your names, so it is served while Serve only my names is on. **See which accounts answer it on Models**" (the tiers may still say "Does not offer this model": they know an alias only by the models under it) |
+| a prefixed copy of one | "team/opus is served: it is opus, one of your names, under an account's prefix. **See which accounts answer it on Models**" |
+| his, no account offers it | "kept-model is one of your names, but no account offers it now. **See Models**" |
+
+The links open Models searched for the typed name (its card, or its row under Not served with Keep). A name is served
+under the rule when it is one of the answer's `names` or one of their `copies`, compared exactly as the gateway does
+(only-my-names.md 16; after its narrowing a name is his only by the configuration: an alias row or `keep`), and, for a
+name with a thinking suffix (`opus(high)`), the name without it first. `set_by` is not read. Off, Home, a 404 or no
+answer yet: nothing on the page changes.
+
+Upstream's files take it in three places: `RoutingPage.tsx` (the hook, the line in the model picker, the tier note
+passed down) and `TierLadder.tsx` (an optional `stateNote` drawn after the state of a tier that serves, may serve or
+stands by). The rest is `src/provimux/routing/` (`nameVerdict.ts` pure, `useRoutingNames.ts`, `RoutingNames.tsx` and
+its `.module.scss`). Tests: `tests/provimux/routing-names.test.ts`.

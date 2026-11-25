@@ -52,6 +52,11 @@ export interface ModelsBodyProps {
   onDismiss: (key: number) => void;
   /** "Serve only my names"; absent where the gateway has no such setting. */
   names?: BoardNames;
+  /**
+   * The last draft the page held: drawn, locked, while the read after a save or a write runs, so the panel stays
+   * in place instead of giving way to the skeleton for the moment the read takes.
+   */
+  held?: AliasDraft | null;
 }
 
 /**
@@ -63,7 +68,9 @@ export interface ModelsBodyProps {
 export function ModelsBody(props: ModelsBodyProps) {
   const { t } = useTranslation();
   const { page, onRetry, onDismiss } = props;
-  const { draft } = page;
+  // A save drops the page's draft (it carries nothing, aliases-page.md 3.6); until the read after it answers, the
+  // panel shows the draft it had, locked.
+  const draft = page.draft ?? (page.reading ? (props.held ?? null) : null);
   return (
     <>
       <LostEdits notices={page.lost} onDismiss={onDismiss} />

@@ -749,7 +749,20 @@
       "write_changed": "Cấu hình đã bị thay đổi ở nơi khác kể từ khi trang này đọc, nên không có gì được ghi. Trang đã đọc lại: hãy thử lại.",
       "write_refused": "Gateway đã từ chối thay đổi: {{message}}",
       "write_failed": "Chưa lưu: {{message}}",
-      "save_drops_other": "{{count}} tên sẽ không còn được phục vụ: {{names}}"
+      "save_drops_other": "{{count}} tên sẽ không còn được phục vụ: {{names}}",
+      "section_copies": "Tên của bạn có tiền tố",
+      "section_copies_hint": "Tiền tố của một tài khoản đứng trước một tên của bạn: được phục vụ như chính tên đó."
+    },
+    "routing": {
+      "names_rule": "Chỉ phục vụ tên của tôi đang bật: tên không phải của bạn bị từ chối trước khi định tuyến.",
+      "names_refused": "{{name}} không phải tên của bạn, nên cổng từ chối nó trước khi định tuyến. Các tầng bên dưới chỉ cho biết tài khoản nào cung cấp nó.",
+      "names_yours": "{{name}} là tên của bạn, nên được phục vụ khi Chỉ phục vụ tên của tôi đang bật.",
+      "names_yours_copy": "{{name}} được phục vụ: đó là {{base}}, một tên của bạn, với tiền tố của tài khoản.",
+      "names_yours_none": "{{name}} là tên của bạn, nhưng hiện không tài khoản nào cung cấp nó.",
+      "names_link": "Xem Model",
+      "names_who_link": "Xem tài khoản nào trả lời nó trong Model",
+      "names_keep_link": "Giữ nó trong Model",
+      "names_tier_refused": "Không áp dụng cho {{name}}: bị từ chối trước khi định tuyến"
     }
   }
 }

@@ -31,6 +31,7 @@ export interface TierLadderProps {
   nowMs: number;
   theme: ResolvedTheme;
   entryControl: ReactNode;
+  stateNote?: ReactNode;
   onMove: (key: string, target: RoutingDropTarget) => void;
   onStep: (key: string, direction: 'up' | 'down') => void;
   onEditWeights: (key: string) => void;
@@ -52,6 +53,7 @@ export function TierLadder({
   nowMs,
   theme,
   entryControl,
+  stateNote,
   onMove,
   onStep,
   onEditWeights,
@@ -180,6 +182,7 @@ export function TierLadder({
                     : t('routing.tier_priority', { priority })}
                 </span>
                 <span className={styles.tierState}>{tierStateText(route?.state)}</span>
+                {route && ['active', 'standby', 'unknown'].includes(route.state) ? stateNote : null}
               </div>
               <div className={styles.tierMembers}>
                 {tierMembers.map((member) => (

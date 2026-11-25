@@ -749,7 +749,20 @@
       "write_changed": "自本页读取以来，配置已在别处被修改，因此没有写入任何内容。本页已重新读取：请再试一次。",
       "write_refused": "网关拒绝了此修改：{{message}}",
       "write_failed": "未保存：{{message}}",
-      "save_drops_other": "{{count}} 个名称将不再提供：{{names}}"
+      "save_drops_other": "{{count}} 个名称将不再提供：{{names}}",
+      "section_copies": "带前缀的你的名称",
+      "section_copies_hint": "账号前缀加在你的某个名称前：与该名称一样提供服务。"
+    },
+    "routing": {
+      "names_rule": "“只提供我的名称”已开启：不属于你的名称会在路由前被拒绝。",
+      "names_refused": "{{name}} 不是你的名称，网关会在路由前拒绝它。下面的层级只显示哪些账号提供它。",
+      "names_yours": "{{name}} 是你的名称，在“只提供我的名称”开启时会提供服务。",
+      "names_yours_copy": "{{name}} 会提供服务：它是你的名称 {{base}} 加上账号前缀。",
+      "names_yours_none": "{{name}} 是你的名称，但目前没有账号提供它。",
+      "names_link": "查看模型",
+      "names_who_link": "在模型页查看哪些账号响应它",
+      "names_keep_link": "在模型页保留它",
+      "names_tier_refused": "{{name}} 不会到达这里：在路由前被拒绝"
     }
   }
 }

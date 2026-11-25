@@ -749,7 +749,20 @@
       "write_changed": "이 페이지가 읽은 뒤 다른 곳에서 설정이 바뀌어 아무것도 쓰지 않았습니다. 페이지가 다시 읽었으니 한 번 더 시도하세요.",
       "write_refused": "게이트웨이가 변경을 거부했습니다: {{message}}",
       "write_failed": "저장되지 않음: {{message}}",
-      "save_drops_other": "이름 {{count}}개가 더 이상 제공되지 않습니다: {{names}}"
+      "save_drops_other": "이름 {{count}}개가 더 이상 제공되지 않습니다: {{names}}",
+      "section_copies": "접두사가 붙은 내 이름",
+      "section_copies_hint": "내 이름 앞에 계정의 접두사가 붙은 것: 그 이름과 똑같이 제공됩니다."
+    },
+    "routing": {
+      "names_rule": "내 이름만 제공이 켜져 있습니다: 내 이름이 아닌 이름은 라우팅 전에 거부됩니다.",
+      "names_refused": "{{name}}은(는) 내 이름이 아니므로 게이트웨이가 라우팅 전에 거부합니다. 아래 단계는 어떤 계정이 제공하는지만 보여 줍니다.",
+      "names_yours": "{{name}}은(는) 내 이름이므로 내 이름만 제공이 켜져 있어도 제공됩니다.",
+      "names_yours_copy": "{{name}}은(는) 제공됩니다: 내 이름 {{base}}에 계정의 접두사가 붙은 것입니다.",
+      "names_yours_none": "{{name}}은(는) 내 이름이지만 지금 제공하는 계정이 없습니다.",
+      "names_link": "모델 보기",
+      "names_who_link": "모델에서 어떤 계정이 응답하는지 보기",
+      "names_keep_link": "모델에서 유지하기",
+      "names_tier_refused": "{{name}}은(는) 해당 없음: 라우팅 전에 거부됨"
     }
   }
 }

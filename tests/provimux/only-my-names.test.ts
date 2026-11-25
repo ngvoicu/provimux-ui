@@ -145,7 +145,13 @@ const pageWith = (state: AliasState): PageState =>
 function renderBody(
   page: PageState,
   names: BoardNames | undefined,
-  options: { filter?: ModelsFilter; writing?: string | null; routes?: unknown } = {}
+  options: {
+    filter?: ModelsFilter;
+    writing?: string | null;
+    routes?: unknown;
+    usage?: Record<string, number>;
+    held?: AliasDraft | null;
+  } = {}
 ) {
   return renderToStaticMarkup(
     createElement(
@@ -158,7 +164,7 @@ function renderBody(
         routesError: null,
         routesOffsetMs: OWNER_NOW - Date.now(),
         lists: ownerLists(),
-        usage: ownerUsage(),
+        usage: options.usage ?? ownerUsage(),
         nowMs: OWNER_NOW,
         filter: options.filter ?? EMPTY_MODELS_FILTER,
         onFilter: noop,
@@ -169,6 +175,7 @@ function renderBody(
         onDismiss: noop,
         writing: options.writing ?? null,
         names,
+        held: options.held,
       })
     )
   );
@@ -581,8 +588,23 @@ describe('the switch on the page', () => {
     const text = textOf(html);
     expect(text).toContain('On: 15 names served, 27 not served.');
     expect(text).toContain('Not served 27');
-    // The copy is drawn with the served names, as the routes list it.
-    expect(text).toContain(`Show 1 other model ${copy.id}`);
+    // The copy is drawn with the served names, in a section of its own after his names (8.4): neither "Used in the
+    // last 30 days" nor "Other models" is drawn while the switch is on.
+    expect(text).toContain(`Your names under a prefix 1`);
+    expect(text.indexOf(copy.id)).toBeGreaterThan(text.indexOf('Your names under a prefix'));
+    expect(text.indexOf('Your names under a prefix')).toBeLessThan(text.indexOf('Not served 27'));
+    expect(text).not.toContain('Other models');
+    // Used in the last 30 days (the run's `team/gpt-5.5`): still with the copies, not under "Used".
+    const used = textOf(
+      renderBody(pageWith(state), boardNames(answer), {
+        routes,
+        usage: { ...ownerUsage(), [copy.id]: 7 },
+      })
+    );
+    expect(used).toContain(`Your names under a prefix 1`);
+    expect(used).not.toContain('Used in the last 30 days');
+    expect(used).not.toContain('Other models');
+    expect(used).toContain(`${copy.id} 1 account · 7 requests in 30 days`);
     // Off, the same file: every name is counted once, the copy included.
     const off = keptAnswer(['claude-haiku-5-5'], withCopy);
     const offText = textOf(
@@ -1108,6 +1130,35 @@ describe('usage by the name tools sent (requested_models)', () => {
       '2026-02-28',
       '2025-12-31',
     ]);
+  });
+});
+
+describe('after a save: the panel stays while the page reads again', () => {
+  test('the draft it had is drawn, locked, until the read answers; never the skeleton', async () => {
+    await i18n.changeLanguage('en');
+    const shown = pageWith(ownerState());
+    const sent = shown.draft!;
+    // A save drops the draft (it carries nothing); the read after it is under way.
+    const saving = pageStep(shown, { type: 'save-started' });
+    const saved = pageStep(saving, {
+      type: 'save-answered',
+      outcome: { confirmed: [], unconfirmed: [], failure: null },
+    });
+    const reading = pageStep(saved, { type: 'read-started' });
+    expect(reading.draft).toBeNull();
+    expect(reading.reading).toBe(true);
+    const held = renderBody(reading, boardNames(ownerAnswer()), { held: sent });
+    expect(held).not.toContain('aria-busy="true" aria-label="Loading');
+    expect(textOf(held)).toContain('Your names 13');
+    expect(textOf(held)).toContain('Reading');
+    // Locked while it reads: nothing can be edited.
+    expect(held).toMatch(/<fieldset[^>]*disabled/);
+    // Without a draft held (the page's first read), the skeleton as before; and once the read failed, its error.
+    expect(renderBody(reading, boardNames(ownerAnswer()))).toContain('aria-busy="true"');
+    const failed = pageStep(reading, { type: 'read-failed', message: 'down' });
+    expect(textOf(renderBody(failed, boardNames(ownerAnswer()), { held: sent }))).not.toContain(
+      'Your names 13'
+    );
   });
 });
 

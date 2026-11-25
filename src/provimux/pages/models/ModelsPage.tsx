@@ -282,8 +282,11 @@ export function ModelsPage() {
   }, [connectionStatus, read]);
 
   const { draft } = page;
+  // The draft drawn while the read after a save answers (ModelsBody's `held`): the last one the page had.
+  const [held, setHeld] = useState<AliasDraft | null>(null);
+  if (draft !== null && draft !== held) setHeld(draft);
   const dirty = isDirty(page);
-  const base = draft?.base ?? null;
+  const base = (draft ?? (page.reading ? held : null))?.base ?? null;
   const excludedCount = useMemo(
     () =>
       base ? readExclusions(base, { compatible: compatibleExclusions }).exclusions.length : null,
@@ -626,6 +629,7 @@ export function ModelsPage() {
         onRetry={() => void read()}
         onDismiss={(key) => send({ type: 'dismissed', key })}
         names={boardNames}
+        held={held}
       />
 
       <FloatingSaveBar

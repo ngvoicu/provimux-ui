@@ -1,0 +1,54 @@
+/* The Routing page's hint style (its model progress and "All unavailable" lines), with upstream's warning tokens
+   for a refused name. */
+
+.note {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  width: 100%;
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-tertiary);
+  text-align: left;
+
+  svg {
+    flex: none;
+    margin-top: 2px;
+  }
+
+  &[data-tone='served'] {
+    color: var(--text-secondary);
+  }
+
+  &[data-tone='refused'] {
+    padding: 7px 10px;
+    border: 1px solid var(--warning-border);
+    border-radius: 8px;
+    background: var(--warning-bg);
+    color: var(--warning-text);
+    font-weight: 500;
+  }
+}
+
+.link {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  white-space: nowrap;
+
+  &:hover {
+    color: var(--text-primary);
+  }
+}
+
+.tierNote {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--warning-text);
+}

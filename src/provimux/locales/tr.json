@@ -818,7 +818,20 @@
       "write_refused": "Ağ geçidi değişikliği reddetti: {{message}}",
       "write_failed": "Kaydedilmedi: {{message}}",
       "save_drops_one": "{{count}} ad artık sunulmayacak: {{names}}",
-      "save_drops_other": "{{count}} ad artık sunulmayacak: {{names}}"
+      "save_drops_other": "{{count}} ad artık sunulmayacak: {{names}}",
+      "section_copies": "Önekli adlarınız",
+      "section_copies_hint": "Adlarınızdan birinin önünde bir hesabın öneki: o ad gibi sunulur."
+    },
+    "routing": {
+      "names_rule": "Yalnızca adlarımı sun açık: sizin olmayan bir ad yönlendirmeden önce reddedilir.",
+      "names_refused": "{{name}} adlarınızdan biri değil, bu yüzden ağ geçidi onu yönlendirmeden önce reddeder. Aşağıdaki katmanlar yalnızca hangi hesapların onu sunduğunu gösterir.",
+      "names_yours": "{{name}} adlarınızdan biri, bu yüzden Yalnızca adlarımı sun açıkken sunulur.",
+      "names_yours_copy": "{{name}} sunulur: adlarınızdan biri olan {{base}}, bir hesabın önekiyle.",
+      "names_yours_none": "{{name}} adlarınızdan biri, ancak şu anda hiçbir hesap onu sunmuyor.",
+      "names_link": "Modeller'e bakın",
+      "names_who_link": "Hangi hesapların yanıtladığını Modeller'de görün",
+      "names_keep_link": "Modeller'de tutun",
+      "names_tier_refused": "{{name}} için değil: yönlendirmeden önce reddedilir"
     }
   }
 }

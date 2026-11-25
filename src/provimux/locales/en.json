@@ -1375,7 +1375,20 @@
       "write_refused": "The gateway refused the change: {{message}}",
       "write_failed": "Not saved: {{message}}",
       "save_drops_one": "{{count}} name will no longer be served: {{names}}",
-      "save_drops_other": "{{count}} names will no longer be served: {{names}}"
+      "save_drops_other": "{{count}} names will no longer be served: {{names}}",
+      "section_copies": "Your names under a prefix",
+      "section_copies_hint": "An account's prefix in front of one of your names: served as that name is."
+    },
+    "routing": {
+      "names_rule": "Serve only my names is on: a name that isn't yours is refused before routing.",
+      "names_refused": "{{name}} isn't one of your names, so the gateway refuses it before routing. The tiers below only show which accounts offer it.",
+      "names_yours": "{{name}} is one of your names, so it is served while Serve only my names is on.",
+      "names_yours_copy": "{{name}} is served: it is {{base}}, one of your names, under an account's prefix.",
+      "names_yours_none": "{{name}} is one of your names, but no account offers it now.",
+      "names_link": "See Models",
+      "names_who_link": "See which accounts answer it on Models",
+      "names_keep_link": "Keep it on Models",
+      "names_tier_refused": "Not for {{name}}: refused before routing"
     }
   },
   "theme": {
