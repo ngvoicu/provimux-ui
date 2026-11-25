@@ -44,6 +44,7 @@ import {
   othersOf,
   readSetting,
   refusedOf,
+  servedCopiesOf,
   setNamesOf,
   switchState,
   unkeepBody,
@@ -148,24 +149,33 @@ export function ModelsBoard(props: ModelsBoardProps) {
     () => (namesAnswer ? othersOf(namesAnswer, yours, usage) : []),
     [namesAnswer, yours, usage]
   );
+  // An account's prefixed copy of one of his names is served too, though neither his nor another's.
+  const alsoServed = useMemo(
+    () => servedCopiesOf(routes, namesAnswer, yours),
+    [routes, namesAnswer, yours]
+  );
   const onlyMine = namesAnswer !== null && switchState(namesAnswer) === 'on';
   // Home decides names itself: the switch says so, and the list's words do not point at it.
   const namesApply = namesAnswer !== null && switchState(namesAnswer) !== 'not-applied';
-  // With the switch on, the cards are his names; everything else is a row of "Not served".
+  // With the switch on, the cards are his names (and what is served with them); everything else is a row of
+  // "Not served".
   const items = useMemo(
-    () => (onlyMine ? allItems.filter((item) => item.own || item.fresh) : allItems),
-    [allItems, onlyMine]
+    () =>
+      onlyMine
+        ? allItems.filter((item) => item.own || item.fresh || alsoServed.has(item.key))
+        : allItems,
+    [allItems, alsoServed, onlyMine]
   );
   const notServed = useMemo((): OtherItem[] => {
     if (!onlyMine) return [];
     const list = [...others];
     const listed = new Set(list.map((other) => other.key));
     for (const item of allItems) {
-      if (item.own || item.fresh || listed.has(item.key)) continue;
+      if (item.own || item.fresh || listed.has(item.key) || alsoServed.has(item.key)) continue;
       list.push({ key: item.key, name: item.name, requests: item.requests, accounts: [] });
     }
     return list.sort(byUse);
-  }, [allItems, onlyMine, others]);
+  }, [allItems, alsoServed, onlyMine, others]);
   const summary = useMemo(() => summarizeNames(items), [items]);
   // Where each name is excluded (by its name or a model it sends upstream), for its mark and link.
   const compatibleExclusions = props.compatibleExclusions === true;
@@ -216,6 +226,7 @@ export function ModelsBoard(props: ModelsBoardProps) {
       setting,
       yours,
       others,
+      alsoServed: alsoServed.size,
       usage: props.names?.usage ?? 'unknown',
       blocked,
       busy: locked || props.writing != null,
@@ -234,6 +245,7 @@ export function ModelsBoard(props: ModelsBoardProps) {
     locked,
     yours,
     others,
+    alsoServed,
     nowMs,
     t,
   ]);

@@ -57,6 +57,13 @@ import styles from './ModelsPage.module.scss';
 
 /** The routes' and the lists' rhythm: on open, on refresh, every 30 s while visible. */
 const POLL_MS = 30_000;
+/**
+ * After a write, the routes and the names are read at once and again at these delays (ms). The gateway answers the
+ * write before its reload applies it (tens of milliseconds later), and `GET /provimux/names` carries no version to
+ * tell an answer from before the write (models-page.md 8.8): without a second read the page would show the old
+ * state, such as a kept name that "no account serves", until the next 30 s read.
+ */
+const SETTLE_READS_MS = [1_000, 4_000];
 const fetchRoutes = (client: Parameters<typeof provimuxApi.modelRoutes>[0]) =>
   provimuxApi.modelRoutes(client);
 const fetchLists = (client: Parameters<typeof provimuxApi.modelLists>[0]) =>
@@ -144,6 +151,19 @@ export function ModelsPage() {
   const { load: loadLists } = lists;
   const { load: loadUsage } = usage;
   const { load: loadNames } = names;
+  const settleTimers = useRef<number[]>([]);
+  const readAgainSoon = useCallback(() => {
+    for (const timer of settleTimers.current) window.clearTimeout(timer);
+    settleTimers.current = SETTLE_READS_MS.map((delay) =>
+      window.setTimeout(() => void Promise.all([loadRoutes(), loadNames()]), delay)
+    );
+  }, [loadNames, loadRoutes]);
+  useEffect(
+    () => () => {
+      for (const timer of settleTimers.current) window.clearTimeout(timer);
+    },
+    []
+  );
   const now = screenNow(usePageClock(), routes.loadedAt, routes.offsetMs);
   const usageMap = useMemo(() => usageByName(usage.data), [usage.data]);
   const details = useModelDetails(lists.data);
@@ -267,8 +287,9 @@ export function ModelsPage() {
     if (outcome.failure === null) showNotification(t('provimux.models.saved'), 'success');
     else showNotification(t('provimux.aliases.save_not_whole'), 'warning');
     // His names follow his alias rows: with the switch on, what is served changes with a save.
+    readAgainSoon();
     await Promise.all([read(), loadRoutes(), loadNames()]);
-  }, [loadNames, loadRoutes, read, send, showNotification, t]);
+  }, [loadNames, loadRoutes, read, readAgainSoon, send, showNotification, t]);
 
   const edit = useCallback(
     (change: (current: AliasDraft) => AliasDraft) => send({ type: 'edited', change }),
@@ -380,10 +401,11 @@ export function ModelsPage() {
         send({ type: 'write-ended' });
         useConfigStore.getState().clearCache();
       }
+      if (done) readAgainSoon();
       await Promise.all([read(), loadRoutes(), loadNames()]);
       return done;
     },
-    [loadNames, loadRoutes, namesOn, read, send, showNotification, t]
+    [loadNames, loadRoutes, namesOn, read, readAgainSoon, send, showNotification, t]
   );
   const usageState = usageStateOf(usage.data, usage.error !== null && usage.data === null);
   const boardNames = useMemo(

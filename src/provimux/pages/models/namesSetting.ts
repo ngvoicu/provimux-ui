@@ -10,6 +10,7 @@
  */
 import { isRecord } from '@/utils/helpers';
 import type {
+  ProvimuxModelRoutesResponse,
   ProvimuxNameAccount,
   ProvimuxNamesResponse,
   ProvimuxRefusedName,
@@ -189,6 +190,27 @@ export function othersOf(
       accounts: other.accounts,
     }))
     .sort(byUse);
+}
+
+/**
+ * Names the gateway serves (or, switched off, would go on serving) that are neither his nor among `others`: an
+ * account's prefixed copy of one of his names (`team/glm-5` when `glm-5` is his; the gateway's only-my-names.md
+ * 3.3 serves it and lists it in neither `names` nor `others`). A name the routes list and the status endpoint does
+ * not call another's is served, so it is never "Not served", and it counts among what is served. Keys.
+ */
+export function servedCopiesOf(
+  routes: ProvimuxModelRoutesResponse | null,
+  answer: ProvimuxNamesResponse | null,
+  yours: ReadonlySet<string>
+): Set<string> {
+  const copies = new Set<string>();
+  if (!routes || !answer) return copies;
+  const others = new Set(answer.others.map((other) => nameKey(other.name)));
+  for (const model of routes.models) {
+    const key = nameKey(model.id);
+    if (!yours.has(key) && !others.has(key)) copies.add(key);
+  }
+  return copies;
 }
 
 export interface Preview {

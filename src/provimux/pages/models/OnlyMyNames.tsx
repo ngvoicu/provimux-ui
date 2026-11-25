@@ -45,6 +45,8 @@ export interface NamesState {
   yours: ReadonlySet<string>;
   /** Every other name, used ones first. */
   others: readonly OtherItem[];
+  /** Names served that are neither his nor among `others`: accounts' prefixed copies of his names. */
+  alsoServed: number;
   usage: UsageState;
   /** Why nothing can be written now, said in a line (edits not saved, no tag); null when it can. */
   blocked: string | null;
@@ -220,7 +222,7 @@ export function OnlyMyNamesSwitch({
   const { answer, setting, others } = state;
   const where = switchState(answer);
   const served = yourNames.length;
-  const total = served + others.length;
+  const total = served + state.alsoServed + others.length;
   const preview = previewOpen && where === 'off';
   const switching = state.writing === 'switch';
 
@@ -257,7 +259,7 @@ export function OnlyMyNamesSwitch({
         : {
             tone: 'on',
             text: t('provimux.names.status_on', {
-              count: served,
+              count: served + state.alsoServed,
               others: t('provimux.names.not_served_count', { count: others.length }),
             }),
           };

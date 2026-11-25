@@ -44,6 +44,7 @@ import {
   previewOf,
   readSetting,
   refusedOf,
+  servedCopiesOf,
   setNamesOf,
   switchBody,
   unkeepBody,
@@ -493,6 +494,42 @@ describe('the switch on the page', () => {
     // No "used" or "other" parts while it is on: everything not his is under Not served.
     expect(text).not.toContain('Used in the last 30 days 4');
     expect(text).not.toMatch(/Show \d+ other models?/);
+  });
+
+  test('an account’s prefixed copy of his name is served: counted as served, never under Not served', async () => {
+    await i18n.changeLanguage('en');
+    // The gateway serves team/<his name> on an account with prefix team (only-my-names.md 3.3) and lists it in
+    // neither names nor others; model-routes lists it, as it lists every served name.
+    const state = withSetting({ enabled: true, keep: ['claude-haiku-5-5'] });
+    const answer = ownerAnswer((raw) => {
+      raw.only_my_names = { enabled: true, applies: true, not_applied: null };
+      raw.others = (raw.others as Doc[]).filter((other) => other.name !== 'claude-haiku-5-5');
+      (raw.names as Doc[]).push({ name: 'claude-haiku-5-5', set_by: ['keep'], accounts: 2 });
+    });
+    const routes = routesServing(answer.names.map((own) => own.name));
+    const copy = { ...structuredClone(routes.models[0]), id: `team/${routes.models[0].id}` };
+    routes.models.push(copy);
+    const yours = yourNameKeys(answer, readSetting(state.document));
+    expect([...servedCopiesOf(readModelRoutes(routes), answer, yours)]).toEqual([
+      copy.id.toLowerCase(),
+    ]);
+    const text = textOf(renderBody(pageWith(state), boardNames(answer), { routes }));
+    expect(text).toContain('On: 15 names served, 27 not served.');
+    expect(text).toContain('Not served 27');
+    expect(text).toContain("Show the 27 names that aren't served");
+    // Off, the same file: every name is counted once, the copy included.
+    const off = ownerAnswer((raw) => {
+      raw.others = (raw.others as Doc[]).filter((other) => other.name !== 'claude-haiku-5-5');
+      (raw.names as Doc[]).push({ name: 'claude-haiku-5-5', set_by: ['keep'], accounts: 2 });
+    });
+    const offText = textOf(
+      renderBody(
+        pageWith(withSetting({ enabled: false, keep: ['claude-haiku-5-5'] })),
+        boardNames(off),
+        { routes }
+      )
+    );
+    expect(offText).toContain('Off: all 42 names are served, 14 of them yours.');
   });
 
   test('on with no names: it says nothing is served; Home: the switch is off and says why', async () => {
