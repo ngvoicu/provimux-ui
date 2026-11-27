@@ -38,20 +38,13 @@ const t = i18n.t.bind(i18n);
 
 type Doc = Record<string, unknown>;
 
-const AFFINITY = {
-  enabled: true,
-  ttl_s: 3600,
-  strategy: 'round-robin',
-  subagents: true,
-  rebind_on: 'any',
-};
 const COUNTS = { returned: 0, last_returned_at: null, since: '2026-11-27T13:21:30Z' };
 const answer = (setting: number | null, reason: string | null, more: Doc = {}): Doc => ({
   observed_at: '2026-11-27T13:21:30Z',
   setting: { cold_after_s: setting },
   in_effect: reason === null,
   reason,
-  affinity: AFFINITY,
+  ttl_s: 3600,
   counts: COUNTS,
   ...more,
 });
@@ -60,9 +53,10 @@ const ANSWERS = {
   notSet: answer(null, 'not-set'),
   inEffect: answer(360, null),
   notBelowTtl: answer(7200, 'not-below-ttl'),
-  rebindNever: answer(360, 'rebind-never', { affinity: { ...AFFINITY, rebind_on: 'never' } }),
-  affinityOff: answer(360, 'session-affinity-off', { affinity: { ...AFFINITY, enabled: false } }),
-  asInstalled: answer(null, 'session-affinity-off', { affinity: { ...AFFINITY, enabled: false } }),
+  rebindNever: answer(360, 'rebind-never'),
+  // With session affinity off the gateway reports no lifetime.
+  affinityOff: answer(360, 'session-affinity-off', { ttl_s: null }),
+  asInstalled: answer(null, 'session-affinity-off', { ttl_s: null }),
   pluginScheduler: answer(360, 'plugin-scheduler'),
   homeMode: answer(360, 'home-mode'),
   counted: answer(360, null, {
@@ -107,7 +101,7 @@ function gateway(initial: Doc = {}, options: { path?: boolean; dropNextReply?: b
             : cold >= 3600
               ? 'not-below-ttl'
               : null;
-    return answer(cold, reason);
+    return answer(cold, reason, reason === 'session-affinity-off' ? { ttl_s: null } : {});
   };
   const client = {
     async getRaw(at: string) {
@@ -273,7 +267,15 @@ describe('times', () => {
     expect(reachesTtl(60, state)).toBe(true);
     expect(reachesTtl(65, state)).toBe(true);
     expect(reachesTtl(null, state)).toBe(false);
-    expect(reachesTtl(65, { ...state, ttlS: null })).toBe(false);
+  });
+
+  test('with session affinity off the gateway reports no lifetime: none is quoted, and no time is compared', () => {
+    const off = stateOf(ANSWERS.affinityOff);
+    expect(off.ttlS).toBeNull();
+    expect(reachesTtl(65, off)).toBe(false);
+    expect(reasonText(t, { ...stateOf(ANSWERS.notBelowTtl), ttlS: null })).toBe(
+      "The time is not shorter than session affinity's lifetime, and an unused conversation is released by then anyway. Set a shorter time here, or a longer session-affinity-ttl in the Config Panel."
+    );
   });
 });
 

@@ -27,7 +27,7 @@ export interface ReturnState {
   inEffect: boolean;
   /** Why not, when not in effect (the first that applies, in the gateway's order). */
   reason: string | null;
-  /** How long session affinity keeps an unused conversation on its account, as it runs. */
+  /** How long session affinity keeps an unused conversation on its account; null with session affinity off. */
   ttlS: number | null;
   /** Bindings dropped since the gateway started: one conversation can count more than once. */
   returned: number;
@@ -58,14 +58,13 @@ const seconds = (value: unknown): number | null =>
 /** The state as the gateway sends it; null when the answer is not that object. */
 export function normalizeReturn(raw: unknown): ReturnState | null {
   if (!isRecord(raw) || typeof raw.in_effect !== 'boolean' || !isRecord(raw.setting)) return null;
-  const affinity = isRecord(raw.affinity) ? raw.affinity : {};
   const counts = isRecord(raw.counts) ? raw.counts : {};
   const returned = counts.returned;
   return {
     coldAfterS: seconds(raw.setting.cold_after_s),
     inEffect: raw.in_effect,
     reason: raw.in_effect ? null : text(raw.reason),
-    ttlS: seconds(affinity.ttl_s),
+    ttlS: seconds(raw.ttl_s),
     returned:
       typeof returned === 'number' && Number.isFinite(returned) && returned > 0
         ? Math.floor(returned)
