@@ -626,6 +626,8 @@ describe('addresses and the menu', () => {
       ['/provimux/accounts', null],
       ['/provimux/models', null],
       ['/provimux/savings', 'savings'],
+      // Restarts: listed while the server is Provimux (restarts.test.ts).
+      ['/provimux/restarts', 'provimux'],
     ]);
   });
 });

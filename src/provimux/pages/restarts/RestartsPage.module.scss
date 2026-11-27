@@ -1,0 +1,616 @@
+@use '../../../styles/mixins' as *;
+
+/* ============================================================
+ * Restarts: the next restart in three steps, then one card per
+ * setting. Tones: ok (a restart keeps it) in the subscription
+ * green, cut (a restart loses it) in upstream's warning amber,
+ * neutral and unknown in the greys; always with words.
+ * ============================================================ */
+
+.page {
+  max-width: 1180px;
+}
+
+.loading {
+  padding: 24px 0;
+  font-size: 13.5px;
+  color: var(--text-tertiary);
+}
+
+/* ---------- the next restart ---------- */
+
+.next {
+  padding: 16px 20px 18px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--bg-primary);
+  box-shadow: var(--shadow);
+}
+
+.nextTitle {
+  margin: 0 0 14px;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.steps {
+  --rail: var(--border-primary);
+
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0 20px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  @include mobile {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+}
+
+.step {
+  --tone: var(--text-secondary);
+  --tone-bg: var(--bg-secondary);
+  --tone-line: var(--border-primary);
+
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+
+  &[data-tone='ok'] {
+    --tone: var(--pmx-sub);
+    --tone-bg: var(--pmx-sub-bg);
+    --tone-line: color-mix(in srgb, var(--pmx-sub) 45%, transparent);
+  }
+
+  &[data-tone='cut'] {
+    --tone: var(--warning-text);
+    --tone-bg: var(--warning-bg);
+    --tone-line: var(--warning-border);
+  }
+
+  &[data-tone='unknown'] {
+    --tone: var(--text-tertiary);
+  }
+
+  // The rail from this step's node to the next one's.
+  &:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    top: 12px;
+    left: 34px;
+    right: -12px;
+    height: 1px;
+    background: var(--rail);
+  }
+
+  @include mobile {
+    flex-direction: row;
+    gap: 12px;
+    padding-bottom: 16px;
+
+    &:last-child {
+      padding-bottom: 0;
+    }
+
+    &:not(:last-child)::after {
+      top: 30px;
+      bottom: 4px;
+      left: 12px;
+      right: auto;
+      width: 1px;
+      height: auto;
+    }
+  }
+}
+
+.stepNode {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 25px;
+  height: 25px;
+  border: 1.5px solid var(--tone-line);
+  border-radius: 50%;
+  background: var(--tone-bg);
+  color: var(--tone);
+  font-family: var(--pmx-font-mono);
+  font-size: 12px;
+  font-weight: 600;
+
+  .step[data-tone='unknown'] & {
+    border-style: dashed;
+  }
+}
+
+.stepBody {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.stepHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.stepTitle {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text-primary);
+}
+
+.stepValue {
+  flex: none;
+  font-family: var(--pmx-font-mono);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--tone);
+}
+
+.stepText {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+/* The wait on the 0–30 s a stop can take. */
+.meter {
+  position: relative;
+  display: block;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--bg-tertiary);
+  overflow: hidden;
+}
+
+.meterFill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--fill, 0%);
+  border-radius: inherit;
+  background: var(--tone);
+  transition: width var(--dur-hover, 0.15s) var(--ease-out-strong, ease-out);
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+}
+
+/* ---------- the two cards ---------- */
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 14px;
+
+  @media (max-width: 1080px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  padding: 18px 20px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--bg-primary);
+  box-shadow: var(--shadow);
+
+  @include mobile {
+    padding: 16px;
+  }
+}
+
+.cardTitle {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+
+.valueRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.value {
+  --tone: var(--text-primary);
+
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 22px;
+  font-weight: 650;
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+  color: var(--text-primary);
+
+  &[data-tone='ok'] {
+    --tone: var(--pmx-sub);
+  }
+
+  &[data-tone='cut'],
+  &[data-tone='warning'] {
+    --tone: var(--warning-text);
+  }
+
+  &[data-tone='off'] {
+    --tone: var(--text-tertiary);
+  }
+
+  &[data-tone='muted'] {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-tertiary);
+  }
+}
+
+.dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--tone);
+}
+
+.provenance {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+
+  &[data-set='true'] {
+    border-color: var(--pmx-brand-line);
+    background: var(--pmx-brand-bg);
+    color: var(--pmx-brand);
+  }
+}
+
+.note {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+
+  &[data-tone='warning'] {
+    border: 1px solid var(--warning-border);
+    background: var(--warning-bg);
+    color: var(--warning-text);
+  }
+}
+
+.detail {
+  margin: -4px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-tertiary);
+
+  code {
+    font-family: var(--pmx-font-mono);
+    overflow-wrap: anywhere;
+  }
+}
+
+.linkRow {
+  margin: -4px 0 0;
+  font-size: 13px;
+}
+
+/* ---------- the slider ---------- */
+
+.slider {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-secondary);
+
+  input[type='range'] {
+    --track: var(--bg-tertiary);
+    --fill-color: var(--pmx-brand);
+
+    width: 100%;
+    height: 22px;
+    margin: 0;
+    background: transparent;
+    cursor: pointer;
+    appearance: none;
+
+    &:disabled {
+      cursor: default;
+      opacity: 0.6;
+    }
+
+    &::-webkit-slider-runnable-track {
+      height: 6px;
+      border-radius: 999px;
+      background: linear-gradient(
+        to right,
+        var(--fill-color) 0 var(--fill, 0%),
+        var(--track) var(--fill, 0%) 100%
+      );
+    }
+
+    &::-moz-range-track {
+      height: 6px;
+      border-radius: 999px;
+      background: var(--track);
+    }
+
+    &::-moz-range-progress {
+      height: 6px;
+      border-radius: 999px;
+      background: var(--fill-color);
+    }
+
+    &::-webkit-slider-thumb {
+      width: 18px;
+      height: 18px;
+      margin-top: -6px;
+      border: 2px solid var(--fill-color);
+      border-radius: 50%;
+      background: var(--floating-surface, #fff);
+      box-shadow: 0 1px 3px rgb(9 9 11 / 0.18);
+      appearance: none;
+      transition: transform var(--dur-press, 0.1s) var(--ease-out-strong, ease-out);
+    }
+
+    &::-moz-range-thumb {
+      width: 14px;
+      height: 14px;
+      border: 2px solid var(--fill-color);
+      border-radius: 50%;
+      background: var(--floating-surface, #fff);
+    }
+
+    &:active:not(:disabled)::-webkit-slider-thumb {
+      transform: scale(1.12);
+    }
+
+    &:focus-visible {
+      outline: none;
+
+      &::-webkit-slider-thumb {
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--pmx-brand) 35%, transparent);
+      }
+
+      &::-moz-range-thumb {
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--pmx-brand) 35%, transparent);
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      &::-webkit-slider-thumb {
+        transition: none;
+      }
+    }
+  }
+}
+
+.sliderHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sliderLabel {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.sliderValue {
+  font-family: var(--pmx-font-mono);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+
+  &[data-dirty='true'] {
+    color: var(--pmx-brand);
+  }
+}
+
+.scale {
+  position: relative;
+  height: 32px;
+  font-family: var(--pmx-font-mono);
+  font-size: 11px;
+  color: var(--text-tertiary);
+
+  // Positions are the centre of the thumb (9 px from each end at 1 and 30).
+  > span {
+    position: absolute;
+    top: 0;
+    transform: translateX(calc(-50% + 9px - var(--at, 0) * 18px));
+    white-space: nowrap;
+
+    &[data-edge='start'] {
+      transform: translateX(0);
+    }
+
+    &[data-edge='end'] {
+      transform: translateX(-100%);
+    }
+  }
+}
+
+.scale > .defaultMark {
+  top: 15px;
+  font-family: var(--pmx-font-sans);
+  font-size: 11px;
+  color: var(--pmx-brand);
+
+  // A caret pointing up at 25 on the numbers' row.
+  &::before {
+    content: '';
+    position: absolute;
+    top: -5px;
+    left: 50%;
+    border: 4px solid transparent;
+    border-top: 0;
+    border-bottom-color: var(--pmx-brand);
+    transform: translateX(-50%);
+  }
+}
+
+.cost {
+  display: flex;
+  gap: 8px;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-primary);
+
+  &::before {
+    content: '';
+    flex: none;
+    width: 3px;
+    margin: 2px 0;
+    border-radius: 2px;
+    background: var(--pmx-brand);
+  }
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.status {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+
+  &[data-tone='ok'] {
+    color: var(--pmx-sub);
+  }
+
+  &[data-tone='error'] {
+    color: var(--error-color);
+  }
+
+  &[data-tone='warning'] {
+    color: var(--warning-text);
+  }
+}
+
+/* ---------- facts, files, footnotes ---------- */
+
+.facts {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-secondary);
+
+  > div {
+    display: grid;
+    grid-template-columns: 140px minmax(0, 1fr);
+    gap: 12px;
+
+    @include mobile {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 2px;
+    }
+  }
+
+  dt {
+    font-size: 12.5px;
+    color: var(--text-tertiary);
+  }
+
+  dd {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--text-primary);
+  }
+}
+
+.factNote {
+  display: block;
+  color: var(--text-secondary);
+}
+
+.files {
+  font-size: 12.5px;
+  color: var(--text-tertiary);
+
+  summary {
+    width: fit-content;
+    cursor: pointer;
+    color: var(--text-secondary);
+
+    &:focus-visible {
+      outline: 2px solid var(--pmx-brand);
+      outline-offset: 2px;
+      border-radius: 3px;
+    }
+  }
+
+  code {
+    display: block;
+    margin-top: 6px;
+    font-family: var(--pmx-font-mono);
+    font-size: 12px;
+    color: var(--text-secondary);
+    overflow-wrap: anywhere;
+  }
+
+  p {
+    margin: 6px 0 0;
+    line-height: 1.5;
+  }
+}
+
+.footnotes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-tertiary);
+
+  p {
+    margin: 0;
+  }
+}

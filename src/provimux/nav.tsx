@@ -1,9 +1,14 @@
 import type { ReactElement } from 'react';
 import i18next from 'i18next';
 import { IconSlidersHorizontal } from '@/components/ui/icons';
-import { IconAccounts, IconModelRoutes, IconSavings } from './components/ProvimuxIcons';
+import {
+  IconAccounts,
+  IconModelRoutes,
+  IconRestarts,
+  IconSavings,
+} from './components/ProvimuxIcons';
 import { ADVANCED_SETTINGS_DRAWER } from './navDrawer';
-import { isListed, type PresenceEntry, type ProvimuxEndpoint } from './presence';
+import { isListed, type NavGate, type PresenceEntry } from './presence';
 import { hideSponsorNav } from './sponsors';
 
 /**
@@ -13,10 +18,12 @@ import { hideSponsorNav } from './sponsors';
  * keys, Subscriptions, Ways to sign in), so every original setting stays one click away. The others go in the
  * Gateway group, after Routing. An item with an endpoint is listed only while that endpoint answers, or fails
  * for another reason than 404; an item without one (Accounts and Models read the configuration and the
- * credentials, and show Provimux's endpoints where the proxy has them) is always listed.
+ * credentials, and show Provimux's endpoints where the proxy has them) is always listed. Restarts is listed
+ * while the server is Provimux (`provimux`: by its version, or by an endpoint only Provimux has): its two
+ * settings are Provimux's, and its cards say what a Provimux without them does.
  */
 export const PROVIMUX_PAGES: ReadonlyArray<{
-  endpoint: ProvimuxEndpoint | null;
+  endpoint: NavGate | null;
   path: string;
   labelKey: string;
   metaKey: string;
@@ -45,6 +52,13 @@ export const PROVIMUX_PAGES: ReadonlyArray<{
     labelKey: 'provimux.nav.savings',
     metaKey: 'provimux.nav_meta.savings',
     icon: () => <IconSavings size={18} />,
+  },
+  {
+    endpoint: 'provimux',
+    path: '/provimux/restarts',
+    labelKey: 'provimux.nav.restarts',
+    metaKey: 'provimux.nav_meta.restarts',
+    icon: () => <IconRestarts size={18} />,
   },
 ];
 
@@ -133,11 +147,11 @@ function keepReachable<G extends { id: string; items: object[] }>(
  */
 export function provimuxNav<G extends { id: string; items: object[] }>(
   groups: G[],
-  pages: Partial<Record<ProvimuxEndpoint, PresenceEntry>>
+  pages: Partial<Record<NavGate, PresenceEntry>>
 ): G[] {
   hideSponsorNav(groups);
   // A caller that knows fewer endpoints (an older presence record) lists none of the others.
-  const listed = (endpoint: ProvimuxEndpoint | null) => {
+  const listed = (endpoint: NavGate | null) => {
     if (endpoint === null) return true;
     const entry: PresenceEntry | undefined = pages[endpoint];
     return entry !== undefined && isListed(entry);

@@ -2,6 +2,7 @@ import { ProvimuxPageGate } from './components/ProvimuxPageGate';
 import { AccountsPage } from './pages/accounts/AccountsPage';
 import { ModelsPage } from './pages/models/ModelsPage';
 import { ModelsRedirect } from './pages/models/ModelsRedirect';
+import { RestartsPage } from './pages/restarts/RestartsPage';
 import { SavingsPage } from './pages/savings/SavingsPage';
 
 /**
@@ -27,4 +28,6 @@ export const PROVIMUX_ROUTES = [
       </ProvimuxPageGate>
     ),
   },
+  // Restarts says on each card what a gateway without its setting does: listed for Provimux only (nav.tsx).
+  { path: '/provimux/restarts', element: <RestartsPage /> },
 ];

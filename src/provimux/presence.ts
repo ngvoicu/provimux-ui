@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import { apiClient } from '@/services/api/client';
 import { useAuthStore } from '@/stores';
 import { errorStatus, provimuxApi } from './api/provimuxApi';
+import { describeServerVersion } from './version';
 
 /**
  * Whether the connected server has Provimux's endpoints (05-console-contract.md, section 2).
@@ -24,6 +25,8 @@ export type ProbedEndpoint = 'modelRoutes' | 'liveLists' | 'modelLists' | 'savin
  * probed; the Models page learns of it from its own load and hides the switch on a 404.
  */
 export type ProvimuxEndpoint = ProbedEndpoint | 'names';
+/** What a sidebar item waits for: an endpoint, or `provimux`, the server being Provimux at all. */
+export type NavGate = ProvimuxEndpoint | 'provimux';
 export type PresenceStatus = 'unknown' | 'probing' | 'ready' | 'unsupported' | 'error';
 
 export interface PresenceEntry {
@@ -137,10 +140,27 @@ export const isProvimuxServer = (state: Pick<PresenceState, ProbedEndpoint>): bo
   state.savings.status === 'ready';
 
 /**
+ * The server is Provimux: its version says so (`8.1.7-pmx.3`), or one of Provimux's endpoints answered (a build whose
+ * version does not carry the suffix). Unknown until either is known; not Provimux once both are.
+ */
+export function provimuxEntry(
+  serverVersion: string | null | undefined,
+  probes: Pick<PresenceState, ProbedEndpoint>
+): PresenceEntry {
+  if (describeServerVersion(serverVersion)?.kind === 'provimux' || isProvimuxServer(probes)) {
+    return { status: 'ready', message: null };
+  }
+  const settled = Object.values(probes).every(
+    (entry) => entry.status !== 'unknown' && entry.status !== 'probing'
+  );
+  return { status: settled ? 'unsupported' : 'unknown', message: null };
+}
+
+/**
  * Runs the probes for the current connection and returns the pages' presence. Called once, by the sidebar
  * (MainLayout), which lives as long as the signed-in session.
  */
-export function useProvimuxPages(): Record<ProbedEndpoint, PresenceEntry> {
+export function useProvimuxPages(): Record<ProbedEndpoint | 'provimux', PresenceEntry> {
   const connectionStatus = useAuthStore((state) => state.connectionStatus);
   const apiBase = useAuthStore((state) => state.apiBase);
   const serverVersion = useAuthStore((state) => state.serverVersion);
@@ -161,5 +181,6 @@ export function useProvimuxPages(): Record<ProbedEndpoint, PresenceEntry> {
     void presence.probe(key);
   }, [connectionStatus, apiBase, serverVersion, probedKey]);
 
-  return { modelRoutes, liveLists, modelLists, savings };
+  const probes = { modelRoutes, liveLists, modelLists, savings };
+  return { ...probes, provimux: provimuxEntry(serverVersion, probes) };
 }

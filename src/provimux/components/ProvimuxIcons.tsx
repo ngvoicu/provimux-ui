@@ -96,3 +96,14 @@ export function IconExcluded({ size = 20, ...props }: IconProps) {
     </svg>
   );
 }
+
+/** A turn of the arrow around a clock's hands: a restart, and the time it is given. */
+export function IconRestarts({ size = 20, ...props }: IconProps) {
+  return (
+    <svg {...base} width={size} height={size} {...props}>
+      <path d="M20.5 12a8.5 8.5 0 1 1-2.5-6" />
+      <path d="M20.5 3.5V8H16" />
+      <path d="M12 8v4l2.5 1.5" />
+    </svg>
+  );
+}
