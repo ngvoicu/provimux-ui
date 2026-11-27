@@ -1,4 +1,4 @@
-import { useId, useRef, type KeyboardEvent } from 'react';
+import { useId, useRef, type KeyboardEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import { FieldLabel } from '@/components/ui/FieldLabel';
@@ -15,6 +15,8 @@ export interface PolicyPanelProps {
   settings: RoutingSettings;
   disabled?: boolean;
   onChange: (next: RoutingSettings) => void;
+  /** Drawn right under Session affinity, for a setting that depends on it. */
+  afterAffinity?: ReactNode;
 }
 
 function StrategyMark({ strategy }: { strategy: RoutingStrategy }) {
@@ -41,7 +43,12 @@ function StrategyMark({ strategy }: { strategy: RoutingStrategy }) {
   );
 }
 
-export function PolicyPanel({ settings, disabled = false, onChange }: PolicyPanelProps) {
+export function PolicyPanel({
+  settings,
+  disabled = false,
+  onChange,
+  afterAffinity,
+}: PolicyPanelProps) {
   const { t } = useTranslation();
   const id = useId();
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -153,6 +160,8 @@ export function PolicyPanel({ settings, disabled = false, onChange }: PolicyPane
           ariaDescribedBy={`${id}-affinity-desc`}
         />
       </section>
+
+      {afterAffinity}
 
       <section className={styles.policySection}>
         <h3 className={styles.policyLabel}>{t('routing.retry_label')}</h3>

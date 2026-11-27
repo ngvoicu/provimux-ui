@@ -1,0 +1,364 @@
+@use '../../styles/mixins' as *;
+
+/* ============================================================
+ * "Back to the first account", a section of the Routing page's
+ * policy column (300 px), under Session affinity. It keeps that
+ * column's rhythm: a hairline above, 13 px labels, hints in the
+ * tertiary grey. Tones: in effect in the subscription green, a
+ * time that does not run in upstream's warning amber, off in grey;
+ * always with words.
+ * ============================================================ */
+
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 18px 0;
+  border-top: 1px solid var(--border-color);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--text-primary);
+}
+
+.pill {
+  --tone: var(--text-tertiary);
+
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+
+  &[data-mode='on'] {
+    --tone: var(--pmx-sub);
+
+    border-color: color-mix(in srgb, var(--pmx-sub) 40%, transparent);
+    background: var(--pmx-sub-bg);
+    color: var(--pmx-sub);
+  }
+
+  &[data-mode='blocked'] {
+    --tone: var(--warning-text);
+
+    border-color: var(--warning-border);
+    background: var(--warning-bg);
+    color: var(--warning-text);
+  }
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--tone);
+
+  // Off is a ring, so the three states differ by shape as well as colour.
+  .pill[data-mode='off'] & {
+    border: 1.5px solid var(--tone);
+    background: transparent;
+  }
+}
+
+.lede {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.now {
+  display: flex;
+  gap: 8px;
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-primary);
+
+  &::before {
+    content: '';
+    flex: none;
+    width: 3px;
+    margin: 2px 0;
+    border-radius: 2px;
+    background: var(--border-primary);
+  }
+
+  .block[data-mode='on'] &::before {
+    background: var(--pmx-sub);
+  }
+}
+
+.note {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+
+  &[data-tone='warning'] {
+    border: 1px solid var(--warning-border);
+    background: var(--warning-bg);
+    color: var(--warning-text);
+  }
+}
+
+.link {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  white-space: nowrap;
+
+  &:hover {
+    color: var(--text-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--pmx-brand);
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+}
+
+/* ---------- the field, open ---------- */
+
+.editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-secondary);
+}
+
+.fieldLabel {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.fieldRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.input {
+  flex: none;
+  width: 64px;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-primary);
+  font-family: var(--pmx-font-mono);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+  text-align: center;
+  transition: border-color var(--dur-hover) var(--ease-out-strong);
+
+  &:hover:not(:disabled) {
+    border-color: var(--border-primary);
+  }
+
+  &:focus-visible {
+    outline: none;
+    border-color: var(--pmx-brand);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--pmx-brand) 22%, transparent);
+  }
+
+  &[aria-invalid='true'] {
+    border-color: var(--warning-border);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+}
+
+.unit {
+  min-width: 0;
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: var(--text-secondary);
+}
+
+.presets {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.presetsLabel {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-tertiary);
+}
+
+.preset {
+  @include button-reset;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 30px;
+  padding: 4px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-primary);
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color var(--dur-hover) var(--ease-out-strong),
+    color var(--dur-hover) var(--ease-out-strong);
+
+  &:hover:not(:disabled) {
+    border-color: var(--border-primary);
+    color: var(--text-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--pmx-brand);
+    outline-offset: 1px;
+  }
+
+  &[aria-pressed='true'] {
+    border-color: var(--pmx-brand-line);
+    background: var(--pmx-brand-bg);
+    color: var(--pmx-brand);
+  }
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.6;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+}
+
+.presetValue {
+  flex: none;
+  font-family: var(--pmx-font-mono);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-tertiary);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+
+  // The column's own scale: its labels are 13 px.
+  :global(.btn.btn-sm) {
+    padding: 6px 12px;
+    font-size: 13px;
+  }
+}
+
+/* ---------- after a change, the count, the conditions ---------- */
+
+.status {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+
+  &[data-tone='ok'] {
+    color: var(--pmx-sub);
+  }
+
+  &[data-tone='error'] {
+    color: var(--error-color);
+  }
+
+  &[data-tone='warning'] {
+    color: var(--warning-text);
+  }
+}
+
+.count {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.details {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-tertiary);
+
+  summary {
+    width: fit-content;
+    cursor: pointer;
+    color: var(--text-secondary);
+
+    &:focus-visible {
+      outline: 2px solid var(--pmx-brand);
+      outline-offset: 2px;
+      border-radius: 3px;
+    }
+  }
+
+  ul {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    margin: 8px 0 0;
+    padding-left: 16px;
+  }
+
+  p {
+    margin: 8px 0 0;
+  }
+
+  code {
+    font-family: var(--pmx-font-mono);
+    font-size: 11.5px;
+    color: var(--text-secondary);
+    overflow-wrap: anywhere;
+  }
+}

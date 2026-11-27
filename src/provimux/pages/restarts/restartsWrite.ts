@@ -22,13 +22,18 @@ export interface Snapshot {
 
 export type Check = 'same' | 'changed' | 'absent' | 'unreadable';
 
-export interface WriteSpec {
+/** What a page reads together: the configuration, for the tag a write is conditional on, and its state paths. */
+export interface Readable {
+  config: ConfigLoad;
+}
+
+export interface WriteSpec<S extends Readable = Snapshot> {
   /** Reads the card's state path again and compares it with what the control was drawn from. */
   check: (client: Client) => Promise<Check>;
   /** The request, conditional on the tag of the page's configuration read. */
   send: (etag: string | null, client: Client) => Promise<void>;
   /** The gateway reports the change. */
-  shows: (snapshot: Snapshot) => boolean;
+  shows: (snapshot: S) => boolean;
 }
 
 export type WriteResult =
@@ -44,11 +49,11 @@ export type WriteResult =
   /** Saved. `shown`: the gateway reports it. */
   | { kind: 'saved'; shown: boolean };
 
-export interface WriteDeps {
+export interface WriteDeps<S extends Readable = Snapshot> {
   client: Client;
   /** The page's current read: the configuration's tag comes from it. */
-  current: Snapshot;
-  read: (client: Client) => Promise<Snapshot>;
+  current: S;
+  read: (client: Client) => Promise<S>;
   /** Whether the page and the connection are still the ones the write began on. */
   isCurrent: () => boolean;
   wait: (ms: number) => Promise<void>;
@@ -58,10 +63,10 @@ export interface WriteDeps {
   everyMs?: number;
 }
 
-export async function runWrite(
-  spec: WriteSpec,
-  deps: WriteDeps
-): Promise<{ result: WriteResult; snapshot: Snapshot | null }> {
+export async function runWrite<S extends Readable = Snapshot>(
+  spec: WriteSpec<S>,
+  deps: WriteDeps<S>
+): Promise<{ result: WriteResult; snapshot: S | null }> {
   const { client, current, read, isCurrent, wait } = deps;
   const reread = async () => (isCurrent() ? await read(client).catch(() => null) : null);
 

@@ -53,6 +53,7 @@ import { TierLadder } from './components/TierLadder';
 import { WeightDialog } from './components/WeightDialog';
 import { useProvimuxRoutingNames } from '@/provimux/routing/useRoutingNames';
 import { ProvimuxRoutingNamesNote, ProvimuxRoutingTierNote } from '@/provimux/routing/RoutingNames';
+import { ProvimuxSessionReturn } from '@/provimux/routing/SessionReturn';
 import styles from './RoutingPage.module.scss';
 
 // Cooldown chips count down coarsely; one shared timer for the whole board.
@@ -376,7 +377,12 @@ export function RoutingPage() {
             onEditWeights={handleEditWeights}
           />
         </section>
-        <PolicyPanel settings={draft.settings} disabled={saving} onChange={handleSettings} />
+        <PolicyPanel
+          settings={draft.settings}
+          disabled={saving}
+          onChange={handleSettings}
+          afterAffinity={<ProvimuxSessionReturn readAgainWhen={board} />}
+        />
       </div>
     );
   };

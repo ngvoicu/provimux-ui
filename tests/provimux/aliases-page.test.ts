@@ -86,8 +86,16 @@ describe('strings in seven languages', () => {
     [...text.matchAll(/\{\{(\w+)\}\}/g)].map((m) => m[1]).sort();
   const baseOf = (key: string) => key.replace(/_(zero|one|two|few|many|other)$/, '');
 
-  // The pages' strings (Aliases, Models, Restarts), and the provider forms' line (U3).
-  for (const block of ['aliases', 'models', 'forms', 'names', 'restarts'] as const) {
+  // The pages' strings (Aliases, Models, Restarts), the provider forms' line (U3), and Routing's "Back to the
+  // first account".
+  for (const block of [
+    'aliases',
+    'models',
+    'forms',
+    'names',
+    'restarts',
+    'session_return',
+  ] as const) {
     test(`every language has every key of provimux.${block}, in its own plural forms, with the same placeholders`, () => {
       const source = (en.provimux as Tree)[block] as Tree;
       const plural = new Set(
