@@ -39,7 +39,8 @@ repository) &nbsp;·&nbsp; **[providers.dev](https://providers.dev)**
   each works now and its priority, added, fixed, turned off or removed there; **Models**, every model name you can send,
   with the API keys and logins that serve it in the order they are tried, the cooldowns Provimux recorded and each
   login's list; your own names (one model, or several under one name) made and saved there, and a switch to serve
-  only them.
+  only them; **Restarts**, what a stop or an upgrade does to the answers in flight and the conversations under way, and
+  the two settings for it.
 - **[The providers.dev look](#the-providersdev-look)**: "Provimux by providers.dev" throughout, in three themes.
 - **[The Provimux version](#the-provimux-version-and-the-console-on-the-system-page)** and the console's update source
   on the System page.
@@ -51,9 +52,9 @@ Then: [Use it](#use-it) · [Versions and releases](#versions-and-releases) · [B
 ### Provimux's own pages
 
 In the sidebar under Gateway, **Accounts** (in the place of AI Providers, Auth Files and OAuth Login), **Models** (it
-replaced Aliases, Model routes and Model lists, whose addresses lead to it) and **Savings**. The three pages Accounts
-replaced keep their addresses and stay one click away, at the end of Gateway under **Advanced settings**, with plain
-names: API keys (AI Providers), Subscriptions (Auth Files) and Ways to sign in (OAuth Login).
+replaced Aliases, Model routes and Model lists, whose addresses lead to it), **Savings** and **Restarts**. The three
+pages Accounts replaced keep their addresses and stay one click away, at the end of Gateway under **Advanced
+settings**, with plain names: API keys (AI Providers), Subscriptions (Auth Files) and Ways to sign in (OAuth Login).
 
 **Accounts.** Every subscription (a login) and every API key, one card per service (Claude, ChatGPT · OpenAI, Gemini,
 OpenRouter, Devin…), the one tried first on top. A row says the kind (subscription in green, API key in amber), who it
@@ -123,10 +124,22 @@ on CLIProxyAPI, the section is not shown. How Provimux applies the switch is in
 **Routing.** While the switch is on, the Routing page says under the model field that a name that isn't yours is
 refused before routing, and for the name you type whether it is served or refused, with a link to Models.
 
+**Back to the first account.** A conversation that fell back to a lower tier, which may cost more, goes back to the
+highest one by itself: on the Routing page, under Session affinity, you set after how long without a message
+(`routing.session-affinity-return.cold-after`), or turn it off. The card says whether the gateway reports it in
+effect and, if not, the one reason and where to change it, and how often a conversation was sent back since the
+gateway started. It is shown only on a Provimux that reports it. How Provimux decides is in
+[its README](https://github.com/ngvoicu/provimux/blob/main/.github/README.md).
+
+**Restarts.** See what a stop, a restart or an upgrade will do before you do it: how long the gateway lets the answers
+in flight finish (`server.restart-drain-seconds`) and whether conversations go back to their account afterwards
+(`routing.session-affinity-persist`), each changed there. Every line is what the gateway itself reports, and on a
+Provimux without these settings the page says so and changes nothing.
+
 Routes, lists and use come from endpoints only Provimux has (`/v8/management/provimux/…`, described in
 [Provimux's README](https://github.com/ngvoicu/provimux/blob/main/.github/README.md#model-routes-and-live-list-status-for-the-console)).
 Connected to CLIProxyAPI, which answers 404 there, Models shows the names of the configuration only, without order or
-cooldowns, and says so; Savings is not in the sidebar.
+cooldowns, and says so; Savings and Restarts are not in the sidebar.
 
 ### The providers.dev look
 

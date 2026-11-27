@@ -170,7 +170,7 @@ jobs:
             echo "provimux-ui ${VERSION} by [providers.dev](https://providers.dev): the web console of [Provimux](https://github.com/ngvoicu/provimux), built on the [CLI Proxy API Management Center](${original}) ${BASE}."
             echo
             echo "- Console base: ${BASE}, the original's release: ${original}/releases/tag/${BASE}"
-            echo "- Provimux's part is a thin layer on it: the providers.dev look and the Provimux brand, the Provimux version and links on the System page, no sponsor or affiliate links. The Accounts, Models and Savings pages are Provimux's own; every other page, setting and request is the original console's. See the [README](${readme})."
+            echo "- Provimux's part is a thin layer on it: the providers.dev look and the Provimux brand, the Provimux version and links on the System page, no sponsor or affiliate links. The Accounts, Models, Savings and Restarts pages are Provimux's own; every other page, setting and request is the original console's. See the [README](${readme})."
             echo "- Use it: give Provimux \`management.html\` with \`MANAGEMENT_STATIC_PATH\` and \`management.disable-auto-update-panel: true\` ([Use it](${readme}#use-it)); check it with \`sha256sum -c checksums.txt\`."
             echo
             echo "MIT licensed, like the original; \`management.html\` carries the license notice."
