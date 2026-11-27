@@ -4,7 +4,6 @@ import {
   STEP_TONES,
   answersStep,
   conversationsStep,
-  type ConfigLoad,
   type DrainLoad,
   type PersistLoad,
   type Tone,
@@ -12,7 +11,6 @@ import {
 import styles from './RestartsPage.module.scss';
 
 interface NextRestartProps {
-  config: ConfigLoad;
   drain: DrainLoad;
   persist: PersistLoad;
 }
@@ -30,10 +28,10 @@ const CONVERSATION_KEYS = {
  * The page's answer first: the next restart in three steps, each saying only what the page could read. A step is
  * green only on the gateway's word; what it does not report, or what could not be read, is said as such, never green.
  */
-export function NextRestart({ config, drain, persist }: NextRestartProps) {
+export function NextRestart({ drain, persist }: NextRestartProps) {
   const { t } = useTranslation();
   const answers = answersStep(drain);
-  const conversations = conversationsStep(persist, config);
+  const conversations = conversationsStep(persist);
   const waiting = drain.kind === 'loading' || persist.kind === 'loading';
 
   const answersText =

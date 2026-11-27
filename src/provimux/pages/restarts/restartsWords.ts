@@ -12,6 +12,22 @@ export interface CardMessage {
   text: string;
 }
 
+export type Card = 'drain' | 'persist';
+export type Messages = Record<Card, CardMessage | null>;
+const NO_MESSAGES: Messages = { drain: null, persist: null };
+
+/**
+ * A card's line describes the read made with it, never a later one: any read of the gateway's state (a reload, or
+ * another change's reads) takes every line away.
+ */
+export const messagesAfterRead = (): Messages => NO_MESSAGES;
+
+/** A change's line, from the read after it, on its own card only: the other card's line described an earlier read. */
+export const messagesAfterWrite = (card: Card, message: CardMessage): Messages => ({
+  ...NO_MESSAGES,
+  [card]: message,
+});
+
 /** Turns a write's result, and the read after it, into the card's line. */
 export type Describe = (result: WriteResult, snapshot: Snapshot) => CardMessage;
 

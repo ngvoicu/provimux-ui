@@ -16,6 +16,8 @@ import { PersistCard } from '@/provimux/pages/restarts/PersistCard';
 import {
   describeDrainWrite,
   describePersistWrite,
+  messagesAfterRead,
+  messagesAfterWrite,
   type OnWrite,
 } from '@/provimux/pages/restarts/restartsWords';
 
@@ -29,9 +31,9 @@ import {
   lastError,
   normalizeDrain,
   normalizePersist,
+  probesSay,
   startOutcome,
   supportSince,
-  type ConfigLoad,
   type DrainLoad,
   type PersistLoad,
 } from '@/provimux/pages/restarts/restartsLogic';
@@ -223,7 +225,6 @@ const text = (markup: string) =>
     .replace(/\s+/g, ' ');
 const drainOf = (raw: Doc): DrainLoad => ({ kind: 'ready', state: normalizeDrain(raw)! });
 const persistOf = (raw: Doc): PersistLoad => ({ kind: 'ready', state: normalizePersist(raw)! });
-const configOf = (doc: Doc): ConfigLoad => ({ kind: 'ready', document: doc, etag: '"1"' });
 const drainCard = (
   drain: DrainLoad,
   version = 'dev',
@@ -240,14 +241,13 @@ const drainCard = (
       onWrite: noWrite,
     })
   );
-const persistCard = (persist: PersistLoad, affinityOn: boolean | null = true) =>
+const persistCard = (persist: PersistLoad) =>
   html(
     createElement(PersistCard, {
       persist,
       writable: true,
       kind: 'provimux',
       version: 'dev',
-      affinityOn,
       busy: false,
       message: null,
       onWrite: noWrite,
@@ -380,7 +380,7 @@ describe('the drain card shows only what GET /provimux/restart-drain reports', (
     const long = text(drainCard(drainOf(DRAIN.shutdown60)));
     expect(long).toContain('Up to 30 seconds');
     expect(long).toContain(
-      "The gateway's whole stop ends after 30 seconds, so it waits 30 seconds at most."
+      'The gateway ends a stop after at most 30 seconds, so it waits 30 seconds at most.'
     );
     // The slider's "default" mark stands at the default the path reports (28), not at a fixed 25.
     const card28 = drainCard(drainOf(DRAIN.shutdown28));
@@ -399,7 +399,10 @@ describe('the drain card shows only what GET /provimux/restart-drain reports', (
       expect(card).toContain(
         `The configuration file says ${refused.written}, which the gateway refuses.`
       );
-      expect(card).toContain('a restart with this file fails to start');
+      expect(card).toContain(
+        'While the file holds it, the gateway keeps its last valid wait, shown above, and a restart with this file fails to start.'
+      );
+      expect(card).not.toContain('until it restarts');
       expect(card).toContain('Up to 10 seconds');
       expect(card).not.toContain('No wait');
       expect(card).not.toContain('Off ');
@@ -420,14 +423,15 @@ describe('the drain card shows only what GET /provimux/restart-drain reports', (
   test('a gateway without the path gets no control and no value; 8.1.7-pmx.3 is told where the setting is', async () => {
     await i18n.changeLanguage('en');
     expect(DRAIN_IN_FILE_SINCE.label).toBe('8.1.7-pmx.3');
-    expect(STATE_SINCE).toBeNull();
+    // The release that brings both state paths (restartsLogic.ts, STATE_SINCE).
+    expect(STATE_SINCE?.label).toBe('8.1.7-pmx.4');
     const tag = drainCard({ kind: 'absent' }, '8.1.7-pmx.3');
     expect(tag).not.toContain('type="checkbox"');
     expect(tag).not.toContain('type="range"');
     const words = text(tag);
     expect(words).toContain('This Provimux (8.1.7-⁠pmx.3) has this setting but does not report it');
     expect(words).toContain('set server.restart-drain-seconds in its configuration file');
-    expect(words).toContain('The console shows and changes it with a newer Provimux.');
+    expect(words).toContain('The console shows and changes it from Provimux 8.1.7-\u2060pmx.4.');
     expect(words).not.toMatch(/\d+ seconds?/);
     expect(text(drainCard({ kind: 'absent' }, '8.1.7-pmx.2'))).toContain(
       'This Provimux (8.1.7-⁠pmx.2) does not have this setting.'
@@ -446,6 +450,13 @@ describe('the drain card shows only what GET /provimux/restart-drain reports', (
     expect(gatewayKind('8.1.7', 'unknown', false)).toBe('unknown');
     expect(gatewayKind('dev', 'unknown', true)).toBe('provimux');
     expect(gatewayKind('8.1.7-pmx.2', 'unsupported', false)).toBe('provimux');
+    // Probes say "unsupported" only when every one answered 404; a failed probe says nothing about absence.
+    expect(probesSay(['unsupported', 'unsupported', 'unsupported', 'unsupported'])).toBe(
+      'unsupported'
+    );
+    expect(probesSay(['unsupported', 'error', 'unsupported', 'unsupported'])).toBe('unknown');
+    expect(probesSay(['unsupported', 'probing'])).toBe('unknown');
+    expect(probesSay(['error', 'ready'])).toBe('ready');
     expect(supportSince('8.1.7-pmx.3', DRAIN_IN_FILE_SINCE)).toEqual({ kind: 'yes' });
     expect(supportSince('8.1.7-pmx.2', DRAIN_IN_FILE_SINCE).kind).toBe('older');
   });
@@ -496,9 +507,15 @@ describe('conversations: the card and the summary say what the state reports, ne
     expect(inEffect).toBe('Saved. The gateway reports it in effect.');
     const card = text(persistCard(persistOf(UNSET_ON)));
     expect(card).toContain(
-      'Conversations that send their own session id go back to the account they were on, if the gateway still recognises it'
+      'At the next start, conversations that send their own session id go back to the account they were on, if the gateway still recognises it'
     );
-    expect(card).toContain('usually still has their prompt cache');
+    expect(card).toContain(
+      'so the provider can read their prompt cache again, if it still holds it'
+    );
+    expect(card).not.toContain('usually');
+    expect(card).toContain(
+      'for the conversations and accounts it can recognise; the counts below say how many were left out'
+    );
     expect(card).toContain(
       'Not restored: a conversation without its own session id on a gateway with client keys'
     );
@@ -507,38 +524,31 @@ describe('conversations: the card and the summary say what the state reports, ne
 
   test('finding 3: the summary claims only what the page could read', async () => {
     await i18n.changeLanguage('en');
-    const failed: ConfigLoad = { kind: 'error', message: 'timeout' };
-    // A persist 404 with a failed configuration read is not "session affinity is off".
-    expect(conversationsStep({ kind: 'absent' }, failed)).toBe('unread');
-    expect(
-      conversationsStep({ kind: 'absent' }, configOf({ routing: { 'session-affinity': false } }))
-    ).toBe('no-affinity');
-    expect(
-      conversationsStep({ kind: 'absent' }, configOf({ routing: { 'session-affinity': true } }))
-    ).toBe('unreported');
+    // A persist 404 is "cannot tell", whatever else was or was not read.
+    expect(conversationsStep({ kind: 'absent' })).toBe('unreported');
+    expect(conversationsStep({ kind: 'error', message: 'timeout' })).toBe('unread');
     // in-use still restores an authenticated snapshot: not "routing picks again", and never green.
     const inUse = persistOf({ ...UNSET_ON, in_effect: false, reason: 'in-use' });
-    expect(conversationsStep(inUse, failed)).toBe('in-use');
+    expect(conversationsStep(inUse)).toBe('in-use');
     expect(STEP_TONES['in-use']).not.toBe('ok');
     expect(STEP_TONES.unread).not.toBe('ok');
     const summary = text(
       html(
         createElement(NextRestart, {
-          config: failed,
           drain: { kind: 'absent' },
           persist: { kind: 'absent' },
         })
       )
     );
-    expect(summary).toContain('The page cannot tell: it could not read what the gateway keeps.');
+    expect(summary).toContain(
+      'The page cannot tell: this gateway does not report what it keeps across a restart.'
+    );
     expect(summary).toContain('This gateway does not report how long it waits.');
     expect(summary).not.toContain('Session affinity');
     const busy = text(
-      html(
-        createElement(NextRestart, { config: failed, drain: drainOf(DRAIN.ten), persist: inUse })
-      )
+      html(createElement(NextRestart, { drain: drainOf(DRAIN.ten), persist: inUse }))
     );
-    expect(busy).toContain('Another Provimux on the same store holds the snapshot');
+    expect(busy).toContain("Another Provimux on the same store holds the snapshot's lock");
     expect(busy).not.toContain('routing picks');
     // A file the gateway could not remove after the switch was turned off: the card says so.
     const leftover = normalizePersist({
@@ -557,6 +567,27 @@ describe('conversations: the card and the summary say what the state reports, ne
     expect(text(persistCard({ kind: 'ready', state: leftover }))).toContain(
       'The gateway could not remove its own files from an earlier run: remove /data/kv.db.affinity: permission denied'
     );
+  });
+
+  test('session affinity is never read from the file: yes, on, true and false all leave the page unable to tell', async () => {
+    await i18n.changeLanguage('en');
+    // 8.1.7-pmx.3 has no persist state path; the generic config read hands back the file's raw YAML value.
+    for (const value of ['yes', 'on', true, false]) {
+      const gw = gateway({ routing: { 'session-affinity': value } }, { paths: false });
+      const snapshot = await readAll(gw.client);
+      expect(snapshot.config.kind).toBe('ready');
+      expect(snapshot.persist).toEqual({ kind: 'absent' });
+      expect(conversationsStep(snapshot.persist)).toBe('unreported');
+      const summary = text(
+        html(createElement(NextRestart, { drain: snapshot.drain, persist: snapshot.persist }))
+      );
+      expect(summary).toContain(
+        'The page cannot tell: this gateway does not report what it keeps across a restart.'
+      );
+      expect(summary).not.toContain('Session affinity');
+      expect(summary).not.toContain('routing picks');
+      expect(text(persistCard(snapshot.persist))).not.toContain('routing picks');
+    }
   });
 
   test('the start note: "no snapshot" is the normal first state; a disk that did not answer is a failure', () => {
@@ -651,6 +682,100 @@ describe('writes: one key each, asked again first, and said as the gateway repor
     const line = describeDrainWrite(i18n.t.bind(i18n), run.result, run.snapshot!);
     expect(line.text).toBe('The gateway did not confirm the save. It now reports no wait.');
     expect(line.text).not.toContain('Not saved');
+  });
+
+  test('a "Saved…" line goes with the next read: two tabs, a change in the second, a reload in the first', async () => {
+    await i18n.changeLanguage('en');
+    const t = i18n.t.bind(i18n);
+    const gw = gateway({
+      server: { 'shutdown-timeout': 60 },
+      routing: { 'session-affinity': true },
+    });
+    // Tab A turns the wait off: its card says so, from the read after the save.
+    let a = { snapshot: await readAll(gw.client), messages: messagesAfterRead() };
+    const off = await runWrite(
+      drainSpec(
+        a.snapshot,
+        (e, c) => restartsApi.setDrain(e, 0, c),
+        (s) => s.seconds === 0
+      ),
+      deps(gw, a.snapshot)
+    );
+    a = {
+      snapshot: off.snapshot!,
+      messages: messagesAfterWrite('drain', describeDrainWrite(t, off.result, off.snapshot!)),
+    };
+    expect(a.messages.drain?.text).toBe(
+      'Saved. The gateway now stops without waiting for answers in flight.'
+    );
+    // Tab B puts the default back (60 s, so a stop waits 30 at most).
+    const b = await readAll(gw.client);
+    await runWrite(
+      drainSpec(
+        b,
+        (e, c) => restartsApi.drainToDefault(e, c),
+        (s) => !s.set
+      ),
+      deps(gw, b)
+    );
+    // Tab A reloads: the card shows the gateway's 30 seconds, and no line from the earlier read.
+    a = { snapshot: await readAll(gw.client), messages: messagesAfterRead() };
+    const card = text(
+      html(
+        createElement(DrainCard, {
+          drain: a.snapshot.drain,
+          writable: true,
+          kind: 'provimux',
+          version: 'dev',
+          busy: false,
+          message: a.messages.drain,
+          onWrite: noWrite,
+        })
+      )
+    );
+    expect(card).toContain('Up to 30 seconds');
+    expect(card).not.toContain('Saved.');
+    // The same for the conversations' card: A turns it off, B puts the default back, A reloads.
+    const persistSpec = (send: WriteSpec['send']): WriteSpec => ({
+      check: async () => 'same',
+      send,
+      shows: () => true,
+    });
+    const persistOff = await runWrite(
+      persistSpec((e, c) => restartsApi.persistOff(e, c)),
+      deps(gw, a.snapshot)
+    );
+    a = {
+      snapshot: persistOff.snapshot!,
+      messages: messagesAfterWrite(
+        'persist',
+        describePersistWrite(t, persistOff.result, persistOff.snapshot!)
+      ),
+    };
+    expect(a.messages.persist?.text).toBe('Saved. The gateway reports it off.');
+    const b2 = await readAll(gw.client);
+    await runWrite(
+      persistSpec((e, c) => restartsApi.persistToDefault(e, c)),
+      deps(gw, b2)
+    );
+    a = { snapshot: await readAll(gw.client), messages: messagesAfterRead() };
+    const persistText = text(
+      html(
+        createElement(PersistCard, {
+          persist: a.snapshot.persist,
+          writable: true,
+          kind: 'provimux',
+          version: 'dev',
+          busy: false,
+          message: a.messages.persist,
+          onWrite: noWrite,
+        })
+      )
+    );
+    expect(persistText).toContain('In effect');
+    expect(persistText).not.toContain('Saved.');
+    // A change in one card takes the other card's line away too: it described an earlier read.
+    expect(messagesAfterWrite('persist', { tone: 'ok', text: 'x' }).drain).toBeNull();
   });
 
   test("each write is one key with the read's tag; a removal of an absent key is done; 412 writes nothing", async () => {

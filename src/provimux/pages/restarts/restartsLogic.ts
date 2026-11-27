@@ -19,10 +19,11 @@ export interface Release {
 }
 
 /**
- * The first Provimux release with both state paths (the console shows and changes the two settings from it). Null
- * until it is published: the page then says "a newer Provimux".
+ * The first Provimux release with both state paths: the console shows and changes the two settings from it. Being
+ * prepared under this number; change it here if the release gets another one (null makes the page say "a newer
+ * Provimux").
  */
-export const STATE_SINCE: Release | null = null;
+export const STATE_SINCE: Release | null = { base: [8, 1, 7], pmx: 4, label: '8.1.7-pmx.4' };
 
 /** The first release with `server.restart-drain-seconds` in its configuration (without the state path). */
 export const DRAIN_IN_FILE_SINCE: Release = { base: [8, 1, 7], pmx: 3, label: '8.1.7-pmx.3' };
@@ -66,6 +67,17 @@ export const unbroken = (version: string) => version.replace(/-/g, '-⁠');
  */
 export type GatewayKind = 'provimux' | 'not-provimux' | 'unknown';
 
+/**
+ * What Provimux's endpoint probes say: "ready" when one answered, "unsupported" only when every one answered 404, and
+ * "unknown" otherwise (still probing, or a probe that failed says nothing about absence).
+ */
+export function probesSay(statuses: readonly string[]): 'ready' | 'unsupported' | 'unknown' {
+  if (statuses.includes('ready')) return 'ready';
+  return statuses.length > 0 && statuses.every((status) => status === 'unsupported')
+    ? 'unsupported'
+    : 'unknown';
+}
+
 export function gatewayKind(
   version: string | null | undefined,
   presence: 'ready' | 'unsupported' | 'unknown',
@@ -78,19 +90,12 @@ export function gatewayKind(
   return 'unknown';
 }
 
-// --- the configuration file (only its tag, and routing.session-affinity for the summary) -------------------------
+// --- the configuration file (only its tag: the page infers nothing from what it holds) -----------------------------
 
 export type ConfigLoad =
   | { kind: 'loading' }
   | { kind: 'ready'; document: unknown; etag: string | null }
   | { kind: 'error'; message: string };
-
-/** `routing.session-affinity` as the file has it: true, false (also when not set), or null when not read. */
-export function sessionAffinityOn(config: ConfigLoad): boolean | null {
-  if (config.kind !== 'ready') return null;
-  const routing = isRecord(config.document) ? config.document.routing : null;
-  return isRecord(routing) && routing['session-affinity'] === true;
-}
 
 // --- the drain -------------------------------------------------------------------------------------------------
 
@@ -332,15 +337,20 @@ export type ConversationsStep =
   | 'kept'
   /** Another Provimux holds the store's file: this one saves none, and restores what it can authenticate. */
   | 'in-use'
-  /** Session affinity is off, as the gateway or the file says: nothing is tied to an account. */
+  /** Session affinity is off, as the gateway's state reports: nothing is tied to an account. */
   | 'no-affinity'
   /** Not kept: routing picks an account again. */
   | 'not-kept'
-  /** The gateway does not report it (no state path), and session affinity is on in the file. */
+  /** The gateway does not report it (no state path): the page cannot tell, whatever the file holds. */
   | 'unreported'
   | 'unread';
 
-export function conversationsStep(persist: PersistLoad, config: ConfigLoad): ConversationsStep {
+/**
+ * What the next restart does to conversations, from the gateway's state only. The configuration file's
+ * `routing.session-affinity` is never read for it: the generic config read hands back the file's raw YAML (`yes`
+ * arrives as the string "yes"), and the file can differ from what the gateway runs.
+ */
+export function conversationsStep(persist: PersistLoad): ConversationsStep {
   if (persist.kind === 'ready') {
     const { state } = persist;
     if (state.inEffect) return 'kept';
@@ -348,12 +358,7 @@ export function conversationsStep(persist: PersistLoad, config: ConfigLoad): Con
     if (state.reason === 'session-affinity-off') return 'no-affinity';
     return 'not-kept';
   }
-  if (persist.kind === 'absent') {
-    const affinity = sessionAffinityOn(config);
-    if (affinity === false) return 'no-affinity';
-    if (affinity === true) return 'unreported';
-  }
-  return 'unread';
+  return persist.kind === 'absent' ? 'unreported' : 'unread';
 }
 
 /** A step is green only on the gateway's word that nothing is lost; what the page cannot tell is never green. */

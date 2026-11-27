@@ -32,8 +32,6 @@ interface PersistCardProps {
   writable: boolean;
   kind: GatewayKind;
   version: string | null;
-  /** `routing.session-affinity` as the file has it (null: not read). */
-  affinityOn: boolean | null;
   busy: boolean;
   message: CardMessage | null;
   onWrite: OnWrite;
@@ -57,7 +55,7 @@ const checkPersist =
  * when that account is still recognised and the binding has not expired.
  */
 export function PersistCard(props: PersistCardProps) {
-  const { persist, writable, kind, version, affinityOn, busy, message, onWrite } = props;
+  const { persist, writable, kind, version, busy, message, onWrite } = props;
   const { t, i18n } = useTranslation();
   const id = useId();
 
@@ -104,9 +102,6 @@ export function PersistCard(props: PersistCardProps) {
             : absentLine(t, kind, version)}
         </p>
         {kind === 'provimux' ? <p className={shared.featureText}>{sinceLine(t)}</p> : null}
-        {affinityOn === true ? (
-          <p className={shared.featureText}>{t('provimux.restarts.persist_absent_now')}</p>
-        ) : null}
         <CardStatus message={message} />
       </section>
     );

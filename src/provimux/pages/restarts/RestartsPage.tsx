@@ -3,20 +3,24 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/Button';
 import { IconRefreshCw } from '@/components/ui/icons';
 import { useAuthStore, useConfigStore } from '@/stores';
-import { provimuxEntry, useProvimuxPresence } from '../../presence';
+import { useProvimuxPresence } from '../../presence';
 import { useRequestGuard } from '../shared/requestGuard';
 import { formatClock, formatExact } from '../time';
 import shared from '../shared/Shared.module.scss';
 import { DrainCard } from './DrainCard';
 import { NextRestart } from './NextRestart';
 import { PersistCard } from './PersistCard';
-import type { CardMessage, OnWrite } from './restartsWords';
+import {
+  messagesAfterRead,
+  messagesAfterWrite,
+  type Card,
+  type Messages,
+  type OnWrite,
+} from './restartsWords';
 import { restartsApi } from './restartsApi';
-import { gatewayKind, sessionAffinityOn } from './restartsLogic';
+import { gatewayKind, probesSay } from './restartsLogic';
 import { readAll, runWrite, type Snapshot } from './restartsWrite';
 import styles from './RestartsPage.module.scss';
-
-type Card = 'drain' | 'persist';
 
 const LOADING: Snapshot = {
   config: { kind: 'loading' },
@@ -44,10 +48,7 @@ export function RestartsPage() {
   };
   const [snapshot, setSnapshot] = useState<Snapshot>(LOADING);
   const [busy, setBusy] = useState<Card | 'reload' | null>(null);
-  const [messages, setMessages] = useState<Record<Card, CardMessage | null>>({
-    drain: null,
-    persist: null,
-  });
+  const [messages, setMessages] = useState<Messages>(messagesAfterRead());
   // The latest read and the change under way, for the handlers (set after each render, read only in events).
   const current = useRef(snapshot);
   const busyRef = useRef(busy);
@@ -64,6 +65,7 @@ export function RestartsPage() {
     if (busyRef.current && busyRef.current !== 'reload') return;
     const { client, isCurrent } = guard.begin();
     setBusy('reload');
+    setMessages(messagesAfterRead());
     const parts = {
       config: restartsApi.config(client),
       drain: restartsApi.drain(client),
@@ -95,7 +97,8 @@ export function RestartsPage() {
     const { client, isCurrent } = writeGuard.begin();
     setBusy(card);
     busyRef.current = card;
-    setMessages((previous) => ({ ...previous, [card]: null }));
+    // The change reads the gateway again: no line from an earlier read stays.
+    setMessages(messagesAfterRead());
     try {
       const { result, snapshot: after } = await runWrite(spec, {
         client,
@@ -104,20 +107,16 @@ export function RestartsPage() {
         isCurrent,
         wait,
         onPending: () =>
-          setMessages((previous) => ({
-            ...previous,
-            [card]: { tone: 'pending', text: t('provimux.restarts.applying') },
-          })),
+          setMessages(
+            messagesAfterWrite(card, { tone: 'pending', text: t('provimux.restarts.applying') })
+          ),
       });
       if (!isCurrent()) return;
       if (after) setSnapshot(after);
       if (result.kind === 'saved' || result.kind === 'unconfirmed') {
         useConfigStore.getState().clearCache();
       }
-      setMessages((previous) => ({
-        ...previous,
-        [card]: describe(result, after ?? current.current),
-      }));
+      setMessages(messagesAfterWrite(card, describe(result, after ?? current.current)));
     } catch (error) {
       if (!(error instanceof DOMException && error.name === 'AbortError')) throw error;
     } finally {
@@ -137,10 +136,9 @@ export function RestartsPage() {
   };
 
   const pathAnswered = snapshot.drain.kind === 'ready' || snapshot.persist.kind === 'ready';
-  const entry = provimuxEntry(serverVersion, probes).status;
   const kind = gatewayKind(
     serverVersion,
-    entry === 'ready' ? 'ready' : entry === 'unsupported' ? 'unsupported' : 'unknown',
+    probesSay(Object.values(probes).map((probe) => probe.status)),
     pathAnswered
   );
   const writable = snapshot.config.kind === 'ready' && snapshot.config.etag !== null;
@@ -179,7 +177,7 @@ export function RestartsPage() {
         </p>
       ) : null}
 
-      <NextRestart config={snapshot.config} drain={snapshot.drain} persist={snapshot.persist} />
+      <NextRestart drain={snapshot.drain} persist={snapshot.persist} />
       <div className={styles.cards}>
         <DrainCard
           drain={snapshot.drain}
@@ -195,7 +193,6 @@ export function RestartsPage() {
           writable={writable}
           kind={kind}
           version={serverVersion}
-          affinityOn={sessionAffinityOn(snapshot.config)}
           busy={busy !== null}
           message={messages.persist}
           onWrite={onPersistWrite}
