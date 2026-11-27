@@ -1,78 +1,80 @@
-import { useId, useState, type ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import shared from '../shared/Shared.module.scss';
 import { formatClock, formatExact, timeMs } from '../time';
-import { CardStatus, Provenance, type CardMessage, type Send, type Write } from './parts';
-import { restartsApi } from './restartsApi';
+import { CardHead, CardStatus, Provenance } from './parts';
 import {
-  isKnownReason,
+  absentLine,
+  describePersistWrite,
+  reasonText,
+  sinceLine,
+  type CardMessage,
+  type Describe,
+  type OnWrite,
+} from './restartsWords';
+import { restartsApi, type Client } from './restartsApi';
+import {
+  lastError,
+  samePersist,
   startOutcome,
-  unbroken,
-  type PersistAbsence,
+  type GatewayKind,
   type PersistLoad,
   type PersistState,
 } from './restartsLogic';
+import type { Check } from './restartsWrite';
 import styles from './RestartsPage.module.scss';
 
 interface PersistCardProps {
   persist: PersistLoad;
-  /** What a 404 at the state path means for this gateway, by its version. */
-  absence: PersistAbsence;
-  /** `routing.session-affinity` in the file: without it nothing is tied to an account anyway. */
-  affinityOn: boolean;
-  write: Write;
+  writable: boolean;
+  kind: GatewayKind;
+  version: string | null;
+  /** `routing.session-affinity` as the file has it (null: not read). */
+  affinityOn: boolean | null;
+  busy: boolean;
+  message: CardMessage | null;
+  onWrite: OnWrite;
 }
 
-const reasonKey = (reason: string) => `provimux.restarts.reason_${reason.replace(/-/g, '_')}`;
+const SETTING = 'routing.session-affinity-persist';
+
+const checkPersist =
+  (drawn: PersistState) =>
+  async (client: Client): Promise<Check> => {
+    const now = await restartsApi.persist(client);
+    if (now.kind === 'absent') return 'absent';
+    if (now.kind !== 'ready') return 'unreadable';
+    return samePersist(now.state, drawn) ? 'same' : 'changed';
+  };
 
 /**
- * `routing.session-affinity-persist`, read from its state path (the config path answers 404 when the file does not
- * set it, and unset is on). Off is `false` in the file; on is the key removed, its default. After a write the page
- * waits for the state to show it: the gateway applies the switch at its next check, within about 5 seconds.
+ * `routing.session-affinity-persist`, read from its state path only (the config path answers 404 when the file does
+ * not set it, and unset is on). Off writes `false`; on removes the key, its default. The card says what the gateway
+ * reports, never more: in effect means conversations that send their own session id are put back on their account
+ * when that account is still recognised and the binding has not expired.
  */
-export function PersistCard({ persist, absence, affinityOn, write }: PersistCardProps) {
+export function PersistCard(props: PersistCardProps) {
+  const { persist, writable, kind, version, affinityOn, busy, message, onWrite } = props;
   const { t, i18n } = useTranslation();
   const id = useId();
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<CardMessage | null>(null);
 
   const head = (control?: ReactNode) => (
-    <div className={shared.featureHead}>
-      <div className={shared.featureTitles}>
-        <h2 id={`${id}-title`} className={styles.cardTitle}>
-          {t('provimux.restarts.persist_title')}
-        </h2>
-        <p className={shared.featureEyebrow}>
-          <code>routing.session-affinity-persist</code>
-        </p>
-      </div>
-      {control ? <div className={shared.featureControl}>{control}</div> : null}
-    </div>
+    <CardHead
+      id={id}
+      title={t('provimux.restarts.persist_title')}
+      setting={SETTING}
+      control={control}
+    />
   );
 
-  if (persist.kind === 'absent') {
+  if (persist.kind === 'loading') {
     return (
-      <section className={styles.card} aria-labelledby={`${id}-title`} data-state="absent">
+      <section className={styles.card} aria-labelledby={`${id}-title`} aria-busy="true">
         {head()}
-        <p className={styles.value} data-tone="muted">
-          {t('provimux.restarts.not_in_gateway')}
-        </p>
-        <p className={shared.featureText}>
-          {absence.kind === 'not-provimux'
-            ? t('provimux.restarts.persist_not_provimux', { version: unbroken(absence.version) })
-            : absence.kind === 'older'
-              ? t('provimux.restarts.persist_older', {
-                  version: unbroken(absence.version),
-                  since: unbroken(absence.since),
-                })
-              : t('provimux.restarts.persist_not_yet')}
-        </p>
-        {affinityOn ? (
-          <p className={shared.featureText}>{t('provimux.restarts.persist_absent_now')}</p>
-        ) : null}
+        <p className={shared.featureText}>{t('provimux.common.loading')}</p>
       </section>
     );
   }
@@ -84,47 +86,69 @@ export function PersistCard({ persist, absence, affinityOn, write }: PersistCard
         <p className={shared.featureError} role="alert">
           {t('provimux.restarts.persist_failed', { message: persist.message })}
         </p>
+        <CardStatus message={message} />
+      </section>
+    );
+  }
+
+  if (persist.kind === 'absent') {
+    return (
+      <section className={styles.card} aria-labelledby={`${id}-title`} data-state="absent">
+        {head()}
+        <p className={styles.value} data-tone="muted">
+          {t('provimux.restarts.not_reported')}
+        </p>
+        <p className={shared.featureText}>
+          {kind === 'provimux'
+            ? t('provimux.restarts.absent_unknown')
+            : absentLine(t, kind, version)}
+        </p>
+        {kind === 'provimux' ? <p className={shared.featureText}>{sinceLine(t)}</p> : null}
+        {affinityOn === true ? (
+          <p className={shared.featureText}>{t('provimux.restarts.persist_absent_now')}</p>
+        ) : null}
+        <CardStatus message={message} />
       </section>
     );
   }
 
   const { state } = persist;
-
-  const run = async (send: Send, applied: (next: PersistLoad) => boolean, done: CardMessage) => {
-    setBusy(true);
-    setMessage(null);
-    const outcome = await write(send, applied, () =>
-      setMessage({ tone: 'pending', text: t('provimux.restarts.applying') })
+  const canWrite = writable && !busy;
+  const status = state.inEffect ? 'ok' : !state.setting ? 'off' : 'warning';
+  const describe: Describe = (result, snapshot) => describePersistWrite(t, result, snapshot);
+  const write = (
+    send: (etag: string | null, client: Client) => Promise<void>,
+    shows: (now: PersistState) => boolean
+  ) =>
+    onWrite(
+      {
+        check: checkPersist(state),
+        send,
+        shows: (snapshot) => snapshot.persist.kind === 'ready' && shows(snapshot.persist.state),
+      },
+      describe
     );
-    setBusy(false);
-    setMessage(outcome.ok ? done : outcome.message);
-  };
-
   const turnOff = () =>
-    run(
-      (read, client) => restartsApi.persistOff(read, client),
-      (next) => next.kind === 'ready' && next.state.set && !next.state.setting,
-      { tone: 'ok', text: t('provimux.restarts.persist_saved_off') }
+    write(
+      (etag, client) => restartsApi.persistOff(etag, client),
+      (now) => now.set && !now.setting
+    );
+  const toDefault = () =>
+    write(
+      (etag, client) => restartsApi.persistToDefault(etag, client),
+      (now) => !now.set
     );
 
-  const toDefault = (done: string) =>
-    run(
-      (read, client) => restartsApi.persistToDefault(read, client),
-      (next) => next.kind === 'ready' && !next.state.set,
-      { tone: 'ok', text: done }
-    );
-
-  const status = statusOf(state);
+  const written = timeMs(state.lastWrittenAt);
+  const failure = lastError(state);
 
   return (
     <section className={styles.card} aria-labelledby={`${id}-title`} data-on={state.setting}>
       {head(
         <ToggleSwitch
           checked={state.setting}
-          onChange={(next) =>
-            void (next ? toDefault(t('provimux.restarts.persist_saved_on')) : turnOff())
-          }
-          disabled={busy}
+          onChange={(next) => (next ? toDefault() : turnOff())}
+          disabled={!canWrite}
           ariaLabel={t('provimux.restarts.persist_switch_label')}
           ariaDescribedBy={`${id}-cost`}
           labelPosition="left"
@@ -148,16 +172,25 @@ export function PersistCard({ persist, absence, affinityOn, write }: PersistCard
         <Provenance set={state.set} />
       </div>
 
-      <p className={shared.featureText}>
-        {state.inEffect
-          ? t('provimux.restarts.persist_on_text')
-          : !state.setting
-            ? t('provimux.restarts.persist_off_text')
-            : isKnownReason(state.reason)
-              ? t(reasonKey(state.reason))
-              : t('provimux.restarts.reason_unlisted', { reason: state.reason ?? '?' })}
-      </p>
-      {!state.inEffect && state.setting && state.reason === 'session-affinity-off' ? (
+      {state.inEffect ? (
+        <>
+          <p className={shared.featureText}>{t('provimux.restarts.persist_on_text')}</p>
+          <p className={shared.featureNote}>{t('provimux.restarts.persist_limits')}</p>
+        </>
+      ) : !state.setting ? (
+        <>
+          <p className={shared.featureText}>{t('provimux.restarts.persist_off_text')}</p>
+          {/* A reason before the switch in the gateway's order: turned on, it would still not apply. */}
+          {state.reason && state.reason !== 'switch-off' ? (
+            <p className={styles.note} data-tone="warning">
+              {t('provimux.restarts.persist_off_also', { reason: reasonText(t, state.reason) })}
+            </p>
+          ) : null}
+        </>
+      ) : (
+        <p className={shared.featureText}>{reasonText(t, state.reason)}</p>
+      )}
+      {state.reason === 'session-affinity-off' ? (
         <p className={styles.linkRow}>
           <Link to="/routing" className={shared.inlineLink}>
             {t('provimux.restarts.open_routing')}
@@ -174,10 +207,10 @@ export function PersistCard({ persist, absence, affinityOn, write }: PersistCard
         <div>
           <dt>{t('provimux.restarts.last_written_label')}</dt>
           <dd>
-            {state.lastWrittenAt && timeMs(state.lastWrittenAt) !== null ? (
-              <span title={formatExact(timeMs(state.lastWrittenAt)!, i18n.language)}>
+            {written !== null ? (
+              <span title={formatExact(written, i18n.language)}>
                 {t('provimux.restarts.last_written', {
-                  time: formatClock(timeMs(state.lastWrittenAt)!, i18n.language),
+                  time: formatClock(written, i18n.language),
                   count: state.lastBindings,
                 })}
               </span>
@@ -191,6 +224,11 @@ export function PersistCard({ persist, absence, affinityOn, write }: PersistCard
                 {t('provimux.restarts.left_out', { count: state.leftOut })}
               </span>
             ) : null}
+            {state.leftOutNoIdentity > 0 ? (
+              <span className={styles.factNote}>
+                {t('provimux.restarts.left_out_no_identity', { count: state.leftOutNoIdentity })}
+              </span>
+            ) : null}
           </dd>
         </div>
         <div>
@@ -201,29 +239,26 @@ export function PersistCard({ persist, absence, affinityOn, write }: PersistCard
         </div>
       </dl>
 
-      {state.lastError ? (
+      {failure ? (
         <p className={styles.note} data-tone="warning">
-          {t('provimux.restarts.last_error', { message: state.lastError })}
+          {failure.kind === 'not-removed'
+            ? t('provimux.restarts.last_error_not_removed', { message: failure.message })
+            : t('provimux.restarts.last_error_write', { message: failure.message })}
         </p>
       ) : null}
       {state.keyNote ? <p className={styles.note}>{t('provimux.restarts.key_note')}</p> : null}
 
-      {/* What the switch would change; while a reason keeps it from applying, the reason says it instead. */}
-      {state.inEffect || !state.setting ? (
-        <p id={`${id}-cost`} className={styles.cost}>
-          {state.setting
-            ? t('provimux.restarts.turn_off_cost')
-            : t('provimux.restarts.turn_on_cost')}
-        </p>
-      ) : null}
+      <p id={`${id}-cost`} className={styles.cost}>
+        {state.setting ? t('provimux.restarts.turn_off_cost') : t('provimux.restarts.turn_on_cost')}
+      </p>
 
       {state.set && state.setting ? (
         <div className={styles.actions}>
           <Button
             size="sm"
             variant="secondary"
-            onClick={() => void toDefault(t('provimux.restarts.persist_saved_default'))}
-            disabled={busy}
+            onClick={toDefault}
+            disabled={!canWrite}
             title={t('provimux.restarts.use_default_hint')}
           >
             {t('provimux.restarts.use_default')}
@@ -236,19 +271,13 @@ export function PersistCard({ persist, absence, affinityOn, write }: PersistCard
       {state.snapshot ? (
         <details className={styles.files}>
           <summary>{t('provimux.restarts.files_label')}</summary>
-          <code>{state.snapshot}</code>
-          {state.key ? <code>{state.key}</code> : null}
+          <code>{t('provimux.restarts.files_snapshot', { path: state.snapshot })}</code>
+          {state.key ? <code>{t('provimux.restarts.files_key', { path: state.key })}</code> : null}
           <p>{t('provimux.restarts.files_text')}</p>
         </details>
       ) : null}
     </section>
   );
-}
-
-function statusOf(state: PersistState): 'ok' | 'off' | 'warning' {
-  if (state.inEffect) return 'ok';
-  if (!state.setting) return 'off';
-  return 'warning';
 }
 
 function StartLine({ state }: { state: PersistState }) {

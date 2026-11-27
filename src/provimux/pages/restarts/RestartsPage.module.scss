@@ -444,12 +444,12 @@
 
 .scale {
   position: relative;
-  height: 32px;
+  height: 36px;
   font-family: var(--pmx-font-mono);
   font-size: 11px;
   color: var(--text-tertiary);
 
-  // Positions are the centre of the thumb (9 px from each end at 1 and 30).
+  // Positions are the centre of the thumb (9 px from each end of the track).
   > span {
     position: absolute;
     top: 0;
@@ -467,12 +467,13 @@
 }
 
 .scale > .defaultMark {
-  top: 15px;
+  // A row of its own, below the numbers' row, with room for the caret between them.
+  top: 20px;
   font-family: var(--pmx-font-sans);
   font-size: 11px;
   color: var(--pmx-brand);
 
-  // A caret pointing up at 25 on the numbers' row.
+  // A caret pointing up at the default's place on the track.
   &::before {
     content: '';
     position: absolute;

@@ -1,35 +1,10 @@
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { apiClient } from '@/services/api/client';
-import type { ConfigRead } from './restartsApi';
-import type { PersistLoad } from './restartsLogic';
+import shared from '../shared/Shared.module.scss';
+import type { CardMessage } from './restartsWords';
 import styles from './RestartsPage.module.scss';
 
-export type Client = typeof apiClient;
-
-export type ConfigLoad = { kind: 'ready'; read: ConfigRead } | { kind: 'error'; message: string };
-
-/** A card's line under its controls: what a save did, or why it did not. */
-export interface CardMessage {
-  tone: 'ok' | 'error' | 'pending' | 'warning';
-  text: string;
-}
-
-export type WriteOutcome = { ok: true } | { ok: false; message: CardMessage };
-
-/** One request against the page's read, sent with the page's guarded client. */
-export type Send = (read: ConfigRead, client: Client) => Promise<void>;
-
-/**
- * Sends one write, then reads everything again. `applied` (persist only): the gateway's state shows the change; until
- * it does, `onPending` runs and the page reads again a few times.
- */
-export type Write = (
-  send: Send,
-  applied?: (persist: PersistLoad) => boolean,
-  onPending?: () => void
-) => Promise<WriteOutcome>;
-
-/** Whether the configuration file sets the value, or its default applies. */
+/** Whether the configuration file sets the value, or the gateway's default applies. */
 export function Provenance({ set }: { set: boolean }) {
   const { t } = useTranslation();
   return (
@@ -50,5 +25,32 @@ export function CardStatus({ message }: { message: CardMessage | null }) {
     >
       {message?.text ?? ''}
     </p>
+  );
+}
+
+/** A card's head: its title, the setting's name, and its control where there is one. */
+export function CardHead({
+  id,
+  title,
+  setting,
+  control,
+}: {
+  id: string;
+  title: string;
+  setting: string;
+  control?: ReactNode;
+}) {
+  return (
+    <div className={shared.featureHead}>
+      <div className={shared.featureTitles}>
+        <h2 id={`${id}-title`} className={styles.cardTitle}>
+          {title}
+        </h2>
+        <p className={shared.featureEyebrow}>
+          <code>{setting}</code>
+        </p>
+      </div>
+      {control ? <div className={shared.featureControl}>{control}</div> : null}
+    </div>
   );
 }

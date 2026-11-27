@@ -64,6 +64,7 @@ import { accountsAddressOfLogin } from '@/provimux/pages/shared/accountsLink';
 import { openProvidersState } from '@/provimux/pages/shared/providersLink';
 import { PROVIMUX_ROUTES } from '@/provimux/routes';
 import { textOf } from './support/models';
+import { pluralCategories } from '../helpers/pluralCategories';
 
 const read = (path: string) => readFileSync(path, 'utf8');
 const fixture = (name: string) => JSON.parse(read(`tests/provimux/fixtures/accounts/${name}`));
@@ -786,7 +787,7 @@ describe('strings in seven languages', () => {
     );
     for (const [language, own] of Object.entries(PROVIMUX_TRANSLATIONS)) {
       const strings = flat(((own as Tree).provimux as Tree).accounts as Tree);
-      const forms = new Intl.PluralRules(language).resolvedOptions().pluralCategories;
+      const forms = pluralCategories(language);
       const expected = new Set<string>();
       for (const key of Object.keys(source)) {
         const base = baseOf(key);

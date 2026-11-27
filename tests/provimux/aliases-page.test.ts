@@ -41,6 +41,7 @@ import {
 } from '@/provimux/pages/models/catalog';
 import { PROVIMUX_TRANSLATIONS, overlayStrings } from '@/provimux/i18n';
 import type { AliasDraft, AliasState, KeyEntry, SaveFailure } from '@/provimux/pages/aliases/types';
+import { pluralCategories } from '../helpers/pluralCategories';
 
 type Tree = { [key: string]: unknown };
 const fixture = (name: string): unknown =>
@@ -99,7 +100,7 @@ describe('strings in seven languages', () => {
       );
       for (const [language, own] of Object.entries(PROVIMUX_TRANSLATIONS)) {
         const strings = ((own as Tree).provimux as Tree)[block] as Record<string, string>;
-        const forms = new Intl.PluralRules(language).resolvedOptions().pluralCategories;
+        const forms = pluralCategories(language);
         const expected = new Set<string>();
         for (const key of Object.keys(source)) {
           const base = baseOf(key);
@@ -567,4 +568,3 @@ describe('what the page cannot read', () => {
     expect(addLoginAlias(draft, 'claude', { upstream: 'm', alias: 'n' })).toBe(draft);
   });
 });
-
