@@ -18,6 +18,16 @@
   border-top: 1px solid var(--border-color);
 }
 
+/* A gateway without the rule: one line, in the column's hint grey. */
+.absent {
+  margin: 0;
+  padding: 18px 0;
+  border-top: 1px solid var(--border-color);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-tertiary);
+}
+
 .head {
   display: flex;
   align-items: center;

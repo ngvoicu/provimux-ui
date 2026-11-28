@@ -1,27 +1,17 @@
 /**
  * "Back to the first account" on the Routing page: `routing.session-affinity-return.cold-after`, as
- * `GET /v8/management/provimux/session-return` reports it (the gateway's design/session-route.md, section 15). The
- * console keeps no copy of the gateway's rules: whether the rule runs, and why not, are the state path's `in_effect`
- * and `reason`; the configuration file is read only for its tag. A 404 is a gateway without the rule: nothing is shown.
+ * `GET /v8/management/provimux/session-return` reports it. The console keeps no copy of the gateway's rules: whether
+ * the rule runs, and why not, are the state path's `in_effect` and `reason`; the configuration file is read only for
+ * its tag. A 404 is a gateway without the rule.
  */
 import { isRecord } from '@/utils/helpers';
 import type { ConfigLoad } from '../pages/restarts/restartsLogic';
 
-export const RETURN_REASONS = [
-  'home-mode',
-  'plugin-scheduler',
-  'session-affinity-off',
-  'not-set',
-  'rebind-never',
-  'not-below-ttl',
-] as const;
-export type ReturnReason = (typeof RETURN_REASONS)[number];
-
-export const isKnownReturnReason = (reason: string | null): reason is ReturnReason =>
-  reason !== null && (RETURN_REASONS as readonly string[]).includes(reason);
+/** The first Provimux release with the rule and its state path. */
+export const RETURN_SINCE = '8.1.7-pmx.5';
 
 export interface ReturnState {
-  /** The operator's time in seconds, with its fraction where it has one; null when not set. */
+  /** The saved time in seconds, with its fraction where it has one; null when not set. */
   coldAfterS: number | null;
   /** Whether the rule runs now: the value in use. */
   inEffect: boolean;
@@ -29,11 +19,8 @@ export interface ReturnState {
   reason: string | null;
   /** How long session affinity keeps an unused conversation on its account; null with session affinity off. */
   ttlS: number | null;
-  /** Bindings dropped since the gateway started: one conversation can count more than once. */
+  /** Bindings the rule released since the gateway started, whichever account answered next. */
   returned: number;
-  lastReturnedAt: string | null;
-  /** When the counting started: the gateway's start. */
-  since: string | null;
 }
 
 export type ReturnLoad =
@@ -47,30 +34,21 @@ export type ReturnLoad =
 export interface ReturnSnapshot {
   config: ConfigLoad;
   state: ReturnLoad;
-  loadedAt: number;
 }
 
-const text = (value: unknown): string | null =>
-  typeof value === 'string' && value.trim() ? value : null;
 const seconds = (value: unknown): number | null =>
   typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
 
 /** The state as the gateway sends it; null when the answer is not that object. */
 export function normalizeReturn(raw: unknown): ReturnState | null {
   if (!isRecord(raw) || typeof raw.in_effect !== 'boolean' || !isRecord(raw.setting)) return null;
-  const counts = isRecord(raw.counts) ? raw.counts : {};
-  const returned = counts.returned;
+  const returned = isRecord(raw.counts) ? raw.counts.returned : 0;
   return {
     coldAfterS: seconds(raw.setting.cold_after_s),
     inEffect: raw.in_effect,
-    reason: raw.in_effect ? null : text(raw.reason),
+    reason: typeof raw.reason === 'string' ? raw.reason : null,
     ttlS: seconds(raw.ttl_s),
-    returned:
-      typeof returned === 'number' && Number.isFinite(returned) && returned > 0
-        ? Math.floor(returned)
-        : 0,
-    lastReturnedAt: text(counts.last_returned_at),
-    since: text(counts.since),
+    returned: typeof returned === 'number' && returned > 0 ? Math.floor(returned) : 0,
   };
 }
 
@@ -84,26 +62,27 @@ export type ReturnMode = 'on' | 'off' | 'blocked';
 export const returnMode = (state: ReturnState): ReturnMode =>
   state.inEffect ? 'on' : state.coldAfterS === null ? 'off' : 'blocked';
 
-/** A time in whole hours, minutes and seconds; the seconds keep the fraction the operator wrote (`1m0.9s`). */
+/** A time in whole hours, minutes and seconds; the seconds keep the fraction the file holds (`1m0.9s`). */
 export function timeParts(totalSeconds: number): { h: number; m: number; s: number } {
   const whole = Math.floor(totalSeconds);
-  const fraction = Math.round((totalSeconds - whole) * 1000) / 1000;
   return {
     h: Math.floor(whole / 3600),
     m: Math.floor((whole % 3600) / 60),
-    s: Math.round(((whole % 60) + fraction) * 1000) / 1000,
+    s: Math.round((totalSeconds - whole + (whole % 60)) * 1000) / 1000,
   };
 }
 
-/** The field is in whole minutes: digits only. Whether a number is long enough is the gateway's to say. */
-export const DRAFT = /^\d{1,5}$/;
-
+/** The field takes whole minutes: digits only. Whether a number is long enough is the gateway's to say. */
 export const draftMinutes = (draft: string): number | null =>
-  DRAFT.test(draft.trim()) ? Number(draft.trim()) : null;
+  /^\d{1,5}$/.test(draft.trim()) ? Number(draft.trim()) : null;
 
-/** What the field starts from: the time in use where it is whole minutes, else empty (the line above says it). */
+/** The saved time is a whole number of minutes, so the field can hold it as it is. */
+export const wholeMinutes = (state: ReturnState): boolean =>
+  state.coldAfterS !== null && state.coldAfterS % 60 === 0;
+
+/** What the field starts from: the saved time, rounded up to whole minutes; empty when none is set. */
 export const fieldValue = (state: ReturnState): string =>
-  state.coldAfterS !== null && state.coldAfterS % 60 === 0 ? String(state.coldAfterS / 60) : '';
+  state.coldAfterS === null ? '' : String(Math.ceil(state.coldAfterS / 60));
 
 /** Minutes as the configuration file gets them: "6m", "1h", "1h5m". */
 export function durationValue(minutes: number): string {

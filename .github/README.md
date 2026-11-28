@@ -124,12 +124,13 @@ on CLIProxyAPI, the section is not shown. How Provimux applies the switch is in
 **Routing.** While the switch is on, the Routing page says under the model field that a name that isn't yours is
 refused before routing, and for the name you type whether it is served or refused, with a link to Models.
 
-**Back to the first account.** A conversation that fell back to a lower tier, which may cost more, goes back to the
-highest one by itself: on the Routing page, under Session affinity, you set after how long without a message
-(`routing.session-affinity-return.cold-after`), or turn it off. The card says whether the gateway reports it in
-effect and, if not, the one reason and where to change it, and how often a conversation was sent back since the
-gateway started. It is shown only on a Provimux that reports it. How Provimux decides is in
-[its README](https://github.com/ngvoicu/provimux/blob/main/.github/README.md).
+**Back to the first account.** When a conversation fell back to a lower tier, which may cost more, Provimux can try a
+higher-priority account again. On the Routing page, under Session affinity, you set after how long without a message
+routed to an account it may do so on the next message (`routing.session-affinity-return.cold-after`), or turn it
+off. The card always shows the saved time, whether the gateway reports it in effect and, if not, the one reason and
+where to change it, and how many automatic returns the gateway attempted since it started. On a gateway without the
+setting the card is one line: "Automatic return needs Provimux v8.1.7-pmx.5 or later." How Provimux decides is in
+[its README](https://github.com/ngvoicu/provimux/blob/main/.github/README.md#a-conversation-that-fell-back-goes-back-by-itself).
 
 **Restarts.** See what a stop, a restart or an upgrade will do before you do it: how long the gateway lets the answers
 in flight finish (`server.restart-drain-seconds`) and whether conversations go back to their account afterwards

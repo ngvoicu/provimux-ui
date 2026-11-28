@@ -1,15 +1,19 @@
-import { useEffect, useId, useState } from 'react';
+import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
-import { formatClock, formatExact, timeMs } from '../pages/time';
+import type { CardMessage } from '../pages/restarts/restartsWords';
+import { unbroken } from '../pages/restarts/restartsLogic';
+import { saveTime, turnOff, type Drawn } from './sessionReturnActions';
 import {
   PRESETS,
+  RETURN_SINCE,
   draftMinutes,
   fieldValue,
   reachesTtl,
   returnMode,
-  type ReturnState,
+  wholeMinutes,
+  type ReturnLoad,
 } from './sessionReturnLogic';
 import { SESSION_RETURN_SETTING } from './sessionReturnApi';
 import { reasonLink, reasonText, timeText } from './sessionReturnWords';
@@ -25,31 +29,81 @@ interface SessionReturnProps {
 
 /**
  * "Back to the first account" (Provimux), in the Routing page's policy column under Session affinity, which it
- * depends on: `routing.session-affinity-return.cold-after`, as `GET /provimux/session-return` reports it. Closed, it
- * says what the gateway does now; "Set a time" or "Change" opens the field. It saves by itself, apart from the
- * page's own save bar: its buttons are its own. Nothing is drawn until the path answers, and nothing at all for a
- * gateway without it (404).
+ * depends on: `routing.session-affinity-return.cold-after`, as `GET /provimux/session-return` reports it. It saves by
+ * itself, apart from the page's own save bar: its buttons are its own. This component only wires: what is read and
+ * changed is in useSessionReturn.ts and sessionReturnActions.ts, what is drawn in SessionReturnView.
  */
 export function ProvimuxSessionReturn({ readAgainWhen }: SessionReturnProps) {
-  const { t } = useTranslation();
   const id = useId();
-  const { snapshot, busy, message, load, save, turnOff } = useSessionReturn(readAgainWhen);
+  const { snapshot, busy, message, load, run } = useSessionReturn(readAgainWhen);
+  // The field's text while it is open; null while it is closed.
+  const [draft, setDraft] = useState<string | null>(null);
+  const { state } = snapshot;
+  // The buttons exist only on a card the gateway answered.
+  const drawn = snapshot as Drawn;
+  const closeWhenLanded = async (landed: Promise<boolean>) => {
+    if (await landed) setDraft(null);
+  };
 
-  if (snapshot.state.kind === 'loading' || snapshot.state.kind === 'absent') return null;
+  return (
+    <SessionReturnView
+      id={id}
+      load={state}
+      draft={draft}
+      busy={busy}
+      message={message}
+      onRead={() => void load()}
+      onDraft={setDraft}
+      onOpen={() => setDraft(state.kind === 'ready' ? fieldValue(state.state) : '')}
+      onSave={() => void closeWhenLanded(run((io) => saveTime(draft ?? '', drawn, io)))}
+      onTurnOff={() => void closeWhenLanded(run((io) => turnOff(drawn, io)))}
+    />
+  );
+}
 
-  if (snapshot.state.kind === 'error') {
+interface ViewProps {
+  id: string;
+  load: ReturnLoad;
+  /** The field's text while it is open; null while it is closed. */
+  draft: string | null;
+  busy: boolean;
+  message: CardMessage | null;
+  onRead: () => void;
+  onOpen: () => void;
+  onDraft: (draft: string | null) => void;
+  onSave: () => void;
+  onTurnOff: () => void;
+}
+
+/**
+ * Everything the card can show, from what the gateway answered. Nothing until it answers; one line for a gateway
+ * without the rule (404), naming the release it came with; closed, what the gateway reports; open, the field.
+ */
+export function SessionReturnView(props: ViewProps) {
+  const { id, load, draft, busy, message, onRead, onOpen, onDraft, onSave, onTurnOff } = props;
+  const { t } = useTranslation();
+
+  if (load.kind === 'loading') return null;
+
+  if (load.kind === 'absent') {
+    return (
+      <p className={styles.absent}>
+        {t(`${K}.needs_version`, { version: unbroken(RETURN_SINCE) })}
+      </p>
+    );
+  }
+
+  if (load.kind === 'error') {
     return (
       <section className={styles.block} aria-labelledby={`${id}-title`}>
-        <div className={styles.head}>
-          <h3 id={`${id}-title`} className={styles.title}>
-            {t(`${K}.title`)}
-          </h3>
-        </div>
+        <h3 id={`${id}-title`} className={styles.title}>
+          {t(`${K}.title`)}
+        </h3>
         <p className={styles.note} data-tone="warning" role="alert">
-          {t(`${K}.read_failed`, { message: snapshot.state.message })}
+          {t(`${K}.read_failed`, { message: load.message })}
         </p>
         <div className={styles.actions}>
-          <Button size="sm" variant="secondary" onClick={() => void load()}>
+          <Button size="sm" variant="secondary" onClick={onRead}>
             {t(`${K}.read_again`)}
           </Button>
         </div>
@@ -57,65 +111,18 @@ export function ProvimuxSessionReturn({ readAgainWhen }: SessionReturnProps) {
     );
   }
 
-  const configError = snapshot.config.kind === 'error' ? snapshot.config.message : null;
-  const writable = snapshot.config.kind === 'ready' && snapshot.config.etag !== null;
-  return (
-    <Ready
-      id={id}
-      state={snapshot.state.state}
-      writable={writable}
-      configError={configError}
-      busy={busy}
-      message={message}
-      onSave={save}
-      onTurnOff={turnOff}
-    />
-  );
-}
-
-interface ReadyProps {
-  id: string;
-  state: ReturnState;
-  /** The configuration could be read: its tag makes a write conditional. */
-  writable: boolean;
-  configError: string | null;
-  busy: boolean;
-  message: { tone: 'ok' | 'error' | 'pending' | 'warning'; text: string } | null;
-  onSave: (drawn: ReturnState, minutes: number) => Promise<boolean>;
-  onTurnOff: (drawn: ReturnState) => Promise<boolean>;
-}
-
-/** The card for a gateway that reports the rule. Exported for the tests, which draw each state. */
-export function Ready(props: ReadyProps) {
-  const { id, state, writable, configError, busy, message, onSave, onTurnOff } = props;
-  const { t, i18n } = useTranslation();
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState<string | null>(null);
-
-  // A fresh read that changed the time under the field replaces what was being typed.
-  const inUse = state.coldAfterS;
-  useEffect(() => {
-    setDraft(null);
-  }, [inUse]);
-
+  const { state } = load;
+  const saved = state.coldAfterS;
   const mode = returnMode(state);
-  const time = state.coldAfterS !== null ? timeText(t, state.coldAfterS) : null;
-  const shown = draft ?? fieldValue(state);
-  const minutes = draftMinutes(shown);
-  const dirty = draft !== null && draft.trim() !== fieldValue(state);
-  const canWrite = writable && !busy;
+  const time = saved === null ? null : timeText(t, saved);
+  const minutes = draft === null ? null : draftMinutes(draft);
   const link = reasonLink(state.reason);
-  const since = timeMs(state.since);
-  const last = timeMs(state.lastReturnedAt);
-
-  const close = () => {
-    setEditing(false);
-    setDraft(null);
-  };
-  const submit = async () => {
-    if (minutes === null || !dirty) return;
-    if (await onSave(state, minutes)) close();
-  };
+  const off =
+    saved === null ? null : (
+      <Button size="sm" type="button" variant="ghost" onClick={onTurnOff} disabled={busy}>
+        {t(`${K}.turn_off`)}
+      </Button>
+    );
 
   return (
     <section className={styles.block} aria-labelledby={`${id}-title`} data-mode={mode}>
@@ -128,40 +135,43 @@ export function Ready(props: ReadyProps) {
           {t(`${K}.state_${mode}`)}
         </span>
       </div>
-      <p className={styles.lede}>{t(`${K}.lede`)}</p>
 
-      {mode === 'on' && time ? (
+      {state.inEffect ? (
         <p className={styles.now}>{t(`${K}.on_text`, { time })}</p>
-      ) : mode === 'off' ? (
-        <p className={styles.now}>{t(`${K}.off_text`)}</p>
-      ) : null}
-      {mode === 'blocked' || (mode === 'off' && state.reason && state.reason !== 'not-set') ? (
-        <p className={styles.note} data-tone={mode === 'blocked' ? 'warning' : undefined}>
-          {mode === 'blocked'
-            ? reasonText(t, state)
-            : t(`${K}.off_also`, { reason: reasonText(t, state) })}
-          {link ? (
-            <>
-              {' '}
-              <Link to={link} className={styles.link}>
-                {t(link === '/config' ? `${K}.open_config` : `${K}.open_plugins`)}
-              </Link>
-            </>
-          ) : null}
-        </p>
-      ) : null}
-      {configError !== null ? (
-        <p className={styles.note} data-tone="warning" role="alert">
-          {t('provimux.restarts.config_failed', { message: configError })}
-        </p>
+      ) : (
+        <p className={styles.lede}>{t(`${K}.lede`)}</p>
+      )}
+      {time === null ? <p className={styles.now}>{t(`${K}.off_text`)}</p> : null}
+      {time !== null && !state.inEffect ? (
+        <>
+          <p className={styles.now}>{t(`${K}.saved_time`, { time })}</p>
+          <p className={styles.note} data-tone="warning">
+            {reasonText(t, state)}
+            {link ? (
+              <>
+                {' '}
+                <Link to={link} className={styles.link}>
+                  {t(link === '/config' ? `${K}.open_config` : `${K}.open_plugins`)}
+                </Link>
+              </>
+            ) : null}
+          </p>
+        </>
       ) : null}
 
-      {editing ? (
+      {draft === null ? (
+        <div className={styles.actions}>
+          <Button size="sm" variant="secondary" onClick={onOpen} disabled={busy}>
+            {saved === null ? t(`${K}.set_time`) : t(`${K}.change`)}
+          </Button>
+          {off}
+        </div>
+      ) : (
         <form
           className={styles.editor}
           onSubmit={(event) => {
             event.preventDefault();
-            void submit();
+            onSave();
           }}
         >
           <label htmlFor={`${id}-minutes`} className={styles.fieldLabel}>
@@ -175,16 +185,26 @@ export function Ready(props: ReadyProps) {
               inputMode="numeric"
               autoComplete="off"
               maxLength={5}
-              value={shown}
-              disabled={!canWrite}
+              value={draft}
+              disabled={busy}
               aria-describedby={`${id}-hint`}
-              aria-invalid={shown.trim() !== '' && minutes === null}
+              aria-invalid={minutes === null && draft.trim() !== ''}
               // Opened by the operator's own click on "Set a time" or "Change".
               autoFocus
-              onChange={(event) => setDraft(event.target.value)}
+              onChange={(event) => onDraft(event.target.value)}
             />
             <span className={styles.unit}>{t(`${K}.field_unit`)}</span>
           </div>
+          {minutes === null ? (
+            <p className={styles.hint} role="status">
+              {t(`${K}.field_help`)}
+            </p>
+          ) : null}
+          {time !== null && !wholeMinutes(state) ? (
+            <p className={styles.hint}>
+              {t(`${K}.not_whole`, { time, minutes: fieldValue(state) })}
+            </p>
+          ) : null}
           <div className={styles.presets} role="group" aria-labelledby={`${id}-presets`}>
             <span id={`${id}-presets`} className={styles.presetsLabel}>
               {t(`${K}.presets_label`)}
@@ -195,8 +215,8 @@ export function Ready(props: ReadyProps) {
                 type="button"
                 className={styles.preset}
                 aria-pressed={minutes === preset.minutes}
-                disabled={!canWrite}
-                onClick={() => setDraft(String(preset.minutes))}
+                disabled={busy}
+                onClick={() => onDraft(String(preset.minutes))}
               >
                 <span>{t(`${K}.preset_${preset.cache}`)}</span>
                 <span className={styles.presetValue}>{timeText(t, preset.minutes * 60)}</span>
@@ -206,11 +226,7 @@ export function Ready(props: ReadyProps) {
           <p id={`${id}-hint`} className={styles.hint}>
             {t(`${K}.choose_hint`)}
           </p>
-          {shown.trim() !== '' && minutes === null ? (
-            <p className={styles.note} data-tone="warning" role="alert">
-              {t(`${K}.draft_invalid`)}
-            </p>
-          ) : reachesTtl(minutes, state) && state.ttlS !== null && minutes !== null ? (
+          {minutes !== null && state.ttlS !== null && reachesTtl(minutes, state) ? (
             <p className={styles.note} data-tone="warning" role="status">
               {t(`${K}.ttl_warning`, {
                 ttl: timeText(t, state.ttlS),
@@ -226,37 +242,22 @@ export function Ready(props: ReadyProps) {
               size="sm"
               type="submit"
               loading={busy}
-              disabled={!canWrite || !dirty || minutes === null}
+              disabled={minutes === null || minutes * 60 === saved}
             >
               {t(`${K}.save`)}
             </Button>
-            <Button size="sm" type="button" variant="ghost" onClick={close} disabled={busy}>
-              {t(`${K}.cancel`)}
-            </Button>
-          </div>
-        </form>
-      ) : (
-        <div className={styles.actions}>
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={() => setEditing(true)}
-            disabled={!canWrite}
-          >
-            {state.coldAfterS === null ? t(`${K}.set_time`) : t(`${K}.change`)}
-          </Button>
-          {state.coldAfterS !== null ? (
             <Button
               size="sm"
+              type="button"
               variant="ghost"
-              onClick={() => void onTurnOff(state)}
-              disabled={!canWrite}
-              loading={busy}
+              onClick={() => onDraft(null)}
+              disabled={busy}
             >
-              {t(`${K}.turn_off`)}
+              {t(`${K}.cancel`)}
             </Button>
-          ) : null}
-        </div>
+            {off}
+          </div>
+        </form>
       )}
 
       <p
@@ -270,32 +271,15 @@ export function Ready(props: ReadyProps) {
       </p>
 
       {state.inEffect || state.returned > 0 ? (
-        <p className={styles.count}>
-          {state.returned > 0 ? t(`${K}.returned`, { count: state.returned }) : t(`${K}.none_yet`)}
-          {since !== null ? (
-            <>
-              {' '}
-              <span title={formatExact(since, i18n.language)}>
-                {t(`${K}.started`, { time: formatClock(since, i18n.language) })}
-              </span>
-            </>
-          ) : null}
-          {last !== null && state.returned > 0 ? (
-            <>
-              {' '}
-              <span title={formatExact(last, i18n.language)}>
-                {t(`${K}.last`, { time: formatClock(last, i18n.language) })}
-              </span>
-            </>
-          ) : null}
-        </p>
+        <p className={styles.count}>{t(`${K}.attempts`, { n: state.returned })}</p>
       ) : null}
 
       <details className={styles.details}>
         <summary>{t(`${K}.details_label`)}</summary>
         <ul>
           <li>{t(`${K}.details_when`)}</li>
-          <li>{t(`${K}.details_promise`)}</li>
+          <li>{t(`${K}.details_pinned`)}</li>
+          <li>{t(`${K}.details_refused`)}</li>
           <li>{t(`${K}.details_alone`)}</li>
           <li>{t(`${K}.details_first`)}</li>
           <li>{t(`${K}.details_count`)}</li>

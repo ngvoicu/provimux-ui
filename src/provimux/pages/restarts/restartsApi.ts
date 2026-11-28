@@ -77,7 +77,8 @@ export function writeFailure(error: unknown): RestartsWriteError {
   return new RestartsWriteError('error', message);
 }
 
-async function conditional(
+/** One write, conditional on the configuration's tag. `absentIsDone`: removing a key the file does not hold. */
+export async function conditional(
   etag: string | null,
   send: (headers: Record<string, string>) => Promise<unknown>,
   { absentIsDone = false } = {}

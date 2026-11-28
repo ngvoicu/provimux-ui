@@ -1,33 +1,23 @@
 // "Back to the first account" on the Routing page (Provimux): routing.session-affinity-return.cold-after, as
-// GET /provimux/session-return reports it. The answers below are the gateway's own, as its tests print them for each
-// state; the fixture gateway answers the config path as the real one was seen to (200, 412, 422, 404 not_found).
+// GET /provimux/session-return reports it. The card's buttons each call one plain function (sessionReturnActions.ts):
+// those are run here against a fixture gateway that answers the state path and the config path as the real one does
+// (200, 404 not_found, 412, 422). What the card shows is drawn from the gateway's answers as static markup.
 import { afterAll, describe, expect, test } from 'bun:test';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import i18n from '../../src/i18n/index';
 import { PolicyPanel } from '@/features/routing/components/PolicyPanel';
-import { runWrite } from '@/provimux/pages/restarts/restartsWrite';
-import { ProvimuxSessionReturn, Ready } from '@/provimux/routing/SessionReturn';
+import { ProvimuxSessionReturn, SessionReturnView } from '@/provimux/routing/SessionReturn';
+import { saveTime, turnOff, type Drawn } from '@/provimux/routing/sessionReturnActions';
 import { sessionReturnApi, type Client } from '@/provimux/routing/sessionReturnApi';
 import {
-  draftMinutes,
-  durationValue,
   fieldValue,
   normalizeReturn,
-  reachesTtl,
-  returnMode,
-  timeParts,
+  type ReturnLoad,
   type ReturnSnapshot,
-  type ReturnState,
 } from '@/provimux/routing/sessionReturnLogic';
-import {
-  describeReturnWrite,
-  reasonLink,
-  reasonText,
-  timeText,
-} from '@/provimux/routing/sessionReturnWords';
-import { offSpec, saveSpec } from '@/provimux/routing/sessionReturnWrite';
+import { timeText } from '@/provimux/routing/sessionReturnWords';
 
 const initialLanguage = i18n.language;
 afterAll(async () => {
@@ -38,61 +28,37 @@ const t = i18n.t.bind(i18n);
 
 type Doc = Record<string, unknown>;
 
-const COUNTS = { returned: 0, last_returned_at: null, since: '2026-11-27T13:21:30Z' };
-const answer = (setting: number | null, reason: string | null, more: Doc = {}): Doc => ({
-  observed_at: '2026-11-27T13:21:30Z',
-  setting: { cold_after_s: setting },
-  in_effect: reason === null,
-  reason,
-  ttl_s: 3600,
-  counts: COUNTS,
-  ...more,
-});
-/** The gateway's answers, one per state it reports. */
-const ANSWERS = {
-  notSet: answer(null, 'not-set'),
-  inEffect: answer(360, null),
-  notBelowTtl: answer(7200, 'not-below-ttl'),
-  rebindNever: answer(360, 'rebind-never'),
-  // With session affinity off the gateway reports no lifetime.
-  affinityOff: answer(360, 'session-affinity-off', { ttl_s: null }),
-  asInstalled: answer(null, 'session-affinity-off', { ttl_s: null }),
-  pluginScheduler: answer(360, 'plugin-scheduler'),
-  homeMode: answer(360, 'home-mode'),
-  counted: answer(360, null, {
-    counts: {
-      returned: 12,
-      last_returned_at: '2026-11-27T09:58:30Z',
-      since: '2026-11-27T06:00:11Z',
-    },
-  }),
-} as const;
-const stateOf = (raw: Doc): ReturnState => normalizeReturn(raw)!;
-
-// --- a gateway: the config path and the state path, as the branch with the rule answers --------------------------------
+// --- a gateway: the state path and the config path --------------------------------------------------------------------
 
 const DURATION = /^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+(?:\.\d+)?)s)?$/;
 const secondsOf = (value: unknown): number | null => {
-  if (typeof value !== 'string' || value === '') return null;
-  const match = DURATION.exec(value);
+  const match = typeof value === 'string' && value !== '' ? DURATION.exec(value) : null;
   if (!match) return null;
   return Number(match[1] ?? 0) * 3600 + Number(match[2] ?? 0) * 60 + Number(match[3] ?? 0);
 };
 
-function gateway(initial: Doc = {}, options: { path?: boolean; dropNextReply?: boolean } = {}) {
+interface GatewayOptions {
+  /** The state path exists (false: a gateway from before the rule). */
+  path?: boolean;
+  /** What the gateway itself decides and no file of this fixture can make: Home mode, a plugin's scheduler. */
+  reason?: string;
+  returned?: number;
+}
+
+function gateway(initial: Doc = {}, options: GatewayOptions = {}) {
   let routing: Doc = { 'session-affinity': true, ...initial };
   let tag = 1;
-  let path = options.path ?? true;
-  let dropNextReply = options.dropNextReply ?? false;
-  let stateFails = false;
+  let dropNextReply = false;
   const requests: Array<{ method: string; path: string; ifMatch?: string; body?: unknown }> = [];
   const error = (status: number | undefined, apiCode?: string, message?: string) =>
     Object.assign(new Error(message ?? apiCode ?? 'Network Error'), { status, apiCode });
   const state = () => {
-    const setting = routing['session-affinity-return'] as Doc | null | undefined;
+    const setting = routing['session-affinity-return'] as Doc | undefined;
     const cold = secondsOf(setting?.['cold-after']);
+    const affinity = routing['session-affinity'] === true;
     const reason =
-      routing['session-affinity'] !== true
+      options.reason ??
+      (!affinity
         ? 'session-affinity-off'
         : cold === null
           ? 'not-set'
@@ -100,8 +66,19 @@ function gateway(initial: Doc = {}, options: { path?: boolean; dropNextReply?: b
             ? 'rebind-never'
             : cold >= 3600
               ? 'not-below-ttl'
-              : null;
-    return answer(cold, reason, reason === 'session-affinity-off' ? { ttl_s: null } : {});
+              : null);
+    return {
+      observed_at: '2026-11-28T08:00:00Z',
+      setting: { cold_after_s: cold },
+      in_effect: reason === null,
+      reason,
+      ttl_s: affinity ? 3600 : null,
+      counts: {
+        returned: options.returned ?? 0,
+        last_returned_at: null,
+        since: '2026-11-28T06:00:00Z',
+      },
+    };
   };
   const client = {
     async getRaw(at: string) {
@@ -110,20 +87,18 @@ function gateway(initial: Doc = {}, options: { path?: boolean; dropNextReply?: b
     },
     async get(at: string) {
       requests.push({ method: 'GET', path: at });
-      if (stateFails) throw error(500, 'internal', 'boom');
-      if (at === '/provimux/session-return' && path) return state();
+      if (at === '/provimux/session-return' && options.path !== false) return state();
       throw error(404);
     },
-    async put(at: string, body: unknown, config?: { headers?: Record<string, string> }) {
+    async put(at: string, body: Doc, config?: { headers?: Record<string, string> }) {
       const ifMatch = config?.headers?.['If-Match'];
       requests.push({ method: 'PUT', path: at, ifMatch, body });
       if (ifMatch !== `"${tag}"`) throw error(412, 'precondition_failed');
-      const value = (body as Doc | null)?.['cold-after'];
-      if (body !== null && value !== undefined && (secondsOf(value) ?? 0) < 60) {
+      if ((secondsOf(body['cold-after']) ?? 0) < 60) {
         throw error(
           422,
           'invalid_config',
-          `parse config payload: routing.session-affinity-return.cold-after must be a duration of at least one minute ("6m", "1h30m"), got ${JSON.stringify(String(value))}`
+          `parse config payload: routing.session-affinity-return.cold-after must be a duration of at least one minute ("6m", "1h30m"), got "${String(body['cold-after'])}"`
         );
       }
       routing = { ...routing, 'session-affinity-return': body };
@@ -146,382 +121,374 @@ function gateway(initial: Doc = {}, options: { path?: boolean; dropNextReply?: b
       return { status: 'ok' };
     },
   };
-  return {
+  const io = {
     client: client as unknown as Client,
+    isCurrent: () => true,
+    t,
+    wait: async () => {},
+  };
+  return {
+    io,
     requests,
     writes: () => requests.filter((request) => request.method !== 'GET'),
-    file: () => routing,
+    file: () => routing['session-affinity-return'],
+    /** The card as the page drew it: what the gateway reports now. */
+    drawn: async () => (await sessionReturnApi.read(io.client)) as Drawn,
     /** Another writer changes the file. */
-    touch: () => {
-      tag += 1;
-    },
     setRouting: (patch: Doc) => {
       routing = { ...routing, ...patch };
       tag += 1;
     },
-    replaceWithOlder: () => {
-      path = false;
-    },
-    failState: () => {
-      stateFails = true;
+    dropNextReply: () => {
+      dropNextReply = true;
     },
   };
 }
 
-const run = async (
-  gw: ReturnType<typeof gateway>,
-  spec: (drawn: ReturnState) => ReturnType<typeof saveSpec>,
-  before?: (current: ReturnSnapshot) => void
-) => {
-  const current = await sessionReturnApi.read(gw.client);
-  if (current.state.kind !== 'ready') throw new Error('the fixture has the path');
-  before?.(current);
-  return runWrite(spec(current.state.state), {
-    client: gw.client,
-    current,
-    read: sessionReturnApi.read,
-    isCurrent: () => true,
-    wait: async () => undefined,
-    polls: 2,
+const time = (cold: string): Doc => ({ 'session-affinity-return': { 'cold-after': cold } });
+const SETTING = '/config/routing/session-affinity-return';
+const stateOf = (snapshot: ReturnSnapshot) =>
+  snapshot.state.kind === 'ready' ? snapshot.state.state : null;
+
+// --- the buttons ------------------------------------------------------------------------------------------------------
+
+describe('Save time', () => {
+  test('6: one conditional PUT of {"cold-after":"6m"}, then what the gateway reports', async () => {
+    const gw = gateway();
+    const outcome = await saveTime('6', await gw.drawn(), gw.io);
+    expect(gw.writes()).toEqual([
+      { method: 'PUT', path: SETTING, ifMatch: '"1"', body: { 'cold-after': '6m' } },
+    ]);
+    expect(stateOf(outcome.snapshot)).toMatchObject({ coldAfterS: 360, inEffect: true });
+    expect(outcome.line).toEqual({ tone: 'ok', text: 'Saved.' });
+    expect(outcome.landed).toBe(true);
   });
-};
 
-// --- the state --------------------------------------------------------------------------------------------------------
-
-describe('the state, as the gateway reports it', () => {
-  test("each of the gateway's answers: in effect, off, or a time that does not run", () => {
-    const modes = Object.fromEntries(
-      Object.entries(ANSWERS).map(([name, raw]) => [name, returnMode(stateOf(raw))])
-    );
-    expect(modes).toEqual({
-      notSet: 'off',
-      inEffect: 'on',
-      notBelowTtl: 'blocked',
-      rebindNever: 'blocked',
-      affinityOff: 'blocked',
-      asInstalled: 'off',
-      pluginScheduler: 'blocked',
-      homeMode: 'blocked',
-      counted: 'on',
-    });
-    expect(stateOf(ANSWERS.counted)).toMatchObject({
-      coldAfterS: 360,
-      inEffect: true,
-      reason: null,
+  test('60 is written as 1h, and the gateway then reports it not below its lifetime', async () => {
+    const gw = gateway(time('6m'));
+    const outcome = await saveTime('60', await gw.drawn(), gw.io);
+    expect(gw.file()).toEqual({ 'cold-after': '1h' });
+    expect(stateOf(outcome.snapshot)).toMatchObject({
+      coldAfterS: 3600,
+      inEffect: false,
+      reason: 'not-below-ttl',
       ttlS: 3600,
-      returned: 12,
-      lastReturnedAt: '2026-11-27T09:58:30Z',
-      since: '2026-11-27T06:00:11Z',
     });
+    expect(outcome.landed).toBe(true);
   });
 
-  test("in effect is the gateway's word alone: a time in the answer does not make it so", () => {
-    expect(returnMode(stateOf(answer(360, 'a-reason-of-a-later-gateway')))).toBe('blocked');
-    expect(reasonText(t, stateOf(answer(360, 'a-reason-of-a-later-gateway')))).toBe(
-      'The gateway gives this reason: a-reason-of-a-later-gateway.'
-    );
+  test('an existing 90s: the field starts at 2, and saving that writes 2m', async () => {
+    const gw = gateway(time('90s'));
+    const drawn = await gw.drawn();
+    expect(drawn.state.state.coldAfterS).toBe(90);
+    expect(fieldValue(drawn.state.state)).toBe('2');
+    const outcome = await saveTime(fieldValue(drawn.state.state), drawn, gw.io);
+    expect(gw.file()).toEqual({ 'cold-after': '2m' });
+    expect(stateOf(outcome.snapshot)?.coldAfterS).toBe(120);
   });
 
-  test('an answer that is not the state is an error, never "off"', async () => {
-    expect(normalizeReturn({ setting: { cold_after_s: null } })).toBeNull();
-    expect(normalizeReturn({ in_effect: false })).toBeNull();
-    expect(normalizeReturn('ok')).toBeNull();
-    const gw = gateway();
-    gw.failState();
-    expect(await sessionReturnApi.state(gw.client)).toEqual({ kind: 'error', message: 'boom' });
+  test('an empty field, or anything but whole minutes, sends nothing and says what to enter', async () => {
+    const gw = gateway(time('6m'));
+    const drawn = await gw.drawn();
+    for (const text of ['', '  ', '6m', '90s', '1.5', 'six']) {
+      const outcome = await saveTime(text, drawn, gw.io);
+      expect(outcome.line.text).toBe('Enter a whole number of minutes.');
+      expect(outcome.landed).toBe(false);
+      expect(outcome.snapshot).toBe(drawn);
+    }
+    expect(gw.writes()).toEqual([]);
   });
 
-  test('a gateway without the path (404) is absent, and its configuration is not asked for', async () => {
-    const gw = gateway({}, { path: false });
-    const read = await sessionReturnApi.read(gw.client);
-    expect(read.state).toEqual({ kind: 'absent' });
-    expect(gw.requests.map((request) => request.path)).toEqual(['/provimux/session-return']);
-  });
-});
-
-describe('times', () => {
-  test('a time in words: the parts that are not zero, the fraction kept', () => {
-    expect(timeText(t, 360)).toBe('6 min');
-    expect(timeText(t, 3900)).toBe('1 h 5 min');
-    expect(timeText(t, 3600)).toBe('1 h');
-    expect(timeText(t, 90)).toBe('1 min 30 s');
-    expect(timeText(t, 60.9)).toBe('1 min 0.9 s');
-    expect(timeParts(7265)).toEqual({ h: 2, m: 1, s: 5 });
-  });
-
-  test('the field is whole minutes; what the file gets is a duration', () => {
-    expect(draftMinutes(' 6 ')).toBe(6);
-    expect(draftMinutes('0')).toBe(0);
-    for (const bad of ['', '6m', '1.5', '-3', 'six', '123456'])
-      expect(draftMinutes(bad)).toBeNull();
-    expect([6, 60, 65, 90, 120].map(durationValue)).toEqual(['6m', '1h', '1h5m', '1h30m', '2h']);
-    expect(fieldValue(stateOf(ANSWERS.inEffect))).toBe('6');
-    expect(fieldValue(stateOf(ANSWERS.notSet))).toBe('');
-    // A time the file holds with seconds is said above the field, not rounded into it.
-    expect(fieldValue(stateOf(answer(60.9, null)))).toBe('');
-  });
-
-  test("a time not shorter than session affinity's lifetime, as the gateway reports that lifetime", () => {
-    const state = stateOf(ANSWERS.inEffect);
-    expect(reachesTtl(59, state)).toBe(false);
-    expect(reachesTtl(60, state)).toBe(true);
-    expect(reachesTtl(65, state)).toBe(true);
-    expect(reachesTtl(null, state)).toBe(false);
-  });
-
-  test('with session affinity off the gateway reports no lifetime: none is quoted, and no time is compared', () => {
-    const off = stateOf(ANSWERS.affinityOff);
-    expect(off.ttlS).toBeNull();
-    expect(reachesTtl(65, off)).toBe(false);
-    expect(reasonText(t, { ...stateOf(ANSWERS.notBelowTtl), ttlS: null })).toBe(
-      "The time is not shorter than session affinity's lifetime, and an unused conversation is released by then anyway. Set a shorter time here, or a longer session-affinity-ttl in the Config Panel."
-    );
-  });
-});
-
-// --- the writes -------------------------------------------------------------------------------------------------------
-
-describe('a change', () => {
-  test('a time is one conditional PUT of the key, and the gateway then reports it', async () => {
-    const gw = gateway();
-    const { result, snapshot } = await run(gw, (drawn) => saveSpec(drawn, 6));
-    expect(gw.writes()).toEqual([
-      {
-        method: 'PUT',
-        path: '/config/routing/session-affinity-return',
-        ifMatch: '"1"',
-        body: { 'cold-after': '6m' },
-      },
-    ]);
-    expect(result).toEqual({ kind: 'saved', shown: true });
-    expect(describeReturnWrite(t, result, snapshot!)).toEqual({
-      tone: 'ok',
-      text: 'Saved. The gateway reports it in effect.',
-    });
-  });
-
-  test('a time the gateway accepts and does not run is saved, and said not to be in effect', async () => {
-    const gw = gateway();
-    const { result, snapshot } = await run(gw, (drawn) => saveSpec(drawn, 65));
-    expect(gw.file()['session-affinity-return']).toEqual({ 'cold-after': '1h5m' });
-    expect(result).toEqual({ kind: 'saved', shown: true });
-    expect(describeReturnWrite(t, result, snapshot!)).toEqual({
-      tone: 'warning',
-      text: 'Saved. The gateway reports it not in effect, for the reason above.',
-    });
-  });
-
-  test("a refused value (422) writes nothing, and the gateway's words are shown", async () => {
-    const gw = gateway({ 'session-affinity-return': { 'cold-after': '6m' } });
-    const { result, snapshot } = await run(gw, (drawn) => saveSpec(drawn, 0));
-    expect(result.kind).toBe('refused');
-    expect(gw.file()['session-affinity-return']).toEqual({ 'cold-after': '6m' });
-    const line = describeReturnWrite(t, result, snapshot!);
-    expect(line.tone).toBe('error');
-    expect(line.text).toContain('routing.session-affinity-return.cold-after');
-    expect(line.text).toContain('"0m"');
-  });
-
-  test('off removes the key; a key that is not there is off already', async () => {
-    const gw = gateway({ 'session-affinity-return': { 'cold-after': '6m' } });
-    const { result, snapshot } = await run(gw, offSpec);
-    expect(gw.writes()).toEqual([
-      { method: 'DELETE', path: '/config/routing/session-affinity-return', ifMatch: '"1"' },
-    ]);
-    expect('session-affinity-return' in gw.file()).toBe(false);
-    expect(result).toEqual({ kind: 'saved', shown: true });
-    expect(describeReturnWrite(t, result, snapshot!).text).toBe(
-      'Saved. The gateway reports it off.'
-    );
-    // 404 not_found on the key: done.
-    await expect(sessionReturnApi.off('"2"', gw.client)).resolves.toBeUndefined();
+  test('a value the gateway refuses (422) writes nothing, and its own words are the line', async () => {
+    const gw = gateway(time('6m'));
+    const outcome = await saveTime('0', await gw.drawn(), gw.io);
+    expect(gw.file()).toEqual({ 'cold-after': '6m' });
+    expect(outcome.line.tone).toBe('error');
+    expect(outcome.line.text).toContain('The gateway refused the change:');
+    expect(outcome.line.text).toContain('routing.session-affinity-return.cold-after must be a');
+    expect(outcome.landed).toBe(false);
   });
 
   test('a file another writer changed since the read (412) is not written', async () => {
+    const gw = gateway(time('6m'));
+    const drawn = await gw.drawn();
+    gw.setRouting({ 'request-retry': 2 });
+    const outcome = await saveTime('8', drawn, gw.io);
+    expect(gw.file()).toEqual({ 'cold-after': '6m' });
+    expect(outcome.line.text).toContain('The configuration file changed since this page read it');
+    expect(outcome.landed).toBe(false);
+  });
+
+  test('nothing is sent when the gateway no longer reports what the card showed', async () => {
+    const gw = gateway(time('6m'));
+    const drawn = await gw.drawn();
+    gw.setRouting({ 'session-affinity': false });
+    const outcome = await saveTime('8', drawn, gw.io);
+    expect(gw.writes()).toEqual([]);
+    expect(outcome.line.text).toContain("Nothing was sent: the gateway's setting changed");
+    expect(stateOf(outcome.snapshot)?.reason).toBe('session-affinity-off');
+  });
+
+  test('a lost reply: said so, with what the gateway reports now, and the field can close', async () => {
     const gw = gateway();
-    const { result, snapshot } = await run(
-      gw,
-      (drawn) => saveSpec(drawn, 6),
-      () => gw.touch()
+    const drawn = await gw.drawn();
+    gw.dropNextReply();
+    const outcome = await saveTime('6', drawn, gw.io);
+    expect(outcome.line.text).toBe(
+      'The gateway did not confirm the save. The card shows what it reports now.'
     );
-    expect(result).toEqual({ kind: 'changed', reread: true });
-    expect('session-affinity-return' in gw.file()).toBe(false);
-    expect(describeReturnWrite(t, result, snapshot!).tone).toBe('warning');
-  });
-
-  test('nothing is sent when the gateway no longer reports what the controls were drawn from', async () => {
-    const changed = gateway();
-    const first = await run(
-      changed,
-      (drawn) => saveSpec(drawn, 6),
-      () => changed.setRouting({ 'session-affinity': false })
-    );
-    expect(first.result).toEqual({ kind: 'stale', why: 'changed' });
-    expect(changed.writes()).toEqual([]);
-
-    const replaced = gateway();
-    const second = await run(
-      replaced,
-      (drawn) => saveSpec(drawn, 6),
-      () => replaced.replaceWithOlder()
-    );
-    expect(second.result).toEqual({ kind: 'stale', why: 'absent' });
-    expect(replaced.writes()).toEqual([]);
-    expect(second.snapshot?.state).toEqual({ kind: 'absent' });
-  });
-
-  test('a lost reply is "unconfirmed", and the line says what the gateway reports now', async () => {
-    const gw = gateway({}, { dropNextReply: true });
-    const { result, snapshot } = await run(gw, (drawn) => saveSpec(drawn, 6));
-    expect(result).toEqual({ kind: 'unconfirmed' });
-    expect(describeReturnWrite(t, result, snapshot!)).toEqual({
-      tone: 'warning',
-      text: 'The gateway did not confirm the save. It now reports it in effect, after 6 min.',
-    });
+    expect(stateOf(outcome.snapshot)).toMatchObject({ coldAfterS: 360, inEffect: true });
+    expect(outcome.landed).toBe(true);
   });
 });
 
-// --- the card ---------------------------------------------------------------------------------------------------------
+describe('Turn off', () => {
+  test('one conditional DELETE of the key, then off', async () => {
+    const gw = gateway(time('6m'));
+    const outcome = await turnOff(await gw.drawn(), gw.io);
+    expect(gw.writes()).toEqual([{ method: 'DELETE', path: SETTING, ifMatch: '"1"' }]);
+    expect(gw.file()).toBeUndefined();
+    expect(stateOf(outcome.snapshot)).toMatchObject({ coldAfterS: null, inEffect: false });
+    expect(outcome.line).toEqual({ tone: 'ok', text: 'Saved.' });
+    expect(outcome.landed).toBe(true);
+  });
+});
 
-const html = (element: ReturnType<typeof createElement>) =>
-  renderToStaticMarkup(createElement(MemoryRouter, null, element));
+describe('reading', () => {
+  test('a gateway without the path (404) is asked once: no configuration, nothing more', async () => {
+    const gw = gateway({}, { path: false });
+    expect((await sessionReturnApi.read(gw.io.client)).state).toEqual({ kind: 'absent' });
+    expect(gw.requests).toEqual([{ method: 'GET', path: '/provimux/session-return' }]);
+  });
+
+  test('an answer that is not the state is a failed read, never "off"', () => {
+    expect(normalizeReturn({ setting: { cold_after_s: null } })).toBeNull();
+    expect(normalizeReturn({ in_effect: false })).toBeNull();
+    expect(normalizeReturn('ok')).toBeNull();
+  });
+});
+
+// --- what the card shows ----------------------------------------------------------------------------------------------
+
 const text = (markup: string) =>
   markup
     .replace(/<[^>]+>/g, ' ')
     .replace(/&quot;/g, '"')
     .replace(/&#x27;/g, "'")
-    .replace(/&amp;/g, '&')
+    .replace(/⁠/g, '')
     .replace(/\s+/g, ' ');
-const never = async () => false;
-const card = (raw: Doc, more: Partial<Parameters<typeof Ready>[0]> = {}) =>
-  html(
-    createElement(Ready, {
-      id: 'x',
-      state: stateOf(raw),
-      writable: true,
-      configError: null,
-      busy: false,
-      message: null,
-      onSave: never,
-      onTurnOff: never,
-      ...more,
-    })
+const nothing = () => undefined;
+const view = (load: ReturnLoad, draft: string | null = null) =>
+  renderToStaticMarkup(
+    createElement(
+      MemoryRouter,
+      null,
+      createElement(SessionReturnView, {
+        id: 'x',
+        load,
+        draft,
+        busy: false,
+        message: null,
+        onRead: nothing,
+        onOpen: nothing,
+        onDraft: nothing,
+        onSave: nothing,
+        onTurnOff: nothing,
+      })
+    )
   );
+/** The card for a gateway with this file: closed, or with the field open on `draft`. */
+const card = async (file: Doc, options: GatewayOptions = {}, draft: string | null = null) =>
+  view((await gateway(file, options).drawn()).state, draft);
 
 describe('the card', () => {
-  test('in effect: the statement, then the condition with the time, then the count', () => {
-    const shown = text(card(ANSWERS.counted));
+  test('in effect: what the gateway decides, with the saved time, and the counter by its name', async () => {
+    const shown = text(await card(time('6m'), { returned: 12 }));
     expect(shown).toContain('Back to the first account In effect');
     expect(shown).toContain(
-      'A conversation that fell back to a lower tier, which may cost more, goes back to the highest one by itself.'
+      'After 6 min without a message routed to an account, the gateway can try a higher-priority account on the next message.'
     );
-    expect(shown).toContain(
-      'A conversation goes back at its next message after 6 min without one.'
-    );
-    expect(shown).toContain('Sent back 12 times since the gateway started.');
-    expect(shown).toContain('Change');
-    expect(shown).toContain('Turn off');
-    expect(text(card(answer(360, null, { counts: { ...COUNTS, returned: 1 } })))).toContain(
-      'Sent back 1 time since the gateway started.'
-    );
-    expect(text(card(ANSWERS.inEffect))).toContain('None sent back since the gateway started.');
+    expect(shown).toContain('Automatic returns attempted since startup: 12');
+    expect(shown).toContain('Change Turn off');
+    // A saved time that is not whole minutes is shown as it is.
+    expect(text(await card(time('90s')))).toContain('After 1 min 30 s without a message routed');
   });
 
-  test('off: says so, offers a time, and no count of a rule that never ran', () => {
-    const shown = text(card(ANSWERS.notSet));
-    expect(shown).toContain('Back to the first account Off');
-    expect(shown).toContain(
-      'No time is set, so a conversation stays on the account it fell back to.'
-    );
-    expect(shown).toContain('Set a time');
-    expect(shown).not.toContain('Turn off');
-    expect(shown).not.toContain('since the gateway started');
-    expect(shown).not.toContain('A time alone');
-  });
-
-  test('as installed (no time, session affinity off): off, and a time alone would not turn it on', () => {
-    const shown = text(card(ANSWERS.asInstalled));
-    expect(shown).toContain('Back to the first account Off');
-    expect(shown).toContain(
-      'A time alone would not turn it on: Session affinity is off, so no conversation is tied to an account. Turn it on above and save.'
-    );
-  });
-
-  test('a time that does not run: the one reason, and where to change it', () => {
-    const cases: Array<[Doc, string, string | null]> = [
-      [
-        ANSWERS.affinityOff,
-        'Session affinity is off, so no conversation is tied to an account.',
-        null,
-      ],
-      [ANSWERS.notBelowTtl, "2 h is not shorter than session affinity's lifetime (1 h)", '/config'],
-      [ANSWERS.rebindNever, 'session-affinity-rebind-on is "never"', '/config'],
-      [ANSWERS.homeMode, 'The gateway is in Home mode, where this does not apply.', null],
-      [ANSWERS.pluginScheduler, 'A scheduling plugin chooses the accounts', '/plugins'],
-    ];
-    for (const [raw, words, link] of cases) {
-      const markup = card(raw);
-      const shown = text(markup);
-      expect(shown).toContain('Back to the first account Not in effect');
-      expect(shown).toContain(words);
-      expect(shown).not.toContain('A conversation goes back at its next message');
-      expect(reasonLink(stateOf(raw).reason)).toBe(link);
-      if (link) expect(markup).toContain(`href="${link}"`);
-      else expect(markup).not.toContain('href=');
+  test('no time: one sentence, also as installed with session affinity off', async () => {
+    for (const file of [{}, { 'session-affinity': false }]) {
+      const shown = text(await card(file));
+      expect(shown).toContain('Back to the first account Off');
+      expect(shown).toContain('No automatic return time is set.');
+      expect(shown).toContain('Set a time');
+      expect(shown).not.toContain('Turn off');
+      expect(shown).not.toContain('Session affinity is off');
+      expect(shown).not.toContain('Automatic returns attempted');
     }
   });
 
-  test('a configuration that could not be read: shown, and nothing can be changed', () => {
-    const markup = card(ANSWERS.inEffect, { writable: false, configError: 'read failed' });
-    expect(text(markup)).toContain('Could not read the configuration file');
-    expect(markup.match(/<button[^>]*disabled/g)?.length).toBe(2);
+  test('the saved time stays beside every reason it does not run, also while the field is open', async () => {
+    const cases: Array<[Doc, GatewayOptions, string, string | null]> = [
+      [
+        { ...time('90s'), 'session-affinity': false },
+        {},
+        'Session affinity is off. Turn it on above and save.',
+        null,
+      ],
+      [
+        { ...time('90s'), 'session-affinity-rebind-on': 'never' },
+        {},
+        'session-affinity-rebind-on is "never", and automatic return does not run with that setting.',
+        '/config',
+      ],
+      [
+        time('90s'),
+        { reason: 'home-mode' },
+        'The gateway is in Home mode, where automatic return does not run.',
+        null,
+      ],
+      [
+        time('90s'),
+        { reason: 'plugin-scheduler' },
+        "A plugin's scheduler is in use, and automatic return does not run with one.",
+        '/plugins',
+      ],
+      [
+        time('90s'),
+        { reason: 'a-reason-of-a-later-gateway' },
+        'The gateway gives this reason: a-reason-of-a-later-gateway.',
+        null,
+      ],
+    ];
+    for (const [file, options, words, link] of cases) {
+      const markup = await card(file, options);
+      expect(text(markup)).toContain('Back to the first account Not in effect');
+      expect(text(markup)).toContain('Saved time: 1 min 30 s');
+      expect(text(markup)).toContain(words);
+      expect(/href="([^"]+)"/.exec(markup)?.[1] ?? null).toBe(link);
+      expect(text(await card(file, options, '2'))).toContain('Saved time: 1 min 30 s');
+    }
+    const long = text(await card(time('1h5m')));
+    expect(long).toContain('Saved time: 1 h 5 min');
+    expect(long).toContain("1 h 5 min is not shorter than session affinity's lifetime (1 h)");
   });
 
-  test("the conditions sit behind a details control, with the setting's name", () => {
-    const markup = card(ANSWERS.inEffect);
+  test('the field open: an empty one says what to enter and cannot be saved; Turn off stays in reach', async () => {
+    const empty = await card(time('6m'), {}, '');
+    expect(text(empty)).toContain('Automatic return time');
+    expect(text(empty)).toContain('Enter a whole number of minutes.');
+    expect(empty).toMatch(/<button[^>]*disabled=""[^>]*type="submit"/);
+    expect(text(empty)).toContain('Save time Cancel Turn off');
+
+    const filled = await card({}, {}, '6');
+    expect(text(filled)).not.toContain('Enter a whole number of minutes.');
+    expect(filled).not.toMatch(/<button[^>]*disabled=""[^>]*type="submit"/);
+    // Nothing to turn off while no time is set.
+    expect(text(filled)).toContain('Save time Cancel');
+    expect(text(filled)).not.toContain('Turn off');
+  });
+
+  test('the field open on a saved 90s says where it starts', async () => {
+    const shown = text(await card(time('90s'), {}, '2'));
+    expect(shown).toContain(
+      'The saved time is 1 min 30 s. The field takes whole minutes, so it starts at 2.'
+    );
+    expect(text(await card(time('6m'), {}, '6'))).not.toContain('The field takes whole minutes');
+  });
+
+  test("a time that reaches session affinity's lifetime is said to do nothing before it is saved", async () => {
+    const words =
+      'Session affinity releases an unused conversation after 1 h, so 1 h 5 min would do nothing.';
+    expect(text(await card(time('6m'), {}, '65'))).toContain(words);
+    expect(text(await card(time('6m'), {}, '59'))).not.toContain('would do nothing');
+    // With session affinity off the gateway reports no lifetime: nothing to compare with.
+    expect(text(await card({ ...time('6m'), 'session-affinity': false }, {}, '65'))).not.toContain(
+      'would do nothing'
+    );
+  });
+
+  test('the conditions sit behind "How it decides", closed, with the setting\'s name', async () => {
+    const markup = await card(time('6m'));
     const details = markup.slice(markup.indexOf('<details'));
+    expect(details).not.toContain('open=""');
     expect(text(details)).toContain('How it decides');
+    expect(text(details)).toContain('A pinned turn stays on its account.');
     expect(text(details)).toContain(
-      'It never moves a conversation that had a message within the time you set.'
+      'A message refused before an account was chosen does not restart the wait.'
     );
     expect(details).toContain('<code>routing.session-affinity-return.cold-after</code>');
-    expect(details).not.toContain('open=""');
   });
 
-  test('nothing is drawn before the gateway answers: a gateway without the rule never shows the card', () => {
-    expect(html(createElement(ProvimuxSessionReturn, null))).toBe('');
+  test('a read that failed says so, with Read again', () => {
+    const shown = text(view({ kind: 'error', message: 'boom' }));
+    expect(shown).toContain('Could not read this setting from the gateway: boom');
+    expect(shown).toContain('Read again');
   });
 
-  test('the Routing page draws it right under Session affinity', () => {
-    const markup = html(
-      createElement(PolicyPanel, {
-        settings: {
-          strategy: 'round-robin',
-          sessionAffinity: true,
-          requestRetry: 0,
-          maxRetryCredentials: 0,
-        },
-        onChange: () => undefined,
-        afterAffinity: createElement('div', { id: 'the-seam' }),
-      })
-    );
-    const affinity = markup.indexOf('Session affinity');
-    const seam = markup.indexOf('id="the-seam"');
-    const failover = markup.indexOf('Failover');
-    expect(affinity).toBeGreaterThan(-1);
-    expect(seam).toBeGreaterThan(affinity);
-    expect(failover).toBeGreaterThan(seam);
+  test('times in words keep the seconds and the fraction the file holds', () => {
+    expect([360, 3900, 3600, 90, 60.9].map((seconds) => timeText(t, seconds))).toEqual([
+      '6 min',
+      '1 h 5 min',
+      '1 h',
+      '1 min 30 s',
+      '1 min 0.9 s',
+    ]);
   });
 });
 
-describe('the English', () => {
-  test('no sentence of the card carries a board number, an address or a credential', () => {
-    const strings = i18n.getResourceBundle('en', 'translation').provimux.session_return as Record<
-      string,
-      string
-    >;
-    for (const value of Object.values(strings)) {
-      expect(value).not.toMatch(/\b[TmM]-\d{2,}\b|@|https?:/);
-    }
+describe('on the Routing page', () => {
+  const panel = (afterAffinity: ReturnType<typeof createElement>) =>
+    renderToStaticMarkup(
+      createElement(
+        MemoryRouter,
+        null,
+        createElement(PolicyPanel, {
+          settings: {
+            strategy: 'round-robin',
+            sessionAffinity: true,
+            requestRetry: 0,
+            maxRetryCredentials: 0,
+          },
+          onChange: nothing,
+          afterAffinity,
+        })
+      )
+    );
+  const inPanel = (load: ReturnLoad) =>
+    panel(
+      createElement(SessionReturnView, {
+        id: 'x',
+        load,
+        draft: null,
+        busy: false,
+        message: null,
+        onRead: nothing,
+        onOpen: nothing,
+        onDraft: nothing,
+        onSave: nothing,
+        onTurnOff: nothing,
+      })
+    );
+
+  test('the card sits right under Session affinity, before Failover', async () => {
+    const shown = text(inPanel((await gateway(time('6m')).drawn()).state));
+    expect(shown.indexOf('Session affinity')).toBeLessThan(shown.indexOf('Back to the first'));
+    expect(shown.indexOf('Back to the first')).toBeLessThan(shown.indexOf('Failover'));
+  });
+
+  test('a gateway without the path (404): one line beside the other controls, nothing else of the card', () => {
+    const markup = inPanel({ kind: 'absent' });
+    expect(text(markup)).toContain('Automatic return needs Provimux v8.1.7-pmx.5 or later.');
+    expect(text(markup)).not.toContain('Back to the first account');
+    expect(text(markup)).not.toContain('Set a time');
+    // The page's own controls are all there.
+    expect(text(markup)).toContain('Session affinity');
+    expect(text(markup)).toContain('Failover');
+    expect(markup.match(/type="number"/g)?.length).toBe(2);
+  });
+
+  test('nothing is drawn before the gateway answers', () => {
+    expect(text(panel(createElement(ProvimuxSessionReturn)))).not.toMatch(
+      /Back to the first|Automatic return/
+    );
   });
 });
