@@ -29,11 +29,11 @@ export interface Io {
 }
 
 export interface Outcome {
-  /** What the gateway reports after it: the card. */
-  snapshot: ReturnSnapshot;
+  /** What the gateway reports after it: the card. Null when nothing was read. */
+  snapshot: ReturnSnapshot | null;
   /** The line under the buttons. */
   line: CardMessage;
-  /** The change is in the file, so the field can close. */
+  /** The change is in the file, so the field closes even when nothing could be read after it. */
   landed: boolean;
 }
 
@@ -67,7 +67,7 @@ async function change(drawn: Drawn, io: Io, write: Omit<WriteSpec<ReturnSnapshot
           text: io.t(result.kind === 'saved' ? `${K}.saved_not_shown` : `${K}.unconfirmed`),
         });
   return {
-    snapshot: snapshot ?? drawn,
+    snapshot,
     line,
     // Saved, or a lost reply after which the gateway reports the change.
     landed: result.kind === 'saved' || (result.kind === 'unconfirmed' && shown),
@@ -79,7 +79,7 @@ export async function saveTime(text: string, drawn: Drawn, io: Io): Promise<Outc
   const minutes = draftMinutes(text);
   if (minutes === null) {
     return {
-      snapshot: drawn,
+      snapshot: null,
       line: { tone: 'warning', text: io.t(`${K}.field_help`) },
       landed: false,
     };

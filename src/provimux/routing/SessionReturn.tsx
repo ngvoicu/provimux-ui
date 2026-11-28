@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
@@ -35,15 +35,11 @@ interface SessionReturnProps {
  */
 export function ProvimuxSessionReturn({ readAgainWhen }: SessionReturnProps) {
   const id = useId();
-  const { snapshot, busy, message, load, run } = useSessionReturn(readAgainWhen);
-  // The field's text while it is open; null while it is closed.
-  const [draft, setDraft] = useState<string | null>(null);
+  const { card, busy, message, load, run, setDraft } = useSessionReturn(readAgainWhen);
+  const { draft, snapshot } = card;
   const { state } = snapshot;
   // The buttons exist only on a card the gateway answered.
   const drawn = snapshot as Drawn;
-  const closeWhenLanded = async (landed: Promise<boolean>) => {
-    if (await landed) setDraft(null);
-  };
 
   return (
     <SessionReturnView
@@ -55,8 +51,8 @@ export function ProvimuxSessionReturn({ readAgainWhen }: SessionReturnProps) {
       onRead={() => void load()}
       onDraft={setDraft}
       onOpen={() => setDraft(state.kind === 'ready' ? fieldValue(state.state) : '')}
-      onSave={() => void closeWhenLanded(run((io) => saveTime(draft ?? '', drawn, io)))}
-      onTurnOff={() => void closeWhenLanded(run((io) => turnOff(drawn, io)))}
+      onSave={() => void run((io) => saveTime(draft ?? '', drawn, io))}
+      onTurnOff={() => void run((io) => turnOff(drawn, io))}
     />
   );
 }
@@ -136,12 +132,13 @@ export function SessionReturnView(props: ViewProps) {
         </span>
       </div>
 
-      {state.inEffect ? (
-        <p className={styles.now}>{t(`${K}.on_text`, { time })}</p>
-      ) : (
-        <p className={styles.lede}>{t(`${K}.lede`)}</p>
-      )}
-      {time === null ? <p className={styles.now}>{t(`${K}.off_text`)}</p> : null}
+      {state.inEffect ? <p className={styles.now}>{t(`${K}.on_text`, { time })}</p> : null}
+      {time === null ? (
+        <>
+          <p className={styles.now}>{t(`${K}.off_text`)}</p>
+          <p className={styles.lede}>{t(`${K}.lede`)}</p>
+        </>
+      ) : null}
       {time !== null && !state.inEffect ? (
         <>
           <p className={styles.now}>{t(`${K}.saved_time`, { time })}</p>
@@ -228,10 +225,7 @@ export function SessionReturnView(props: ViewProps) {
           </p>
           {minutes !== null && state.ttlS !== null && reachesTtl(minutes, state) ? (
             <p className={styles.note} data-tone="warning" role="status">
-              {t(`${K}.ttl_warning`, {
-                ttl: timeText(t, state.ttlS),
-                time: timeText(t, minutes * 60),
-              })}{' '}
+              {t(`${K}.reason_not_below_ttl`, { ttl: timeText(t, state.ttlS) })}{' '}
               <Link to="/config" className={styles.link}>
                 {t(`${K}.open_config`)}
               </Link>

@@ -13,6 +13,7 @@ import { saveTime, turnOff, type Drawn } from '@/provimux/routing/sessionReturnA
 import { sessionReturnApi, type Client } from '@/provimux/routing/sessionReturnApi';
 import {
   fieldValue,
+  freshRead,
   normalizeReturn,
   type ReturnLoad,
   type ReturnSnapshot,
@@ -194,7 +195,7 @@ describe('Save time', () => {
       const outcome = await saveTime(text, drawn, gw.io);
       expect(outcome.line.text).toBe('Enter a whole number of minutes.');
       expect(outcome.landed).toBe(false);
-      expect(outcome.snapshot).toBe(drawn);
+      expect(outcome.snapshot).toBeNull();
     }
     expect(gw.writes()).toEqual([]);
   });
@@ -318,7 +319,9 @@ describe('the card', () => {
     for (const file of [{}, { 'session-affinity': false }]) {
       const shown = text(await card(file));
       expect(shown).toContain('Back to the first account Off');
-      expect(shown).toContain('No automatic return time is set.');
+      expect(shown).toContain(
+        'No automatic return time is set. Set one, and a conversation that fell back to a lower-priority account can go back to a higher one at its next message.'
+      );
       expect(shown).toContain('Set a time');
       expect(shown).not.toContain('Turn off');
       expect(shown).not.toContain('Session affinity is off');
@@ -364,12 +367,15 @@ describe('the card', () => {
       expect(text(markup)).toContain('Back to the first account Not in effect');
       expect(text(markup)).toContain('Saved time: 1 min 30 s');
       expect(text(markup)).toContain(words);
+      expect(text(markup)).not.toContain('Set one');
       expect(/href="([^"]+)"/.exec(markup)?.[1] ?? null).toBe(link);
       expect(text(await card(file, options, '2'))).toContain('Saved time: 1 min 30 s');
     }
     const long = text(await card(time('1h5m')));
     expect(long).toContain('Saved time: 1 h 5 min');
-    expect(long).toContain("1 h 5 min is not shorter than session affinity's lifetime (1 h)");
+    expect(long).toContain(
+      'Automatic return needs a time shorter than the session-affinity lifetime (1 h). Set a shorter time here, or a longer session-affinity-ttl in the Config Panel.'
+    );
   });
 
   test('the field open: an empty one says what to enter and cannot be saved; Turn off stays in reach', async () => {
@@ -387,6 +393,21 @@ describe('the card', () => {
     expect(text(filled)).not.toContain('Turn off');
   });
 
+  test('a fresh read closes the field: an old time left in it cannot be saved', async () => {
+    const gw = gateway(time('6m'));
+    const open = { ...freshRead(await gw.drawn()), draft: '6' };
+    expect(text(view(open.snapshot.state, open.draft))).toContain('Save time');
+    // Another tab saves 8 minutes; the Routing page is refreshed.
+    gw.setRouting(time('8m'));
+    const read = freshRead(await gw.drawn());
+    expect(read.draft).toBeNull();
+    const shown = view(read.snapshot.state, read.draft);
+    expect(text(shown)).toContain('After 8 min without a message routed');
+    expect(text(shown)).toContain('Change Turn off');
+    expect(shown).not.toContain('type="submit"');
+    expect(text(shown)).not.toContain('Save time');
+  });
+
   test('the field open on a saved 90s says where it starts', async () => {
     const shown = text(await card(time('90s'), {}, '2'));
     expect(shown).toContain(
@@ -395,14 +416,13 @@ describe('the card', () => {
     expect(text(await card(time('6m'), {}, '6'))).not.toContain('The field takes whole minutes');
   });
 
-  test("a time that reaches session affinity's lifetime is said to do nothing before it is saved", async () => {
-    const words =
-      'Session affinity releases an unused conversation after 1 h, so 1 h 5 min would do nothing.';
+  test("a time that reaches session affinity's lifetime: said before it is saved", async () => {
+    const words = 'Automatic return needs a time shorter than the session-affinity lifetime (1 h).';
     expect(text(await card(time('6m'), {}, '65'))).toContain(words);
-    expect(text(await card(time('6m'), {}, '59'))).not.toContain('would do nothing');
+    expect(text(await card(time('6m'), {}, '59'))).not.toContain(words);
     // With session affinity off the gateway reports no lifetime: nothing to compare with.
     expect(text(await card({ ...time('6m'), 'session-affinity': false }, {}, '65'))).not.toContain(
-      'would do nothing'
+      words
     );
   });
 

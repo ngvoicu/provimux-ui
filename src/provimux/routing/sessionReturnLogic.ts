@@ -36,6 +36,15 @@ export interface ReturnSnapshot {
   state: ReturnLoad;
 }
 
+/** What the card holds: the gateway's last answer, and the field's text while it is open (null: closed). */
+export interface ReturnCard {
+  snapshot: ReturnSnapshot;
+  draft: string | null;
+}
+
+/** Any fresh read of the card: it shows what the gateway reports, and its field is closed. */
+export const freshRead = (snapshot: ReturnSnapshot): ReturnCard => ({ snapshot, draft: null });
+
 const seconds = (value: unknown): number | null =>
   typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
 

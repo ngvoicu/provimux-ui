@@ -35,8 +35,5 @@ export const reasonLink = (reason: string | null): '/config' | '/plugins' | null
 export function reasonText(t: TFunction, state: ReturnState): string {
   const known = REASONS[state.reason ?? ''];
   if (!known) return t(`${K}.reason_unlisted`, { reason: state.reason ?? '?' });
-  return t(`${K}.${known.key}`, {
-    time: timeText(t, state.coldAfterS ?? 0),
-    ttl: timeText(t, state.ttlS ?? 0),
-  });
+  return t(`${K}.${known.key}`, { ttl: timeText(t, state.ttlS ?? 0) });
 }
